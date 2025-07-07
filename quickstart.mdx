@@ -1,97 +1,132 @@
 ---
-title: 'Quickstart'
-description: 'Start building awesome documentation in under 5 minutes'
+title: "Quickstart"
+description: "Send your first request to QuickBooks in 5 minutes."
 ---
 
-## Setup your development
-
-Learn how to update your docs locally and deploy them to the public.
-
-### Edit and preview
+### Preparing your QuBe Sync account
 
 <AccordionGroup>
-  <Accordion icon="github" title="Clone your docs locally">
-    During the onboarding process, we created a repository on your Github with
-    your docs content. You can find this repository on our
-    [dashboard](https://dashboard.mintlify.com). To clone the repository
-    locally, follow these
-    [instructions](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository)
-    in your terminal.
+  <Accordion title="Create your free QuBe Sync account" icon="user">
+    From the https://qubesync.com homepage, click "Register" and create your free account
+
+    <img
+      src="/images/image.png"
+      alt="image.png"
+      title="image.png"
+      style={{ width:"33%" }}
+    />
   </Accordion>
-  <Accordion icon="rectangle-terminal" title="Preview changes">
-    Previewing helps you make sure your changes look as intended. We built a
-    command line interface to render these changes locally. 
-    1. Install the
-    [Mintlify CLI](https://www.npmjs.com/package/mintlify) to preview the
-    documentation changes locally with this command: ``` npm i -g mintlify ```
-    2. Run the following command at the root of your documentation (where
-    `docs.json` is): ``` mintlify dev ```
-    <Note>
-      If you’re currently using the legacy ```mint.json``` configuration file, please update the Mintlify CLI:
+  <Accordion title="Create your first connection" icon="arrows-left-right">
+    In the Connections tab, create a new connection.  Select your development app and click save.
 
+    <img
+      src="/images/SCR-20250704-tdii.png"
+      alt="SCR-20250704-tdii.png"
+      title="SCR-20250704-tdii.png"
+      className="mx-auto"
+      style={{ width:"50%" }}
+    />
 
-      ```npm i -g mintlify@latest```
-      And run the new upgrade command in your docs repository:
+    Usually, this will be done programmatically by posting to the connections endpoint:
 
-      ```mintlify upgrade```
-      You should now be using the new ```docs.json``` configuration file. Feel free to delete the ```mint.json``` file from your repository.
-    </Note>
+    `post https://qubesync.com/api/v1/connections`
   </Accordion>
 </AccordionGroup>
 
-### Deploy your changes
+### Set up the QuickBooks Web Connector
+
+The Web Connector should come pre-installed with QuickBooks, and allows QuickBooks to communicate with web applications.
 
 <AccordionGroup>
+  <Accordion title="Load the QWC File" description="The QWC file tells the web connector how to communicate with QuBe Sync" icon="download">
+    Inside the Connection screen, you'll be able to download a QWC File. You'll need to open this file from the Windows computer / VM where you have QuickBooks installed and follow the on-screen prompts. Make sure you have QuickBooks open to the correct company file and we suggest allowing access even when QuickBooks is closed to avoid connectivity issues.
 
-<Accordion icon="message-bot" title="Install our Github app">
-  Our Github app automatically deploys your changes to your docs site, so you
-  don't need to manage deployments yourself. You can find the link to install on
-  your [dashboard](https://dashboard.mintlify.com). Once the bot has been
-  successfully installed, there should be a check mark next to the commit hash
-  of the repo.
-</Accordion>
-<Accordion icon="rocket" title="Push your changes">
-  [Commit and push your changes to
-  Git](https://docs.github.com/en/get-started/using-git/pushing-commits-to-a-remote-repository#about-git-push)
-  for your changes to update in your docs site. If you push and don't see that
-  the Github app successfully deployed your changes, you can also manually
-  update your docs through our [dashboard](https://dashboard.mintlify.com).
-</Accordion>
+    ![SCR-20250701-nncu-2.png](/images/SCR-20250701-nncu-2.png)
 
+    `[TODO: insert picture of web connector]`
+  </Accordion>
+  <Accordion title="Copy/paste the password" icon="copy">
+    Click "Generate Password" to generate a password for the Web Connector and it will be copied to your clipboard. Paste this password in the Web Connector and choose to save it when prompted.
+  </Accordion>
+  <Accordion title="Test the connection" icon="arrows-spin">
+    Check the checkbox next to your app in the Web Connector and click "Update Selected". You should see it authenticate and then finish with "No data exchange required" in green if everything has gone according to plan\!
+  </Accordion>
+</AccordionGroup>
+
+### Make Requests
+
+<AccordionGroup>
+  <Accordion title="Get your app's API key" icon="user-secret">
+    In the "My Applications" tab, click into the sandbox app. We've generated an API key for you - click to copy it, and have it ready to use in your environment (e.g. `export QUBE_API_KEY="foo..."` )
+  </Accordion>
+  <Accordion title="Make a request!" icon="code">
+    QuBe Sync gives you the full power of any QBXML request, but also has some prebuilt endpoints for common use cases. Here we'll ask for a list of customers
+
+    <CodeGroup>
+
+    ```bash cURL
+    export QUBE_API_KEY="..." # get this from My Applications tab
+    export CONN_ID="..." # get this from the Connections tab
+    
+    curl -X POST \
+         --url https://qubesync.com/api/v1/connections/$CONN_ID/customers \
+         --user $QUBE_API_KEY:
+    ```
+
+    
+    ```ruby ruby
+    ENV["QUBE_API_KEY"]="..."
+    
+    require 'net/http'
+    require 'uri'
+    require 'json'
+    
+    connection_id = "..."
+    connection_url = "https://qubesync.com/api/v1/connections/#{connection_id}"
+    uri = URI.parse("#{connection_url}/customers?max_returned=10")
+    
+    request = Net::HTTP::Get.new(uri)
+    request.basic_auth(ENV["QUBE_API_KEY"], "")
+    request.content_type = "application/json"
+    
+    response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: false) do |http|
+      http.request(request)
+    end
+    
+    # Check the response
+    if response.is_a?(Net::HTTPSuccess)
+      puts "Request was successful!"
+      puts "Response body: #{response.body}"
+      # opening the request's page in the browser.
+      `open #{JSON.parse(response.body)["data"]["links"]["ui"]}`
+    else
+      puts "Request failed with status code: #{response.code}"
+      puts "Response body: #{response.body}"
+    end
+    
+    ```
+
+    </CodeGroup>
+
+    The response has a link to the request in the UI (`data.links.ui` ) to watch the request as it's processed by the web connector. Hit "Update Selected" on the Web Connector and see your customers\!
+  </Accordion>
 </AccordionGroup>
 
 ## Update your docs
 
 Add content directly in your files with MDX syntax and React components. You can use any of our components, or even build your own.
 
-<CardGroup>
-
-<Card title="Add Content With MDX" icon="file" href="/essentials/markdown">
-  Add content to your docs with MDX syntax.
-</Card>
-
-<Card
-  title="Add Code Blocks"
-  icon="square-code"
-  href="/essentials/code"
->
-  Add code directly to your docs with syntax highlighting.
-</Card>
-
-<Card
-  title="Add Images"
-  icon="image"
-  href="/essentials/images"
->
-  Add images to your docs to make them more engaging.
-</Card>
-
-<Card
-  title="Add Custom Components"
-  icon="puzzle-piece"
-  href="/essentials/reusable-snippets"
->
-  Add templates to your docs to make them more reusable.
-</Card>
-
+<CardGroup cols={2}>
+  <Card title="Add Content With MDX" icon="file" href="/essentials/markdown">
+    Add content to your docs with MDX syntax.
+  </Card>
+  <Card title="Add Code Blocks" icon="square-code" href="/essentials/code">
+    Add code directly to your docs with syntax highlighting.
+  </Card>
+  <Card title="Add Images" icon="image" href="/essentials/images">
+    Add images to your docs to make them more engaging.
+  </Card>
+  <Card title="Add Custom Components" icon="puzzle-piece" href="/essentials/reusable-snippets">
+    Add templates to your docs to make them more reusable.
+  </Card>
 </CardGroup>
