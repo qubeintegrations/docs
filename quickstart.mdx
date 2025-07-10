@@ -68,8 +68,7 @@ The Web Connector should come pre-installed with QuickBooks, and allows QuickBoo
     export QUBE_API_KEY="..." # get this from My Applications tab
     export CONN_ID="..." # get this from the Connections tab
     
-    curl -X POST \
-         --url https://qubesync.com/api/v1/connections/$CONN_ID/customers \
+    curl https://qubesync.com/api/v1/connections/$CONN_ID/customers?max_returned=10 \
          --user $QUBE_API_KEY:
     ```
 
@@ -89,7 +88,7 @@ The Web Connector should come pre-installed with QuickBooks, and allows QuickBoo
     request.basic_auth(ENV["QUBE_API_KEY"], "")
     request.content_type = "application/json"
     
-    response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: false) do |http|
+    response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true) do |http|
       http.request(request)
     end
     
