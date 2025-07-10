@@ -7,7 +7,10 @@
     "light": "#07C983",
     "dark": "#15803D"
   },
-  "favicon": "/favicon.ico",
+  "favicon": { 
+    "light": "/favicon.ico", 
+    "dark": "/favicon.ico" 
+  },
   "navigation": {
     "tabs": [
       {
@@ -58,19 +61,9 @@
     "global": {
       "anchors": [
         {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Community",
-          "href": "https://mintlify.com/community",
+          "anchor": "QuBe Sync Slack",
+          "href": "https://qubeintegrations.slack.com",
           "icon": "slack"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
         }
       ]
     }
