@@ -1,33 +1,24 @@
 ---
 title: 'Introduction'
-description: 'Example section for showcasing API endpoints'
+description: 'The QuBe Sync API lets you talk to QuickBooks Enterprise / Desktop with ease.'
 ---
-
-<Note>
-  If you're not looking to build API reference documentation, you can delete
-  this section by removing the api-reference folder.
-</Note>
 
 ## Welcome
 
-There are two ways to build API documentation: [OpenAPI](https://mintlify.com/docs/api-playground/openapi/setup) and [MDX components](https://mintlify.com/docs/api-playground/mdx/configuration). For the starter kit, we are using the following OpenAPI specification.
+The API for QuBe Sync is intentionally small and simple. You create connections for your users, retrieve the QWC File and password for their web connector, and then queue requests for QuickBooks on their behalf. If you provide a `webhook_url` with a request, you'll get the result `POSTed` to that URL.
 
-<Card
-  title="Plant Store Endpoints"
-  icon="leaf"
-  href="https://github.com/mintlify/starter/blob/main/api-reference/openapi.json"
->
-  View the OpenAPI specification file
-</Card>
+
+## Development
+
+If you're using Ruby, you can use the [qube_sync](https://github.com/qubeintegrations/qube_sync_rb) gem to interact with the API, and specify your QuickBooks requests in JSON. Other languages can use the OpenAPI spec to generate an SDK to fit your needs.
+
+[View the OpenAPI specification file](http://localhost:4002/api/v1/openapi.json)
 
 ## Authentication
 
-All API endpoints are authenticated using Bearer tokens and picked up from the specification file.
+All API endpoints are authenticated using your Application's API key. The API key should be entered as the username, and the password left blank.
 
-```json
-"security": [
-  {
-    "bearerAuth": []
-  }
-]
-```
+## Webhooks
+
+To protect yourself from timing attacks, etc., it's best practice to follow the [Webhook Guide](/webhooks) for verifying the webhooks you're receiving are genuinely from QuBe Sync.
+

@@ -1,217 +1,1586 @@
 {
-  "openapi": "3.1.0",
+  "openapi": "3.0.0",
   "info": {
-    "title": "OpenAPI Plant Store",
-    "description": "A sample API that uses a plant store as an example to demonstrate features in the OpenAPI specification",
-    "license": {
-      "name": "MIT"
-    },
-    "version": "1.0.0"
+      "title": "QuBe Sync API",
+      "description": "Integrate with QuickBooks Desktop or QuickBooks Enterprise in a few steps.",
+      "version": "1.0.0",
+      "contact": {
+          "email": "support@qubesync.com"
+      }
   },
   "servers": [
-    {
-      "url": "http://sandbox.mintlify.com"
-    }
-  ],
-  "security": [
-    {
-      "bearerAuth": []
-    }
+      {
+          "url": "https://api.qubesync.com/api/v1",
+          "description": "v1 API"
+      }
   ],
   "paths": {
-    "/plants": {
-      "get": {
-        "description": "Returns all plants from the system that the user has access to",
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "The maximum number of results to return",
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Plant response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Plant"
+      "/connections": {
+          "get": {
+              "summary": "List all connections",
+              "description": "Returns a list of all connections for the authenticated application",
+              "tags": [
+                  "Connections"
+              ],
+              "security": [
+                  {
+                      "apiKey": []
                   }
-                }
+              ],
+              "responses": {
+                  "200": {
+                      "description": "A list of connections",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/ConnectionsList"
+                              }
+                          }
+                      }
+                  },
+                  "401": {
+                      "$ref": "#/components/responses/Unauthorized"
+                  }
               }
-            }
           },
-          "400": {
-            "description": "Unexpected error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
+          "post": {
+              "summary": "Create a new connection",
+              "description": "Creates a new connection for the authenticated application. No request body is required as the connection is automatically generated with default values.",
+              "tags": [
+                  "Connections"
+              ],
+              "security": [
+                  {
+                      "apiKey": []
+                  }
+              ],
+              "responses": {
+                  "201": {
+                      "description": "Connection created successfully",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/Connection"
+                              },
+                              "example": {
+                                  "data": {
+                                      "id": "123e4567-e89b-12d3-a456-426614174000",
+                                      "app_id": "550e8400-e29b-41d4-a716-446655440000",
+                                      "username": "550e8400-e29b-41d4-a716-446655440001",
+                                      "last_connected_at": null,
+                                      "company_file": null
+                                  }
+                              }
+                          }
+                      }
+                  },
+                  "401": {
+                      "$ref": "#/components/responses/Unauthorized"
+                  }
               }
-            }
           }
-        }
       },
-      "post": {
-        "description": "Creates a new plant in the store",
-        "requestBody": {
-          "description": "Plant to add to the store",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewPlant"
+      "/connections/{connectionId}": {
+          "get": {
+              "summary": "Get connection by ID",
+              "description": "Returns a single connection by ID",
+              "tags": [
+                  "Connections"
+              ],
+              "security": [
+                  {
+                      "apiKey": []
+                  }
+              ],
+              "parameters": [
+                  {
+                      "name": "connectionId",
+                      "in": "path",
+                      "required": true,
+                      "schema": {
+                          "type": "string",
+                          "format": "uuid"
+                      },
+                      "description": "ID of the connection to return"
+                  }
+              ],
+              "responses": {
+                  "200": {
+                      "description": "Connection found",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/Connection"
+                              },
+                              "example": {
+                                  "data": {
+                                      "id": "123e4567-e89b-12d3-a456-426614174000",
+                                      "app_id": "550e8400-e29b-41d4-a716-446655440000",
+                                      "username": "550e8400-e29b-41d4-a716-446655440001",
+                                      "company_file": "My Company File.QBW",
+                                      "last_connected_at": "2023-01-01T12:00:00Z"
+                                  }
+                              }
+                          }
+                      }
+                  },
+                  "401": {
+                      "$ref": "#/components/responses/Unauthorized"
+                  },
+                  "404": {
+                      "$ref": "#/components/responses/NotFound"
+                  }
               }
-            }
           },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "plant response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Plant"
-                }
+          "delete": {
+              "summary": "Delete a connection",
+              "description": "Deletes a connection by ID. This will also delete all associated queued requests.",
+              "tags": [
+                  "Connections"
+              ],
+              "security": [
+                  {
+                      "apiKey": []
+                  }
+              ],
+              "parameters": [
+                  {
+                      "name": "connectionId",
+                      "in": "path",
+                      "required": true,
+                      "schema": {
+                          "type": "string",
+                          "format": "uuid"
+                      },
+                      "description": "ID of the connection to delete"
+                  }
+              ],
+              "responses": {
+                  "204": {
+                      "description": "Connection and all associated data deleted successfully"
+                  },
+                  "401": {
+                      "$ref": "#/components/responses/Unauthorized"
+                  },
+                  "404": {
+                      "$ref": "#/components/responses/NotFound"
+                  }
               }
-            }
+          }
+      },
+      "/connections/{connection_id}/queued_requests": {
+          "get": {
+              "summary": "List queued requests for a connection",
+              "description": "Returns a paginated list of queued requests for a specific connection, ordered by most recent first. The response includes metadata about pagination.",
+              "tags": [
+                  "Queued Requests"
+              ],
+              "security": [
+                  {
+                      "apiKey": []
+                  }
+              ],
+              "parameters": [
+                  {
+                      "name": "connection_id",
+                      "in": "path",
+                      "required": true,
+                      "schema": {
+                          "type": "string",
+                          "format": "uuid"
+                      },
+                      "description": "ID of the connection"
+                  },
+                  {
+                      "name": "page",
+                      "in": "query",
+                      "required": false,
+                      "schema": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "default": 1
+                      },
+                      "description": "Page number for pagination"
+                  },
+                  {
+                      "name": "page_size",
+                      "in": "query",
+                      "required": false,
+                      "schema": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 100,
+                          "default": 20
+                      },
+                      "description": "Number of items per page (max 100)"
+                  },
+                  {
+                      "name": "sort",
+                      "in": "query",
+                      "required": false,
+                      "schema": {
+                          "type": "string",
+                          "enum": [
+                              "inserted_at",
+                              "updated_at"
+                          ],
+                          "default": "inserted_at"
+                      },
+                      "description": "Field to sort by"
+                  },
+                  {
+                      "name": "sort_direction",
+                      "in": "query",
+                      "required": false,
+                      "schema": {
+                          "type": "string",
+                          "enum": [
+                              "asc",
+                              "desc"
+                          ],
+                          "default": "desc"
+                      },
+                      "description": "Sort direction (asc/desc)"
+                  },
+                  {
+                      "name": "search_phrase",
+                      "in": "query",
+                      "required": false,
+                      "schema": {
+                          "type": "string"
+                      },
+                      "description": "Search phrase to filter queued requests"
+                  },
+                  {
+                      "name": "state",
+                      "in": "query",
+                      "required": false,
+                      "schema": {
+                          "type": "string",
+                          "enum": [
+                              "waiting",
+                              "retryable",
+                              "ticketed",
+                              "sent",
+                              "response_received",
+                              "error",
+                              "discarded"
+                          ]
+                      },
+                      "description": "Filter by request state"
+                  },
+                  {
+                      "name": "webhook_state",
+                      "in": "query",
+                      "required": false,
+                      "schema": {
+                          "type": "string",
+                          "enum": [
+                              "not_applicable",
+                              "pending",
+                              "succeeded",
+                              "failed"
+                          ]
+                      },
+                      "description": "Filter by webhook delivery state"
+                  }
+              ],
+              "responses": {
+                  "200": {
+                      "description": "A paginated list of queued requests",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/QueuedRequestsList"
+                              },
+                              "examples": {
+                                  "success": {
+                                      "summary": "Successful response with queued requests",
+                                      "value": {
+                                          "data": [
+                                              {
+                                                  "id": "550e8400-e29b-41d4-a716-446655440000",
+                                                  "state": "response_received",
+                                                  "webhook_state": "succeeded",
+                                                  "request_xml": "<QBXML><QBXMLMsgsRq onError='stopOnError'><CustomerQueryRq requestID='1'><MaxReturned>1</MaxReturned></CustomerQueryRq></QBXMLMsgsRq></QBXML>",
+                                                  "response_xml": "<QBXML><QBXMLMsgsRs statusCode='0' statusSeverity='Info' statusMessage='Status OK'><CustomerQueryRs requestID='1' statusCode='0' statusSeverity='Info' statusMessage='Status OK'><CustomerRet><ListID>80000001-1234567890</ListID><Name>Sample Customer</Name></CustomerRet></CustomerQueryRs></QBXMLMsgsRs></QBXML>",
+                                                  "webhook_url": "https://example.com/webhooks/quickbooks/status",
+                                                  "webhook_attempts": [
+                                                      {
+                                                          "attempted_at": "2023-01-01T12:00:05Z",
+                                                          "response": "success"
+                                                      }
+                                                  ],
+                                                  "links": {
+                                                      "self": "/api/v1/queued_requests/550e8400-e29b-41d4-a716-446655440000",
+                                                      "ui": "/app/queued_requests/550e8400-e29b-41d4-a716-446655440000",
+                                                      "connection_ui": "/app/connections/123e4567-e89b-12d3-a456-426614174000"
+                                                  },
+                                                  "inserted_at": "2023-01-01T12:00:00Z",
+                                                  "updated_at": "2023-01-01T12:00:05Z"
+                                              }
+                                          ],
+                                          "page": 1,
+                                          "total_pages": 1
+                                      }
+                                  }
+                              }
+                          }
+                      }
+                  },
+                  "401": {
+                      "$ref": "#/components/responses/Unauthorized"
+                  },
+                  "404": {
+                      "$ref": "#/components/responses/NotFound"
+                  }
+              }
           },
-          "400": {
-            "description": "unexpected error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
+          "post": {
+              "summary": "Queue a new request",
+              "description": "Creates a new queued request for processing by the QuickBooks integration. The request can be in either XML or JSON format. If a webhook URL is provided, the system will send a POST request to that URL when the request is completed.",
+              "tags": [
+                  "Queued Requests"
+              ],
+              "security": [
+                  {
+                      "apiKey": []
+                  }
+              ],
+              "parameters": [
+                  {
+                      "name": "connection_id",
+                      "in": "path",
+                      "required": true,
+                      "schema": {
+                          "type": "string",
+                          "format": "uuid",
+                          "example": "123e4567-e89b-12d3-a456-426614174000"
+                      },
+                      "description": "ID of the connection that will process this request"
+                  }
+              ],
+              "requestBody": {
+                  "required": true,
+                  "content": {
+                      "application/json": {
+                          "schema": {
+                              "$ref": "#/components/schemas/QueuedRequestCreate"
+                          },
+                          "examples": {
+                              "jsonRequest": {
+                                  "summary": "Create request with JSON",
+                                  "value": {
+                                      "queued_request": {
+                                          "request_json": {
+                                              "version": "13.0",
+                                              "request": {
+                                                  "name": "CustomerQueryRq",
+                                                  "attributes": {
+                                                      "requestID": "1"
+                                                  },
+                                                  "children": [
+                                                      {
+                                                          "name": "MaxReturned",
+                                                          "text": "100"
+                                                      }
+                                                  ]
+                                              }
+                                          },
+                                          "webhook_url": "https://example.com/webhooks/quickbooks/status"
+                                      }
+                                  }
+                              },
+                              "xmlRequest": {
+                                  "summary": "Create request with QBXML",
+                                  "value": {
+                                      "queued_request": {
+                                          "request_xml": "<QBXML><QBXMLMsgsRq onError='stopOnError'><CustomerQueryRq requestID='1'><MaxReturned>100</MaxReturned></CustomerQueryRq></QBXMLMsgsRq></QBXML>",
+                                          "webhook_url": "https://example.com/webhooks/quickbooks/status"
+                                      }
+                                  }
+                              }
+                          }
+                      }
+                  }
+              },
+              "responses": {
+                  "201": {
+                      "description": "Queued request created successfully",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/QueuedRequest"
+                              }
+                          }
+                      }
+                  },
+                  "400": {
+                      "$ref": "#/components/responses/BadRequest"
+                  },
+                  "401": {
+                      "$ref": "#/components/responses/Unauthorized"
+                  },
+                  "404": {
+                      "$ref": "#/components/responses/NotFound"
+                  }
               }
-            }
           }
-        }
-      }
-    },
-    "/plants/{id}": {
-      "delete": {
-        "description": "Deletes a single plant based on the ID supplied",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "ID of plant to delete",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Plant deleted",
-            "content": {}
+      },
+      "/queued_requests/{requestId}": {
+          "get": {
+              "summary": "Get queued request by ID",
+              "description": "Retrieves detailed information about a specific queued request, including its current state, request/response data, and any associated errors. This endpoint can be used to poll for request completion or to check the status of a long-running operation.",
+              "tags": [
+                  "Queued Requests"
+              ],
+              "security": [
+                  {
+                      "apiKey": []
+                  }
+              ],
+              "parameters": [
+                  {
+                      "name": "requestId",
+                      "in": "path",
+                      "required": true,
+                      "schema": {
+                          "type": "string",
+                          "format": "uuid",
+                          "example": "550e8400-e29b-41d4-a716-446655440000"
+                      },
+                      "description": "The unique identifier of the queued request"
+                  }
+              ],
+              "responses": {
+                  "200": {
+                      "description": "Queued request found and returned successfully",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/QueuedRequest"
+                              },
+                              "examples": {
+                                  "completedRequest": {
+                                      "summary": "Completed request with response",
+                                      "value": {
+                                          "data": {
+                                              "id": "550e8400-e29b-41d4-a716-446655440000",
+                                              "state": "response_received",
+                                              "webhook_state": "succeeded",
+                                              "request_xml": "<QBXML><QBXMLMsgsRq onError='stopOnError'><CustomerQueryRq requestID='1'><MaxReturned>1</MaxReturned></CustomerQueryRq></QBXMLMsgsRq></QBXML>",
+                                              "response_xml": "<QBXML><QBXMLMsgsRs statusCode='0' statusSeverity='Info' statusMessage='Status OK'><CustomerQueryRs requestID='1' statusCode='0' statusSeverity='Info' statusMessage='Status OK'><CustomerRet><ListID>80000001-1234567890</ListID><Name>Sample Customer</Name></CustomerRet></CustomerQueryRs></QBXMLMsgsRs></QBXML>",
+                                              "webhook_url": "https://example.com/webhooks/quickbooks/status",
+                                              "webhook_attempts": [
+                                                  {
+                                                      "attempted_at": "2023-01-01T12:00:05Z",
+                                                      "response": "success"
+                                                  }
+                                              ],
+                                              "links": {
+                                                  "self": "/api/v1/queued_requests/550e8400-e29b-41d4-a716-446655440000",
+                                                  "ui": "/app/queued_requests/550e8400-e29b-41d4-a716-446655440000",
+                                                  "connection_ui": "/app/connections/123e4567-e89b-12d3-a456-426614174000"
+                                              },
+                                              "inserted_at": "2023-01-01T12:00:00Z",
+                                              "updated_at": "2023-01-01T12:00:05Z",
+                                              "completed_at": "2023-01-01T12:00:05Z"
+                                          }
+                                      }
+                                  },
+                                  "pendingRequest": {
+                                      "summary": "Pending request",
+                                      "value": {
+                                          "data": {
+                                              "id": "550e8400-e29b-41d4-a716-446655440001",
+                                              "state": "waiting",
+                                              "webhook_state": "not_applicable",
+                                              "request_xml": "<QBXML><QBXMLMsgsRq onError='stopOnError'><CustomerAddRq requestID='2'><CustomerAdd><Name>New Customer</Name></CustomerAdd></CustomerAddRq></QBXMLMsgsRq></QBXML>",
+                                              "links": {
+                                                  "self": "/api/v1/queued_requests/550e8400-e29b-41d4-a716-446655440001",
+                                                  "ui": "/app/queued_requests/550e8400-e29b-41d4-a716-446655440001",
+                                                  "connection_ui": "/app/connections/123e4567-e89b-12d3-a456-426614174000"
+                                              },
+                                              "inserted_at": "2023-01-01T12:00:00Z",
+                                              "updated_at": "2023-01-01T12:00:00Z"
+                                          }
+                                      }
+                                  },
+                                  "failedRequest": {
+                                      "summary": "Failed request with error",
+                                      "value": {
+                                          "data": {
+                                              "id": "550e8400-e29b-41d4-a716-446655440002",
+                                              "state": "error",
+                                              "webhook_state": "failed",
+                                              "request_xml": "<QBXML><QBXMLMsgsRq onError='stopOnError'><InvalidRequestRq requestID='3'/></QBXMLMsgsRq></QBXML>",
+                                              "webhook_url": "https://example.com/webhooks/quickbooks/status",
+                                              "webhook_attempts": [
+                                                  {
+                                                      "attempted_at": "2023-01-01T12:00:05Z",
+                                                      "response": "Failed to deliver webhook: Connection timeout"
+                                                  }
+                                              ],
+                                              "webhook_error": "Failed to deliver webhook after 3 attempts",
+                                              "error": {
+                                                  "message": "Invalid request: Unknown request type 'InvalidRequestRq'",
+                                                  "code": "invalid_request",
+                                                  "details": {
+                                                      "line": 1,
+                                                      "column": 50
+                                                  }
+                                              },
+                                              "links": {
+                                                  "self": "/api/v1/queued_requests/550e8400-e29b-41d4-a716-446655440002",
+                                                  "ui": "/app/queued_requests/550e8400-e29b-41d4-a716-446655440002",
+                                                  "connection_ui": "/app/connections/123e4567-e89b-12d3-a456-426614174000"
+                                              },
+                                              "inserted_at": "2023-01-01T12:00:00Z",
+                                              "updated_at": "2023-01-01T12:00:10Z",
+                                              "completed_at": "2023-01-01T12:00:10Z"
+                                          }
+                                      }
+                                  }
+                              }
+                          }
+                      }
+                  },
+                  "401": {
+                      "$ref": "#/components/responses/Unauthorized"
+                  },
+                  "404": {
+                      "$ref": "#/components/responses/NotFound"
+                  },
+                  "410": {
+                      "description": "The requested queued request has been deleted",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/Error"
+                              },
+                              "example": {
+                                  "error": {
+                                      "message": "Queued request not found or has been deleted",
+                                      "code": "not_found"
+                                  }
+                              }
+                          }
+                      }
+                  }
+              }
           },
-          "400": {
-            "description": "unexpected error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
+          "delete": {
+              "summary": "Delete a queued request",
+              "description": "Permanently deletes a queued request by ID. This operation is idempotent - deleting an already deleted request will return a successful response. Only requests that are in a terminal state (completed, error, or discarded) can be deleted. Active requests must be cancelled first.",
+              "operationId": "deleteQueuedRequest",
+              "tags": [
+                  "Queued Requests"
+              ],
+              "security": [
+                  {
+                      "apiKey": []
+                  }
+              ],
+              "parameters": [
+                  {
+                      "name": "requestId",
+                      "in": "path",
+                      "required": true,
+                      "schema": {
+                          "type": "string",
+                          "format": "uuid",
+                          "example": "550e8400-e29b-41d4-a716-446655440000"
+                      },
+                      "description": "The unique identifier of the queued request to delete"
+                  },
+                  {
+                      "name": "force",
+                      "in": "query",
+                      "required": false,
+                      "schema": {
+                          "type": "boolean",
+                          "default": false
+                      },
+                      "description": "If true, allows deletion of requests that are not in a terminal state. Use with caution as this may leave the connection in an inconsistent state."
+                  }
+              ],
+              "responses": {
+                  "204": {
+                      "description": "Queued request was successfully deleted or did not exist",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "type": "object",
+                                  "properties": {
+                                      "meta": {
+                                          "type": "object",
+                                          "properties": {
+                                              "deleted": {
+                                                  "type": "boolean",
+                                                  "example": true
+                                              }
+                                          }
+                                      }
+                                  }
+                              },
+                              "example": {
+                                  "meta": {
+                                      "deleted": true
+                                  }
+                              }
+                          }
+                      }
+                  },
+                  "400": {
+                      "description": "Bad request - cannot delete request in current state",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/Error"
+                              },
+                              "examples": {
+                                  "activeRequest": {
+                                      "summary": "Cannot delete active request",
+                                      "value": {
+                                          "error": {
+                                              "message": "Cannot delete request in state 'waiting'. Only completed, failed, or discarded requests can be deleted.",
+                                              "code": "invalid_state"
+                                          }
+                                      }
+                                  }
+                              }
+                          }
+                      }
+                  },
+                  "401": {
+                      "$ref": "#/components/responses/Unauthorized"
+                  },
+                  "404": {
+                      "description": "Queued request not found or already deleted",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/Error"
+                              },
+                              "example": {
+                                  "error": {
+                                      "message": "Queued request not found or has been deleted",
+                                      "code": "not_found"
+                                  }
+                              }
+                          }
+                      }
+                  },
+                  "409": {
+                      "description": "Conflict - cannot delete request due to business rules",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/Error"
+                              },
+                              "examples": {
+                                  "connectionActive": {
+                                      "summary": "Cannot delete request with active connection",
+                                      "value": {
+                                          "error": {
+                                              "message": "Cannot delete request: Connection is currently active. Please disconnect first.",
+                                              "code": "connection_active"
+                                          }
+                                      }
+                                  }
+                              }
+                          }
+                      }
+                  }
               }
-            }
           }
-        }
-      }
-    }
-  },
-  "webhooks": {
-    "/plant/webhook": {
-      "post": {
-        "description": "Information about a new plant added to the store",
-        "requestBody": {
-          "description": "Plant added to the store",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewPlant"
+      },
+      "/connections/{connection_id}/customers": {
+          "get": {
+              "summary": "Query customers",
+              "description": "Executes a pre-built query to retrieve customer data from QuickBooks. Supports filtering by name, date range, and active status.",
+              "tags": ["Pre-built Queries"],
+              "operationId": "queryCustomers",
+              "security": [{"apiKey": []}],
+              "parameters": [
+                  {
+                      "name": "connection_id",
+                      "in": "path",
+                      "required": true,
+                      "schema": {
+                          "type": "string",
+                          "format": "uuid"
+                      },
+                      "description": "ID of the connection to use for the query"
+                  },
+                  {   "name": "request_id", "in": "query", "required": false, "schema": {"$ref": "#/components/schemas/request_id"} },
+                  {   "name": "iterate", "in": "query", "required": false, "schema": {"$ref": "#/components/schemas/iterate"} },
+                  {   "name": "max_returned", "in": "query", "required": false, "schema": {"type": "integer"}, "description": "Maximum number of results to return" },
+                  {   "name": "include", "in": "query", "required": false, "schema": {"type": "array", "items": {"type": "string", "enum": ["FullName", "ListID", "etc"]}}, "description": "List of fields for QuickBooks to include in the response. Full list of possible values at " },
+                  {
+                      "name": "name",
+                      "in": "query",
+                      "required": false,
+                      "schema": {
+                          "type": "string"
+                      },
+                      "description": "Filter customers by name (partial match, case-insensitive)"
+                  },
+                  {
+                      "name": "from_name",
+                      "in": "query",
+                      "required": false,
+                      "schema": {
+                          "type": "string"
+                      },
+                      "description": "Filter customers with names starting from this value (inclusive)"
+                  },
+                  {
+                      "name": "to_name",
+                      "in": "query",
+                      "required": false,
+                      "schema": {
+                          "type": "string"
+                      },
+                      "description": "Filter customers with names up to this value (inclusive)"
+                  },
+                  {
+                      "name": "from_modified_date",
+                      "in": "query",
+                      "required": false,
+                      "schema": {
+                          "type": "string",
+                          "format": "date-time"
+                      },
+                      "description": "Filter customers modified after this date/time (ISO 8601 format)"
+                  },
+                  {
+                      "name": "to_modified_date",
+                      "in": "query",
+                      "required": false,
+                      "schema": {
+                          "type": "string",
+                          "format": "date-time"
+                      },
+                      "description": "Filter customers modified before this date/time (ISO 8601 format)"
+                  },
+                  {
+                      "name": "active",
+                      "in": "query",
+                      "required": false,
+                      "schema": {
+                          "type": "string",
+                          "enum": ["Active", "Inactive", "All"],
+                          "default": "Active"
+                      },
+                      "description": "Filter customers by active status"
+                  },
+                  {
+                      "name": "webhook_url",
+                      "in": "query",
+                      "required": false,
+                      "schema": {
+                          "type": "string",
+                          "format": "uri"
+                      },
+                      "description": "Optional URL to receive a webhook when the query completes"
+                  }
+              ],
+              "responses": {
+                  "202": {
+                      "description": "Query accepted and queued for processing",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/QueuedRequest"
+                              }
+                          }
+                      }
+                  },
+                  "400": {
+                      "$ref": "#/components/responses/BadRequest"
+                  },
+                  "401": {
+                      "$ref": "#/components/responses/Unauthorized"
+                  },
+                  "404": {
+                      "$ref": "#/components/responses/NotFound"
+                  }
               }
-            }
           }
-        },
-        "responses": {
-          "200": {
-            "description": "Return a 200 status to indicate that the data was received successfully"
+      },
+      "/connections/{connection_id}/invoices": {
+          "get": {
+              "summary": "Query invoices",
+              "description": "Executes a pre-built query to retrieve invoice data from QuickBooks. Supports filtering by customer, date range, and paid status.",
+              "tags": ["Pre-built Queries"],
+              "operationId": "queryInvoices",
+              "security": [{"apiKey": []}],
+              "parameters": [
+                  {
+                      "name": "connection_id",
+                      "in": "path",
+                      "required": true,
+                      "schema": {
+                          "type": "string",
+                          "format": "uuid"
+                      },
+                      "description": "ID of the connection to use for the query"
+                  },
+                  {   "name": "request_id", "in": "query", "required": false, "schema": {"$ref": "#/components/schemas/request_id"} },
+                  {   "name": "iterate", "in": "query", "required": false, "schema": {"$ref": "#/components/schemas/iterate"} },
+                  {   "name": "max_returned", "in": "query", "required": false, "schema": {"type": "integer"}, "description": "Maximum number of results to return" },
+                  {   "name": "include", "in": "query", "required": false, "schema": {"type": "array", "items": {"type": "string", "enum": ["FullName", "ListID", "etc"]}}, "description": "List of fields for QuickBooks to include in the response. Full list of possible values at " },
+
+                  {
+                      "name": "customer_list_id",
+                      "in": "query",
+                      "required": false,
+                      "schema": {
+                          "type": "string"
+                      },
+                      "description": "Filter invoices by customer ListID"
+                  },
+                  {
+                      "name": "from_transaction_date",
+                      "in": "query",
+                      "required": false,
+                      "schema": {
+                          "type": "string",
+                          "format": "date"
+                      },
+                      "description": "Filter invoices with transaction dates on or after this date (YYYY-MM-DD)"
+                  },
+                  {
+                      "name": "to_transaction_date",
+                      "in": "query",
+                      "required": false,
+                      "schema": {
+                          "type": "string",
+                          "format": "date"
+                      },
+                      "description": "Filter invoices with transaction dates on or before this date (YYYY-MM-DD)"
+                  },
+                  {
+                      "name": "from_due_date",
+                      "in": "query",
+                      "required": false,
+                      "schema": {
+                          "type": "string",
+                          "format": "date"
+                      },
+                      "description": "Filter invoices with due dates on or after this date (YYYY-MM-DD)"
+                  },
+                  {
+                      "name": "to_due_date",
+                      "in": "query",
+                      "required": false,
+                      "schema": {
+                          "type": "string",
+                          "format": "date"
+                      },
+                      "description": "Filter invoices with due dates on or before this date (YYYY-MM-DD)"
+                  },
+                  {
+                      "name": "status",
+                      "in": "query",
+                      "required": false,
+                      "schema": {
+                          "type": "string",
+                          "enum": ["All", "PaidOnly", "NotPaidOnly", "Any"]
+                      },
+                      "description": "Filter invoices by paid status"
+                  },
+                  {
+                      "name": "include_line_items",
+                      "in": "query",
+                      "required": false,
+                      "schema": {
+                          "type": "boolean",
+                          "default": false
+                      },
+                      "description": "Whether to include line item details in the response"
+                  },
+                  {
+                      "name": "webhook_url",
+                      "in": "query",
+                      "required": false,
+                      "schema": {
+                          "type": "string",
+                          "format": "uri"
+                      },
+                      "description": "Optional URL to receive a webhook when the query completes"
+                  }
+              ],
+              "responses": {
+                  "202": {
+                      "description": "Query accepted and queued for processing",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/QueuedRequest"
+                              }
+                          }
+                      }
+                  },
+                  "400": {
+                      "$ref": "#/components/responses/BadRequest"
+                  },
+                  "401": {
+                      "$ref": "#/components/responses/Unauthorized"
+                  },
+                  "404": {
+                      "$ref": "#/components/responses/NotFound"
+                  }
+              }
           }
-        }
+      },
+      "/connections/{connection_id}/vendors": {
+          "get": {
+              "summary": "Query vendors",
+              "description": "Executes a pre-built query to retrieve vendor data from QuickBooks. Supports filtering by name and date range.",
+              "tags": ["Pre-built Queries"],
+              "operationId": "queryVendors",
+              "security": [{"apiKey": []}],
+              "parameters": [
+                  {
+                      "name": "connection_id",
+                      "in": "path",
+                      "required": true,
+                      "schema": {
+                          "type": "string",
+                          "format": "uuid"
+                      },
+                      "description": "ID of the connection to use for the query"
+                  },
+                  {   "name": "request_id", "in": "query", "required": false, "schema": {"$ref": "#/components/schemas/request_id"} },
+                  {   "name": "iterate", "in": "query", "required": false, "schema": {"$ref": "#/components/schemas/iterate"} },
+                  {   "name": "max_returned", "in": "query", "required": false, "schema": {"type": "integer"}, "description": "Maximum number of results to return" },
+                  {   "name": "include", "in": "query", "required": false, "schema": {"type": "array", "items": {"type": "string", "enum": ["FullName", "ListID", "etc"]}}, "description": "List of fields for QuickBooks to include in the response. Full list of possible values at " },
+
+                  {
+                      "name": "name",
+                      "in": "query",
+                      "required": false,
+                      "schema": {
+                          "type": "string"
+                      },
+                      "description": "Filter vendors by name (partial match, case-insensitive)"
+                  },
+                  {
+                      "name": "from_name",
+                      "in": "query",
+                      "required": false,
+                      "schema": {
+                          "type": "string"
+                      },
+                      "description": "Filter vendors with names starting from this value (inclusive)"
+                  },
+                  {
+                      "name": "to_name",
+                      "in": "query",
+                      "required": false,
+                      "schema": {
+                          "type": "string"
+                      },
+                      "description": "Filter vendors with names up to this value (inclusive)"
+                  },
+                  {
+                      "name": "from_modified_date",
+                      "in": "query",
+                      "required": false,
+                      "schema": {
+                          "type": "string",
+                          "format": "date-time"
+                      },
+                      "description": "Filter vendors modified after this date/time (ISO 8601 format)"
+                  },
+                  {
+                      "name": "to_modified_date",
+                      "in": "query",
+                      "required": false,
+                      "schema": {
+                          "type": "string",
+                          "format": "date-time"
+                      },
+                      "description": "Filter vendors modified before this date/time (ISO 8601 format)"
+                  },
+                  {
+                      "name": "active",
+                      "in": "query",
+                      "required": false,
+                      "schema": {
+                          "type": "string",
+                          "enum": ["Active", "Inactive", "All"],
+                          "default": "Active"
+                      },
+                      "description": "Filter vendors by active status"
+                  },
+                  {
+                      "name": "webhook_url",
+                      "in": "query",
+                      "required": false,
+                      "schema": {
+                          "type": "string",
+                          "format": "uri"
+                      },
+                      "description": "Optional URL to receive a webhook when the query completes"
+                  }
+              ],
+              "responses": {
+                  "202": {
+                      "description": "Query accepted and queued for processing",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/QueuedRequest"
+                              }
+                          }
+                      }
+                  },
+                  "400": {
+                      "$ref": "#/components/responses/BadRequest"
+                  },
+                  "401": {
+                      "$ref": "#/components/responses/Unauthorized"
+                  },
+                  "404": {
+                      "$ref": "#/components/responses/NotFound"
+                  }
+              }
+          }
+      },
+      "/connections/{connectionId}/password": {
+          "post": {
+              "summary": "Generate or set password for a connection",
+              "description": "Generates a new password or sets a specific password for a connection",
+              "tags": [
+                  "Connections"
+              ],
+              "security": [
+                  {
+                      "apiKey": []
+                  }
+              ],
+              "parameters": [
+                  {
+                      "name": "connectionId",
+                      "in": "path",
+                      "required": true,
+                      "schema": {
+                          "type": "string",
+                          "format": "uuid"
+                      },
+                      "description": "ID of the connection"
+                  }
+              ],
+              "requestBody": {
+                  "required": false,
+                  "content": {
+                      "application/json": {
+                          "schema": {
+                              "type": "object",
+                              "properties": {
+                                  "password": {
+                                      "type": "string",
+                                      "description": "Optional. If provided, will set this as the connection password. If omitted, a random password will be generated."
+                                  }
+                              }
+                          }
+                      }
+                  }
+              },
+              "responses": {
+                  "200": {
+                      "description": "Password generated/set successfully",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "type": "object",
+                                  "properties": {
+                                      "id": {
+                                          "type": "string",
+                                          "format": "uuid"
+                                      },
+                                      "password": {
+                                          "type": "string"
+                                      }
+                                  }
+                              }
+                          }
+                      }
+                  },
+                  "401": {
+                      "$ref": "#/components/responses/Unauthorized"
+                  },
+                  "404": {
+                      "$ref": "#/components/responses/NotFound"
+                  }
+              }
+          }
+      },
+      "/connections/{connectionId}/qwc": {
+          "get": {
+              "summary": "Get QWC file for a connection",
+              "description": "Returns a QWC file for the specified connection",
+              "tags": [
+                  "Connections"
+              ],
+              "security": [
+                  {
+                      "apiKey": []
+                  }
+              ],
+              "parameters": [
+                  {
+                      "name": "connectionId",
+                      "in": "path",
+                      "required": true,
+                      "schema": {
+                          "type": "string",
+                          "format": "uuid"
+                      },
+                      "description": "ID of the connection"
+                  }
+              ],
+              "responses": {
+                  "200": {
+                      "description": "QWC file generated successfully",
+                      "content": {
+                          "application/xml": {
+                              "schema": {
+                                  "type": "string"
+                              }
+                          }
+                      }
+                  },
+                  "401": {
+                      "$ref": "#/components/responses/Unauthorized"
+                  },
+                  "404": {
+                      "$ref": "#/components/responses/NotFound"
+                  }
+              }
+          }
       }
-    }
   },
   "components": {
-    "schemas": {
-      "Plant": {
-        "required": [
-          "name"
-        ],
-        "type": "object",
-        "properties": {
-          "name": {
-            "description": "The name of the plant",
-            "type": "string"
-          },
-          "tag": {
-            "description": "Tag to specify the type",
-            "type": "string"
+      "securitySchemes": {
+          "apiKey": {
+              "type": "http",
+              "scheme": "basic",
+              "description": "Use your app's API_KEY as the username, and leave the password blank"
           }
-        }
       },
-      "NewPlant": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/Plant"
+      "schemas": {
+          "Connection": {
+              "type": "object",
+              "properties": {
+                  "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "example": "123e4567-e89b-12d3-a456-426614174000",
+                      "description": "Unique identifier for the connection"
+                  },
+                  "last_connected_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2023-01-01T12:00:00Z",
+                      "description": "Timestamp of when the connection was last used",
+                      "nullable": true
+                  },
+                  "app_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "example": "550e8400-e29b-41d4-a716-446655440000",
+                      "description": "ID of the app this connection belongs to"
+                  },
+                  "company_file": {
+                      "type": "string",
+                      "example": "My Company File.QBW",
+                      "description": "Name of the QuickBooks company file",
+                      "nullable": true
+                  },
+                  "username": {
+                      "type": "string",
+                      "example": "550e8400-e29b-41d4-a716-446655440001",
+                      "description": "Automatically generated username for the connection"
+                  }
+              },
+              "required": [
+                  "id",
+                  "app_id",
+                  "username"
+              ]
           },
-          {
-            "required": [
-              "id"
-            ],
-            "type": "object",
-            "properties": {
-              "id": {
-                "description": "Identification number of the plant",
-                "type": "integer",
-                "format": "int64"
+          "ConnectionUpdate": {
+              "type": "object",
+              "properties": {
+                  "company_file": {
+                      "type": "string",
+                      "example": "My Company File.QBW",
+                      "description": "Name of the QuickBooks company file"
+                  }
               }
-            }
-          }
-        ]
-      },
-      "Error": {
-        "required": [
-          "error",
-          "message"
-        ],
-        "type": "object",
-        "properties": {
-          "error": {
-            "type": "integer",
-            "format": "int32"
           },
-          "message": {
-            "type": "string"
+          "ConnectionsList": {
+              "type": "object",
+              "properties": {
+                  "data": {
+                      "type": "array",
+                      "items": {
+                          "$ref": "#/components/schemas/Connection"
+                      }
+                  }
+              }
+          },
+          "QueuedRequest": {
+              "type": "object",
+              "properties": {
+                  "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "example": "550e8400-e29b-41d4-a716-446655440000",
+                      "description": "Unique identifier for the queued request"
+                  },
+                  "state": {
+                      "type": "string",
+                      "enum": [
+                          "waiting",
+                          "retryable",
+                          "ticketed",
+                          "sent",
+                          "response_received",
+                          "error",
+                          "discarded"
+                      ],
+                      "description": "Current state of the queued request"
+                  },
+                  "webhook_state": {
+                      "type": "string",
+                      "enum": [
+                          "not_applicable",
+                          "pending",
+                          "succeeded",
+                          "failed"
+                      ],
+                      "description": "State of the webhook delivery. Not applicable if webhook_url was not provided."
+                  },
+                  "request_xml": {
+                      "type": "string",
+                      "example": "<QBXML><QBXMLMsgsRq onError='stopOnError'><CustomerQueryRq requestID='1'><MaxReturned>100</MaxReturned></CustomerQueryRq></QBXMLMsgsRq></QBXML>",
+                      "description": "The QBXML request to be processed"
+                  },
+                  "request_json": {
+                      "type": "object",
+                      "nullable": true,
+                      "description": "The request payload in JSON format (alternative to request_xml)",
+                      "example": {
+                          "version": "13.0",
+                          "request": {
+                              "name": "CustomerQueryRq",
+                              "attributes": {
+                                  "requestID": "1"
+                              },
+                              "children": [
+                                  {
+                                      "name": "MaxReturned",
+                                      "text": "100"
+                                  }
+                              ]
+                          }
+                      }
+                  },
+                  "response_xml": {
+                      "type": "string",
+                      "nullable": true,
+                      "example": "<QBXML><QBXMLMsgsRs statusCode='0' statusSeverity='Info' statusMessage='Status OK'><CustomerQueryRs requestID='1' statusCode='0' statusSeverity='Info' statusMessage='Status OK'><CustomerRet><ListID>80000001-1234567890</ListID><Name>Sample Customer</Name></CustomerRet></CustomerQueryRs></QBXMLMsgsRs></QBXML>",
+                      "description": "The QBXML response from QuickBooks"
+                  },
+                  "response_json": {
+                      "type": "array",
+                      "items": {
+                          "type": "object"
+                      },
+                      "nullable": true,
+                      "description": "The response payload in JSON format, if request is completed"
+                  },
+                  "webhook_url": {
+                      "type": "string",
+                      "format": "uri",
+                      "nullable": true,
+                      "example": "https://example.com/webhook",
+                      "description": "URL to receive a webhook when the request is completed"
+                  },
+                  "webhook_attempts": {
+                      "type": "array",
+                      "items": {
+                          "type": "object",
+                          "properties": {
+                              "attempted_at": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "description": "The timestamp when the webhook was attempted"
+                              },
+                              "response": {
+                                  "type": "string",
+                                  "description": "The response from the webhook endpoint or an error message"
+                              }
+                          },
+                          "required": [
+                              "attempted_at",
+                              "response"
+                          ]
+                      },
+                      "description": "List of webhook delivery attempts with timestamps and responses"
+                  },
+                  "webhook_error": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "Error message if webhook delivery failed"
+                  },
+                  "error": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                          "message": {
+                              "type": "string"
+                          },
+                          "code": {
+                              "type": "string"
+                          },
+                          "details": {
+                              "type": "object"
+                          }
+                      },
+                      "description": "Error details if the request failed processing"
+                  },
+                  "links": {
+                      "type": "object",
+                      "properties": {
+                          "self": {
+                              "type": "string",
+                              "format": "uri",
+                              "example": "/api/v1/connections/123e4567-e89b-12d3-a456-426614174000/queued_requests/550e8400-e29b-41d4-a716-446655440000"
+                          },
+                          "ui": {
+                              "type": "string",
+                              "format": "uri",
+                              "example": "/app/queued_requests/550e8400-e29b-41d4-a716-446655440000"
+                          },
+                          "connection_ui": {
+                              "type": "string",
+                              "format": "uri",
+                              "example": "/app/connections/123e4567-e89b-12d3-a456-426614174000"
+                          }
+                      },
+                      "required": [
+                          "self",
+                          "ui",
+                          "connection_ui"
+                      ]
+                  },
+                  "inserted_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2023-01-01T12:00:00Z",
+                      "description": "When the request was created"
+                  },
+                  "updated_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2023-01-01T12:00:01Z",
+                      "description": "When the request was last updated"
+                  },
+                  "connection_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "example": "123e4567-e89b-12d3-a456-426614174000",
+                      "description": "ID of the connection this request belongs to"
+                  },
+                  "completed_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2023-01-01T12:00:01Z",
+                      "nullable": true,
+                      "description": "When the request was completed, if applicable"
+                  }
+              },
+              "required": [
+                  "id",
+                  "connection_id",
+                  "state",
+                  "request_xml"
+              ]
+          },
+          "QueuedRequestCreate": {
+              "type": "object",
+              "properties": {
+                  "request_json": {
+                      "type": "object",
+                      "description": "The request payload in JSON format (alternative to request_xml)",
+                      "example": {
+                          "version": "13.0",
+                          "request": {
+                              "name": "CustomerQueryRq",
+                              "attributes": {
+                                  "requestID": "1"
+                              },
+                              "children": [
+                                  {
+                                      "name": "MaxReturned",
+                                      "text": "100"
+                                  }
+                              ]
+                          }
+                      }
+                  },
+                  "request_xml": {
+                      "type": "string",
+                      "description": "The request payload in QBXML format (alternative to request_json)",
+                      "example": "<QBXML><QBXMLMsgsRq onError='stopOnError'><CustomerQueryRq requestID='1'><MaxReturned>100</MaxReturned></CustomerQueryRq></QBXMLMsgsRq></QBXML>"
+                  },
+                  "webhook_url": {
+                      "type": "string",
+                      "format": "uri",
+                      "example": "https://your-webhook-url.com/endpoint",
+                      "description": "Optional URL to receive a webhook when the request is completed"
+                  }
+              },
+              "required": [
+                  "request_type",
+                  "request_json"
+              ]
+          },
+          "QueuedRequestsList": {
+              "type": "object",
+              "properties": {
+                  "data": {
+                      "type": "array",
+                      "items": {
+                          "$ref": "#/components/schemas/QueuedRequest"
+                      }
+                  }
+              }
+          },
+          "max_returned": {
+              "type": "integer",
+              "description": "Maximum number of records to return",
+              "example": 100
+          },
+          "request_id": {
+              "type": "string",
+              "description": "A custom ID that can be used to identify the request and response. This could be your local ID for the request.",
+              "example": "1"
+          },
+          "iterate": {
+              "type": "boolean",
+              "description": "If true, QuBe Sync will automatically handle the QBXML iteration until all records are returned. Each page of results will have its own request record and webhook. The id and webhook_url will be the same across each page request, and there will also be `page_request_id`, `page` values to distinguish pages from each other. ",
+              "example": true
+          },
+
+          "Error": {
+              "type": "object",
+              "properties": {
+                  "error": {
+                      "type": "object",
+                      "properties": {
+                          "code": {
+                              "type": "string",
+                              "example": "invalid_request"
+                          },
+                          "message": {
+                              "type": "string",
+                              "example": "The request was invalid"
+                          },
+                          "details": {
+                              "type": "object",
+                              "description": "Additional error details"
+                          }
+                      }
+                  }
+              }
           }
-        }
+      },
+      "responses": {
+          "BadRequest": {
+              "description": "Invalid request",
+              "content": {
+                  "application/json": {
+                      "schema": {
+                          "$ref": "#/components/schemas/Error"
+                      },
+                      "example": {
+                          "error": {
+                              "code": "invalid_request",
+                              "message": "The request was invalid"
+                          }
+                      }
+                  }
+              }
+          },
+          "Unauthorized": {
+              "description": "Authentication required or invalid API key",
+              "content": {
+                  "application/json": {
+                      "schema": {
+                          "$ref": "#/components/schemas/Error"
+                      },
+                      "example": {
+                          "error": {
+                              "code": "unauthorized",
+                              "message": "Authentication required"
+                          }
+                      }
+                  }
+              }
+          },
+          "NotFound": {
+              "description": "The requested resource was not found",
+              "content": {
+                  "application/json": {
+                      "schema": {
+                          "$ref": "#/components/schemas/Error"
+                      },
+                      "example": {
+                          "error": {
+                              "code": "not_found",
+                              "message": "The requested resource was not found"
+                          }
+                      }
+                  }
+              }
+          },
+          "InternalServerError": {
+              "description": "Internal server error",
+              "content": {
+                  "application/json": {
+                      "schema": {
+                          "$ref": "#/components/schemas/Error"
+                      },
+                      "example": {
+                          "error": {
+                              "code": "internal_error",
+                              "message": "An unexpected error occurred"
+                          }
+                      }
+                  }
+              }
+          }
       }
-    },
-    "securitySchemes": {
-      "bearerAuth": {
-        "type": "http",
-        "scheme": "bearer"
+  },
+  "tags": [
+      {
+          "name": "Connections",
+          "description": "Endpoints for managing QuickBooks connections"
+      },
+      {
+          "name": "Queued Requests",
+          "description": "Endpoints for managing queued API requests"
+      },
+      {
+          "name": "Pre-built Queries",
+          "description": "Endpoints for executing pre-built queries against QuickBooks data. These endpoints simplify common data retrieval operations by providing a higher-level interface than the raw queued requests API. Each query is executed asynchronously and returns a queued request ID that can be used to check the status and retrieve results."
       }
-    }
-  }
+  ]
 }
