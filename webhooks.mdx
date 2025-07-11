@@ -1,0 +1,221 @@
+---
+title: "Webhooks"
+description: "Receive webhooks from QuBe Sync when QuickBooks responds to your requests."
+---
+
+
+Any time a request is completed or fails, a webhook is sent to the `webhook_url` you provided with the request. The webhook contains the request ID and the result of the request.
+
+```json
+{
+    "timestamp": "2023-01-01T12:00:00Z",
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "page_request_id": "550e8400-e29b-41d4-a716-446655440001",
+    "page": 1,
+    "state": "completed",
+    "response_xml": "<QBXML><QBXMLMsgsRs statusCode='0' statusSeverity='Info' statusMessage='Status OK'><CustomerQueryRs requestID='1' statusCode='0' statusSeverity='Info' statusMessage='Status OK'><CustomerRet><ListID>80000001-1234567890</ListID><Name>Sample Customer</Name></CustomerRet></CustomerQueryRs></QBXMLMsgsRs></QBXML>",
+    "response_json": [
+      {
+        "QBXMLMsgsRs": {
+          "CustomerQueryRs": {
+            "@requestID": "32",
+            "@statusCode": 0,
+            "@statusSeverity": "Info",
+            "@statusMessage": "Status OK",
+            "@iteratorRemainingCount": 3,
+            "@iteratorID": "{a667c96a-48d0-4e63-866e-d37ce9d607e9}",
+            "CustomerRet": [
+              {
+                "ListID": "80000003-1665678791",
+                "Name": "Babcock's Music Shop",
+                "FullName": "Babcock's Music Shop",
+                "IsActive": true
+              },
+              {
+                "ListID": "80000003-1665678792",
+                "Name": "John Doe",
+                "FullName": "John Doe",
+                "IsActive": true
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "error": null
+}
+```
+
+## Securing your webhook endpoint(s)
+
+To protect yourself from timing attacks, JSON parsing vulnerabilities, etc., it's best practice to verify the webhooks you're receiving are genuinely from QuBe Sync.
+
+If you are using Ruby with the `qube_sync` gem, you can verify a webhook as follows:
+
+```ruby
+payload = request.body.read
+signature = request.headers['X-Qube-Signature']
+
+event = QubeSync.verify_and_build_webhook!(payload, signature)
+```
+
+Otherwise, you can verify a webhook using the following steps:
+
+### Step 1. Get the X-Qube-Signature header
+
+To ensure the webhook is coming from QuBe Sync, you can verify the `X-Qube-Signature` header. This header contains a SHA-256 HMAC of the payload using your application's active secret keys. You can manage your webhook secret keys in the _Application_'s settings.
+
+The header will be in the following format:
+<Note>Newlines have been added for readability.</Note>
+```bash
+X-Qube-Signature: 
+t=1492774577, 
+v1=signature1, 
+v2=signature2
+```
+
+#### Step 2. Extract the timestamp and signatures
+
+<CodeGroup>
+```ruby ruby
+def extract_timestamp_and_signatures(header, expected_schemes: ["v1"])
+  parts = header.split(',').map { |part| part.split('=') }.to_h
+  timestamp = parts["t"].to_i
+  signatures = parts.select { |k, _| expected_schemes.include?(k) }
+  {
+    timestamp: timestamp,
+    signatures: signatures.values
+  }
+end
+```
+
+```elixir elixir
+def extract_timestamp_and_signatures(header, expected_schemes: ["v1"] ) do
+  header
+  |> String.split(",")
+  |> Stream.map(&String.split(&1, "="))
+  |> Enum.into(%{})
+  |> Kernel.then(fn map ->
+    signatures = 
+      map
+      |> Enum.filter(fn {k, _} -> expected_schemes |> Enum.member?(k) end)
+      |> Enum.values()
+      
+    %{
+      timestamp: map["t"],
+      signatures: signatures
+    }
+  end)
+end
+```
+
+```python python
+def extract_timestamp_and_signatures(header, expected_schemes: ["v1"]):
+    parts = header.split(",").map(lambda part: part.split("=")).to_h
+    timestamp = parts["t"].to_i
+    signatures = parts.reject { |k, _| !expected_schemes.include?(k) }
+    {
+      timestamp: timestamp,
+      signatures: signatures.values
+    }
+end
+```
+
+```javascript javascript
+function extractTimestampAndSignatures(header, expectedSchemes = ["v1"]) {
+  const parts = header.split(",").map(part => part.split("=")).to_h;
+  const timestamp = parts["t"].to_i;
+  const signatures = parts.reject((_, k) => !expectedSchemes.includes(k));
+  return {
+    timestamp,
+    signatures: signatures.values
+  };
+}
+```
+</CodeGroup>
+
+#### Step 3. Compare the signatures
+
+Compute the expected signature value by calculating the SHA256 HMAC of the timestamp and raw request body (`{{timestamp}}.{{body}}`) using your application's secret key. Then check if that matches any of the signatures in the header.
+
+<CodeGroup>
+```ruby ruby
+def sign_payload(timestamp, body)
+  OpenSSL::HMAC.hexdigest('sha256', api_secret, "#{timestamp}.#{body}")
+end
+
+def verify_and_build_webhook!(body, signature, max_age: 500)
+  extract_timestamp_and_signatures(signature) => { timestamp:, signatures:}
+
+  if timestamp < Time.now.to_i - max_age
+    raise 'Timestamp diff too high'
+  end
+  
+  signatures.detect { |sig| sign_payload(timestamp, body) == sig } or raise 'No matching signature'
+
+  JSON.parse(body)
+end
+
+payload = request.body.read
+signature = request.headers['X-Qube-Signature']
+
+event = verify_and_build_webhook!(payload, signature)
+```
+
+```elixir elixir
+def sign_payload(timestamp, body) do
+  :crypto.hmac(:sha256, api_secret, "#{timestamp}.#{body}")
+end
+
+def verify_and_build_webhook!(body, signature, max_age: 500) do
+  %{timestamp: timestamp, signatures: signatures} = extract_signatures(signature)
+
+  if timestamp < System.system_time(:second) - max_age do
+    raise 'Timestamp diff too high'
+  end
+
+  Enum.find(signatures, fn sig -> sign_payload(timestamp, body) == sig end) or raise 'No matching signature'
+
+  JSON.parse(body)
+end
+```
+
+```python python
+def sign_payload(timestamp, body):
+    return hmac.new(api_secret, f"{timestamp}.{body}", hashlib.sha256).hexdigest()
+
+def verify_and_build_webhook!(body, signature, max_age: 500):
+    extract_signature_meta(signature) => { timestamp:, signatures:}
+
+    if timestamp < time.time() - max_age:
+        raise 'Timestamp diff too high'
+    
+    next((sig for sig in signatures if sign_payload(timestamp, body) == sig), None) or raise 'No matching signature'
+
+    json.loads(body)
+```
+
+```javascript javascript
+function signPayload(timestamp, body) {
+  return crypto.createHmac('sha256', api_secret).update(`${timestamp}.${body}`).digest('hex');
+}
+
+function verifyAndBuildWebhook!(body, signature, maxAge = 500) {
+  const { timestamp, signatures } = extractSignatures(signature);
+
+  if (timestamp < Date.now() / 1000 - maxAge) {
+    throw new Error('Timestamp diff too high');
+  }
+
+  signatures.find(sig => signPayload(timestamp, body) === sig) || throw new Error('No matching signature');
+
+  JSON.parse(body);
+}
+```
+</CodeGroup>
+
+#### Prevent replay attacks
+
+You can see we're also checking the age of the timestamp to prevent replay attacks. You can choose a `max_age` that makes sense for your application. 
+  
+

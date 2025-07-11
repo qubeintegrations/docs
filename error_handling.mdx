@@ -1,0 +1,51 @@
+---
+title: "Error Handling"
+description: "Gracefully handle QuickBooks errors."
+---
+
+## Overview
+
+When a queued request fails, a webhook is sent to the `webhook_url` you provided with the request. The webhook contains the request ID and the error that occurred.
+
+```json
+{
+    "timestamp": "2023-01-01T12:00:00Z",
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "page_request_id": "550e8400-e29b-41d4-a716-446655440001",
+    "page": 1,
+    "state": "failed",
+    "request_xml": "...",
+    "request_json": "...",
+    ...
+    "error": {
+        "error_type": "quickbooks_connection_error",
+        "message": "The raw QuickBooks error message",
+        "hresult": "the error code from QuickBooks",
+        "human_message": "A friendly error message for the end-user"
+    }
+}
+```
+
+## Error Types
+
+### `quickbooks_connection_error`
+
+This error occurs when the connection to QuickBooks fails. This can happen for a variety of reasons, such:
+
+- QuickBooks is not running, and the user did not enable "Allow access even when QuickBooks is closed" in the Web Connector
+- No company file is open in QuickBooks
+- QuickBooks has a modal open, such as a login screen
+
+### `xml_error`
+
+If the QBXML request to QuickBooks was malformed, this error will be returned. This can be caused by:
+
+- Incorrect QBXML structure or tags
+- Characters that QuickBooks cannot handle
+
+### `unexpected_error`
+
+All other errors are grouped into this category. Sometimes the user will need to send you the contents of their QuickBooks log file to help you debug the issue. 
+
+You can also contact [support@qubesync.com](mailto:support@qubesync.com) for help if you're unable to resolve the issue on your own.
+

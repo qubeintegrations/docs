@@ -5,20 +5,21 @@ description: 'The QuBe Sync API lets you talk to QuickBooks Enterprise / Desktop
 
 ## Welcome
 
-The API for QuBe Sync is intentionally small and simple. You create connections for your users, retrieve the QWC File and password for their web connector, and then queue requests for QuickBooks on their behalf. If you provide a `webhook_url` with a request, you'll get the result `POSTed` to that URL.
+The API for QuBe Sync is intentionally small and focused. You **create connections** for your users, **retrieve the QWC File and password** for their web connector, and then **queue requests** for QuickBooks on their behalf. If you provide a `webhook_url` with a request, you'll get the result `POSTed` to that URL.
 
 
 ## Development
 
-If you're using Ruby, you can use the [qube_sync](https://github.com/qubeintegrations/qube_sync_rb) gem to interact with the API, and specify your QuickBooks requests in JSON. Other languages can use the OpenAPI spec to generate an SDK to fit your needs.
+If you're using Ruby, you can use the [qube_sync](https://github.com/qubeintegrations/qube_sync_rb) gem to interact with the API, and specify your QuickBooks requests. SDKs for other languages are in the works (please send a support request to [support@qubesync.com](mailto:support@qubesync.com) if you'd like your language to be prioritized). You can also use the OpenAPI spec to generate an SDK to fit your needs, or implement the API directly (it's not hard).
+
 
 [View the OpenAPI specification file](http://localhost:4002/api/v1/openapi.json)
 
 ## Authentication
 
-All API endpoints are authenticated using your Application's API key. The API key should be entered as the username, and the password left blank.
+All API endpoints are authenticated using your Application's API key and Basic Auth. The API key should be entered as the username, and the password left blank.
 
 ## Webhooks
 
-To protect yourself from timing attacks, etc., it's best practice to follow the [Webhook Guide](/webhooks) for verifying the webhooks you're receiving are genuinely from QuBe Sync.
+To protect yourself from timing attacks and other common API vulnerabilities, it's best practice to follow the [Webhooks Guide](/webhooks). It will show you how to verify the webhooks you're receiving are genuinely from QuBe Sync.
 
