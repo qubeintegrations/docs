@@ -5,24 +5,27 @@ description: "Auto-paginate requests / responses from QuickBooks."
 
 ## Overview
 
-QuickBooks frequently needs to paginate responses to avoid timeouts and other issues. Usually this would require tracking iterator metadata and making multiple requests to QuickBooks. QuBe Sync handles this for you automatically.
+QuickBooks frequently needs to paginate responses to avoid timeouts and other issues. Usually this would require tracking iterator metadata and making multiple requests to QuickBooks.
 
 ## Auto-pagination to the rescue
 
-QuBe Sync can automatically paginate any request to QuickBooks that uses the `iterator` attribute. Each result page will be sent to the `webhook_url` provided with the original request. Each webhook will contain the `page` and `page_request_id` attributes to help you distinguish between pages.
+QuBe Sync can automatically paginate any QuickBooks request that supports it. Each result page will be sent to the `webhook_url` provided with the original request. Each webhook will contain the `page` and `page_request_id` attributes to help you distinguish between pages.
 
 If you are using [pre-built requests](/api-reference/pre-built-queries/query-customers), you can auto-paginate them by setting the `iterate` parameter to `true`.
 
 <CodeGroup>
+
 ```curl curl
 curl https://qubesync.com/api/v1/connections/$CONN_ID/customers?iterate=true \
      --user $QUBE_API_KEY:
 ```
 
 </CodeGroup>
+
 If you're building custom requests, QuBe Sync will automatically paginate any request you send with `iterator="Start"`.
 
 <CodeGroup>
+
 ```xml qbxml
 <?xml version="1.0" encoding="utf-8"?>
 <?qbxml version="13.0"?>
@@ -35,6 +38,7 @@ If you're building custom requests, QuBe Sync will automatically paginate any re
 </QBXML>
 ```
 
+
 ```ruby ruby
 QubeSync::RequestBuilder.new do |r|
   r.QBXML do
@@ -46,8 +50,5 @@ QubeSync::RequestBuilder.new do |r|
   end
 end
 ```
+
 </CodeGroup>
-
-
-
-
