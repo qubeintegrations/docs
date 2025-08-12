@@ -10,7 +10,7 @@
   },
   "servers": [
       {
-          "url": "https://api.qubesync.com/api/v1",
+          "url": "https://qubesync.com/api/v1",
           "description": "v1 API"
       }
   ],
