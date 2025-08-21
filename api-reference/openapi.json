@@ -308,7 +308,7 @@
                                                     "webhook_state": "succeeded",
                                                     "request_xml": "<QBXML><QBXMLMsgsRq onError='stopOnError'><CustomerQueryRq requestID='1'><MaxReturned>1</MaxReturned></CustomerQueryRq></QBXMLMsgsRq></QBXML>",
                                                     "response_xml": "<QBXML><QBXMLMsgsRs statusCode='0' statusSeverity='Info' statusMessage='Status OK'><CustomerQueryRs requestID='1' statusCode='0' statusSeverity='Info' statusMessage='Status OK'><CustomerRet><ListID>80000001-1234567890</ListID><Name>Sample Customer</Name></CustomerRet></CustomerQueryRs></QBXMLMsgsRs></QBXML>",
-                                                    "webhook_url": "https://example.com/webhooks/quickbooks/status",
+                                                    "webhook_url": "https://example.com/webhooks/qube_sync",
                                                     "webhook_attempts": [
                                                         {
                                                             "attempted_at": "2023-01-01T12:00:05Z",
@@ -342,7 +342,7 @@
             },
             "post": {
                 "summary": "Queue a new request",
-                "description": "Creates a new queued request for processing by the QuickBooks integration. The request can be in either XML or JSON format. If a webhook URL is provided, the system will send a POST request to that URL when the request is completed.",
+                "description": "Creates a new queued request for processing by the QuickBooks integration. The QuickBooks request itself can be in either XML (`request_xml`) or JSON (`request_json`) format. If a webhook URL is provided, the system will send a POST request to that URL with the result when the request is completed.",
                 "tags": [
                     "Queued Requests"
                 ],
@@ -373,37 +373,33 @@
                             },
                             "examples": {
                                 "jsonRequest": {
-                                    "summary": "Create request with JSON",
+                                    "summary": "Specify a QuickBooks request with JSON",
                                     "value": {
-                                        "queued_request": {
-                                            "request_json": {
-                                                "version": "13.0",
-                                                "request": {
-                                                    "name": "CustomerQueryRq",
-                                                    "attributes": {
-                                                        "requestID": "1"
-                                                    },
-                                                    "children": [
-                                                        {
-                                                            "name": "MaxReturned",
-                                                            "text": "100"
-                                                        }
-                                                    ]
-                                                }
-                                            },
-                                            "webhook_url": "https://example.com/webhooks/quickbooks/status"
-                                        }
+                                        "request_json": {
+                                            "version": "13.0",
+                                            "request": {
+                                                "name": "CustomerQueryRq",
+                                                "attributes": {
+                                                    "requestID": "1"
+                                                },
+                                                "children": [
+                                                    {
+                                                        "name": "MaxReturned",
+                                                        "text": "100"
+                                                    }
+                                                ]
+                                            }
+                                        },
+                                        "webhook_url": "https://example.com/webhooks/qube_sync"
                                     }
                                 },
                                 "xmlRequest": {
-                                    "summary": "Create request with QBXML",
+                                    "summary": "Specify a QuickBooks request with XML",
                                     "value": {
-                                        "queued_request": {
-                                            "request_xml": "<QBXML><QBXMLMsgsRq onError='stopOnError'><CustomerQueryRq requestID='1'><MaxReturned>100</MaxReturned></CustomerQueryRq></QBXMLMsgsRq></QBXML>",
-                                            "webhook_url": "https://example.com/webhooks/quickbooks/status"
-                                        }
+                                        "request_xml": "<QBXML><QBXMLMsgsRq onError='stopOnError'><CustomerQueryRq requestID='1'><MaxReturned>100</MaxReturned></CustomerQueryRq></QBXMLMsgsRq></QBXML>",
+                                        "webhook_url": "https://example.com/webhooks/qube_sync"
                                     }
-                                }
+                                },
                             }
                         }
                     }
@@ -474,7 +470,7 @@
                                                 "webhook_state": "succeeded",
                                                 "request_xml": "<QBXML><QBXMLMsgsRq onError='stopOnError'><CustomerQueryRq requestID='1'><MaxReturned>1</MaxReturned></CustomerQueryRq></QBXMLMsgsRq></QBXML>",
                                                 "response_xml": "<QBXML><QBXMLMsgsRs statusCode='0' statusSeverity='Info' statusMessage='Status OK'><CustomerQueryRs requestID='1' statusCode='0' statusSeverity='Info' statusMessage='Status OK'><CustomerRet><ListID>80000001-1234567890</ListID><Name>Sample Customer</Name></CustomerRet></CustomerQueryRs></QBXMLMsgsRs></QBXML>",
-                                                "webhook_url": "https://example.com/webhooks/quickbooks/status",
+                                                "webhook_url": "https://example.com/webhooks/qube_sync",
                                                 "webhook_attempts": [
                                                     {
                                                         "attempted_at": "2023-01-01T12:00:05Z",
@@ -518,7 +514,7 @@
                                                 "state": "error",
                                                 "webhook_state": "failed",
                                                 "request_xml": "<QBXML><QBXMLMsgsRq onError='stopOnError'><InvalidRequestRq requestID='3'/></QBXMLMsgsRq></QBXML>",
-                                                "webhook_url": "https://example.com/webhooks/quickbooks/status",
+                                                "webhook_url": "https://example.com/webhooks/qube_sync",
                                                 "webhook_attempts": [
                                                     {
                                                         "attempted_at": "2023-01-01T12:00:05Z",
@@ -1678,41 +1674,35 @@
             "QueuedRequestCreate": {
                 "type": "object",
                 "properties": {
-                    "queued_request": {
+                    "request_json": {
                         "type": "object",
-                        "description": "The queued request object to create",
-                        "properties": {
-                            "request_json": {
-                                "type": "object",
-                                "description": "The request payload in JSON format (alternative to request_xml)",
-                                "example": {
-                                    "version": "13.0",
-                                    "request": {
-                                        "name": "CustomerQueryRq",
-                                        "attributes": {
-                                            "requestID": "1"
-                                        },
-                                        "children": [
-                                            {
-                                                "name": "MaxReturned",
-                                                "text": "100"
-                                            }
-                                        ]
+                        "description": "The request payload in JSON format (alternative to request_xml)",
+                        "example": {
+                            "version": "13.0",
+                            "request": {
+                                "name": "CustomerQueryRq",
+                                "attributes": {
+                                    "requestID": "1"
+                                },
+                                "children": [
+                                    {
+                                        "name": "MaxReturned",
+                                        "text": "100"
                                     }
-                                }
-                            },
-                            "request_xml": {
-                                "type": "string",
-                                "description": "The request payload in QBXML format (alternative to request_json)",
-                                "example": "<QBXML><QBXMLMsgsRq onError='stopOnError'><CustomerQueryRq requestID='1'><MaxReturned>100</MaxReturned></CustomerQueryRq></QBXMLMsgsRq></QBXML>"
-                            },
-                            "webhook_url": {
-                                "type": "string",
-                                "format": "uri",
-                                "example": "https://your-webhook-url.com/endpoint",
-                                "description": "Optional URL to receive a webhook when the request is completed"
+                                ]
                             }
                         }
+                    },
+                    "request_xml": {
+                        "type": "string",
+                        "description": "The request payload in QBXML format (alternative to request_json)",
+                        "example": "<QBXML><QBXMLMsgsRq onError='stopOnError'><CustomerQueryRq requestID='1'><MaxReturned>100</MaxReturned></CustomerQueryRq></QBXMLMsgsRq></QBXML>"
+                    },
+                    "webhook_url": {
+                        "type": "string",
+                        "format": "uri",
+                        "example": "https://your-webhook-url.com/endpoint",
+                        "description": "Optional URL to receive a webhook when the request is completed"
                     }
                 }
             },
