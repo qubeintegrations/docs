@@ -832,10 +832,8 @@
                         "in": "query",
                         "required": false,
                         "schema": {
-                            "type": "string",
-                            "format": "uri"
-                        },
-                        "description": "Optional URL to receive a webhook when the query completes"
+                            "$ref": "#/components/schemas/webhook_url"
+                        }
                     }
                 ],
                 "responses": {
@@ -1006,10 +1004,8 @@
                         "in": "query",
                         "required": false,
                         "schema": {
-                            "type": "string",
-                            "format": "uri"
-                        },
-                        "description": "Optional URL to receive a webhook when the query completes"
+                            "$ref": "#/components/schemas/webhook_url"
+                        }
                     }
                 ],
                 "responses": {
@@ -1168,10 +1164,8 @@
                         "in": "query",
                         "required": false,
                         "schema": {
-                            "type": "string",
-                            "format": "uri"
-                        },
-                        "description": "Optional URL to receive a webhook when the query completes"
+                            "$ref": "#/components/schemas/webhook_url"
+                        }
                     }
                 ],
                 "responses": {
@@ -1218,6 +1212,14 @@
                         "schema": {
                             "type": "string",
                             "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "webhook_url",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "$ref": "#/components/schemas/webhook_url"
                         }
                     },
                     {
@@ -1676,41 +1678,43 @@
             "QueuedRequestCreate": {
                 "type": "object",
                 "properties": {
-                    "request_json": {
+                    "queued_request": {
                         "type": "object",
-                        "description": "The request payload in JSON format (alternative to request_xml)",
-                        "example": {
-                            "version": "13.0",
-                            "request": {
-                                "name": "CustomerQueryRq",
-                                "attributes": {
-                                    "requestID": "1"
-                                },
-                                "children": [
-                                    {
-                                        "name": "MaxReturned",
-                                        "text": "100"
+                        "description": "The queued request object to create",
+                        "properties": {
+                            "request_json": {
+                                "type": "object",
+                                "description": "The request payload in JSON format (alternative to request_xml)",
+                                "example": {
+                                    "version": "13.0",
+                                    "request": {
+                                        "name": "CustomerQueryRq",
+                                        "attributes": {
+                                            "requestID": "1"
+                                        },
+                                        "children": [
+                                            {
+                                                "name": "MaxReturned",
+                                                "text": "100"
+                                            }
+                                        ]
                                     }
-                                ]
+                                }
+                            },
+                            "request_xml": {
+                                "type": "string",
+                                "description": "The request payload in QBXML format (alternative to request_json)",
+                                "example": "<QBXML><QBXMLMsgsRq onError='stopOnError'><CustomerQueryRq requestID='1'><MaxReturned>100</MaxReturned></CustomerQueryRq></QBXMLMsgsRq></QBXML>"
+                            },
+                            "webhook_url": {
+                                "type": "string",
+                                "format": "uri",
+                                "example": "https://your-webhook-url.com/endpoint",
+                                "description": "Optional URL to receive a webhook when the request is completed"
                             }
                         }
-                    },
-                    "request_xml": {
-                        "type": "string",
-                        "description": "The request payload in QBXML format (alternative to request_json)",
-                        "example": "<QBXML><QBXMLMsgsRq onError='stopOnError'><CustomerQueryRq requestID='1'><MaxReturned>100</MaxReturned></CustomerQueryRq></QBXMLMsgsRq></QBXML>"
-                    },
-                    "webhook_url": {
-                        "type": "string",
-                        "format": "uri",
-                        "example": "https://your-webhook-url.com/endpoint",
-                        "description": "Optional URL to receive a webhook when the request is completed"
                     }
-                },
-                "required": [
-                    "request_type",
-                    "request_json"
-                ]
+                }
             },
             "QueuedRequestsList": {
                 "type": "object",
@@ -1737,6 +1741,11 @@
                 "type": "boolean",
                 "description": "If true, QuBe Sync will automatically handle the QBXML iteration until all records are returned. Each page of results will have its own request record and webhook. The id and webhook_url will be the same across each page request, and there will also be `page_request_id`, `page` values to distinguish pages from each other. ",
                 "example": true
+            },
+            "webhook_url": {
+                "type": "string",
+                "format": "uri",
+                "description": "Optional URL to receive a webhook when the request is completed"
             },
             "Error": {
                 "type": "object",
