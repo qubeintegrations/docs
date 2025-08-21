@@ -52,7 +52,7 @@
           },
           {
             "group": "API Documentation",
-            "openapi": "https://qubesync.com/api/v1/openapi.json"
+            "openapi": "api-reference/openapi.json"
           }
         ]
       }
