@@ -50,7 +50,7 @@ Any time a request is completed or fails, a webhook is sent to the `webhook_url`
 
 To protect yourself from timing attacks, JSON parsing vulnerabilities, etc., it's best practice to verify the webhooks you're receiving are genuinely from QuBe Sync.
 
-If you are using Ruby with the `qube_sync` gem, you can verify a webhook as follows:
+If you are using Ruby with the [qube_sync gem](https://github.com/qubeintegrations/qube_sync_rb/), you can verify a webhook as follows:
 
 ```ruby
 payload = request.body.read
