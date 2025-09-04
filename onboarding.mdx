@@ -1,0 +1,26 @@
+---
+title: "Onboarding Your Customers"
+description: "Getting your customers connected to QuickBooks is as simple as sending them to a URL."
+---
+
+You'll want a button on your site that says "Connect to QuickBooks Desktop" or something similar. This button should do two things:
+
+<Info>
+  Ask the user to start this process from the Windows computer where they have QuickBooks installed. You may wish to warn them they'll be redirected to a qubesync.com to complete the setup.
+</Info>
+
+1. Use the `Connections` API to [create a connection](/api-reference/connections/create-a-new-connection) for the customer, and pass a `redirect_url` to redirect them to once they've completed the setup process.
+2. Redirect them to the `onboarding_url` returned for the connection you created.
+
+Once they've completed the short setup process, they'll be redirected to the `redirect_url` you provided with a query parameter `?state=connected` . If for some reason they chose to cancel the process, it'll have `?state=incomplete` .
+
+## Start making requests\!
+
+Use the [pre-built requests](/api-reference/pre-built-queries/query-customers) or build your own using the [Queued Requests API](/api-reference/customers).
+
+## Do you want full control over the onboarding experience?
+
+Instead of using the `onboarding_url`, once you've created the connection your user will need two essentials to get set up. Use the corresponding connection endpoints to provide them:
+
+1. [Generate a QWC file](/api-reference/connections/get-qwc-file-for-a-connection) for their web connector and let them download it.
+2. [Generate a password](/api-reference/connections/generate-or-set-password-for-a-connection) to enter into their web connector once they've added the QWC file.

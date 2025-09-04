@@ -26,6 +26,7 @@
           {
             "group": "Essentials",
             "pages": [
+              "onboarding",
               "pagination",
               "webhooks",
               "error_handling"
