@@ -14,7 +14,7 @@
             "description": "v1 API"
         },
         {
-            "url": "http://localhost:4002/api/v1",
+            "url": "https://dev.qubesync.com/api/v1",
             "description": "Local development server"
         }
     ],
@@ -425,7 +425,7 @@
                                         "request_xml": "<QBXML><QBXMLMsgsRq onError='stopOnError'><CustomerQueryRq requestID='1'><MaxReturned>100</MaxReturned></CustomerQueryRq></QBXMLMsgsRq></QBXML>",
                                         "webhook_url": "https://example.com/webhooks/qube_sync"
                                     }
-                                },
+                                }
                             }
                         }
                     }
@@ -756,7 +756,7 @@
                         "description": "Maximum number of results to return"
                     },
                     {
-                        "name": "include",
+                        "name": "include[]",
                         "in": "query",
                         "required": false,
                         "schema": {
@@ -826,11 +826,11 @@
                         "schema": {
                             "type": "string",
                             "enum": [
-                                "Active",
-                                "Inactive",
+                                "ActiveOnly",
+                                "InactiveOnly",
                                 "All"
                             ],
-                            "default": "Active"
+                            "default": "ActiveOnly"
                         },
                         "description": "Filter customers by active status"
                     },
@@ -921,7 +921,7 @@
                         "description": "Maximum number of results to return"
                     },
                     {
-                        "name": "include",
+                        "name": "include[]",
                         "in": "query",
                         "required": false,
                         "schema": {
@@ -929,13 +929,13 @@
                             "items": {
                                 "type": "string",
                                 "enum": [
-                                    "FullName",
-                                    "ListID",
+                                    "TxnID",
+                                    "RefNumber",
                                     "etc"
                                 ]
                             }
                         },
-                        "description": "List of fields for QuickBooks to include in the response. Full list of possible values at "
+                        "description": "List of fields for QuickBooks to include in the response. Full list of possible values at"
                     },
                     {
                         "name": "customer_list_id",
@@ -1098,7 +1098,7 @@
                         "description": "Maximum number of results to return"
                     },
                     {
-                        "name": "include",
+                        "name": "include[]",
                         "in": "query",
                         "required": false,
                         "schema": {
@@ -1168,11 +1168,11 @@
                         "schema": {
                             "type": "string",
                             "enum": [
-                                "Active",
-                                "Inactive",
+                                "ActiveOnly",
+                                "InactiveOnly",
                                 "All"
                             ],
-                            "default": "Active"
+                            "default": "ActiveOnly"
                         },
                         "description": "Filter vendors by active status"
                     },
