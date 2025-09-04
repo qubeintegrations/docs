@@ -5,14 +5,18 @@ description: "Getting your customers connected to QuickBooks is as simple as sen
 
 You'll want a button on your site that says "Connect to QuickBooks Desktop" or something similar. This button should do two things:
 
-<Info>
+<Note>
   Ask the user to start this process from the Windows computer where they have QuickBooks installed. You may wish to warn them they'll be redirected to a qubesync.com to complete the setup.
-</Info>
+</Note>
 
 1. Use the `Connections` API to [create a connection](/api-reference/connections/create-a-new-connection) for the customer, and pass a `redirect_url` to redirect them to once they've completed the setup process.
-2. Redirect them to the `onboarding_url` returned for the connection you created.
+2. Redirect them to the `links.onboarding` url returned with the connection you created.
 
-Once they've completed the short setup process, they'll be redirected to the `redirect_url` you provided with a query parameter `?state=connected` . If for some reason they chose to cancel the process, it'll have `?state=incomplete` .
+Once they've completed the short setup process, they'll be redirected to the `redirect_url` you provided with a query parameter `?state=connected` .
+
+<Warning>
+  If for some reason they chose to cancel the process, it'll have `?state=incomplete` . Onboarding links expire after 48 hours, and can be [regenerated using the API](/api-reference/connections/onboarding_url). If a user attempts to use an expired onboarding url, they'll be redirected to the `redirect_url` with `?state=expired` .
+</Warning>
 
 ## Start making requests\!
 
