@@ -49,7 +49,7 @@
             },
             "post": {
                 "summary": "Create a new connection",
-                "description": "Creates a new connection for the authenticated application. No request body is required as the connection is automatically generated with default values.",
+                "description": "Creates and returns a new connection for the authenticated application.",
                 "tags": [
                     "Connections"
                 ],
@@ -58,19 +58,36 @@
                         "apiKey": []
                     }
                 ],
+                "parameters": [
+                    {
+                        "name": "name",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Optional name for the connection - if you leave this blank, the company name returned by QuickBooks will be used once the first request is processed"
+                    }
+                ],
                 "responses": {
                     "201": {
                         "description": "Connection created successfully",
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/Connection"
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/Connection"
+                                        }
+                                    }
                                 },
                                 "example": {
                                     "data": {
                                         "id": "123e4567-e89b-12d3-a456-426614174000",
                                         "app_id": "550e8400-e29b-41d4-a716-446655440000",
                                         "username": "550e8400-e29b-41d4-a716-446655440001",
+                                        "name": "My Customer Inc.",
                                         "last_connected_at": null,
                                         "company_file": null
                                     }
@@ -84,7 +101,7 @@
                 }
             }
         },
-        "/connections/{connectionId}": {
+        "/connections/{connection_id}": {
             "get": {
                 "summary": "Get connection by ID",
                 "description": "Returns a single connection by ID",
@@ -98,7 +115,7 @@
                 ],
                 "parameters": [
                     {
-                        "name": "connectionId",
+                        "name": "connection_id",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -114,15 +131,24 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/Connection"
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/Connection"
+                                        }
+                                    }
                                 },
                                 "example": {
                                     "data": {
-                                        "id": "123e4567-e89b-12d3-a456-426614174000",
-                                        "app_id": "550e8400-e29b-41d4-a716-446655440000",
-                                        "username": "550e8400-e29b-41d4-a716-446655440001",
-                                        "company_file": "My Company File.QBW",
-                                        "last_connected_at": "2023-01-01T12:00:00Z"
+                                        "id": "c2eca704-906e-46ef-9882-9bcfa8f1e92e",
+                                        "name": "My Customer Inc.",
+                                        "type": "standard",
+                                        "username": "7beeba0b-92b6-4302-83c8-d1947ffd5da4",
+                                        "last_connected_at": "2025-09-03T22:05:05Z",
+                                        "company_file": "some_company_file.qbw",
+                                        "app_id": "39c7c660-7757-4728-8f4e-c3549191be6e",
+                                        "qbxml_version": "14.0",
+                                        "quickbooks_product_name": "QuickBooks Pro 2021"
                                     }
                                 }
                             }
@@ -149,7 +175,7 @@
                 ],
                 "parameters": [
                     {
-                        "name": "connectionId",
+                        "name": "connection_id",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -380,7 +406,7 @@
                                             "request": {
                                                 "name": "CustomerQueryRq",
                                                 "attributes": {
-                                                    "requestID": "1"
+                                                    "request_id": "1"
                                                 },
                                                 "children": [
                                                     {
@@ -410,7 +436,12 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/QueuedRequest"
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/QueuedRequest"
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -441,7 +472,7 @@
                 ],
                 "parameters": [
                     {
-                        "name": "requestId",
+                        "name": "request_id",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -458,7 +489,12 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/QueuedRequest"
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/QueuedRequest"
+                                        }
+                                    }
                                 },
                                 "examples": {
                                     "completedRequest": {
@@ -483,8 +519,7 @@
                                                     "connection_ui": "/app/connections/123e4567-e89b-12d3-a456-426614174000"
                                                 },
                                                 "inserted_at": "2023-01-01T12:00:00Z",
-                                                "updated_at": "2023-01-01T12:00:05Z",
-                                                "completed_at": "2023-01-01T12:00:05Z"
+                                                "updated_at": "2023-01-01T12:00:05Z"
                                             }
                                         }
                                     },
@@ -536,8 +571,7 @@
                                                     "connection_ui": "/app/connections/123e4567-e89b-12d3-a456-426614174000"
                                                 },
                                                 "inserted_at": "2023-01-01T12:00:00Z",
-                                                "updated_at": "2023-01-01T12:00:10Z",
-                                                "completed_at": "2023-01-01T12:00:10Z"
+                                                "updated_at": "2023-01-01T12:00:10Z"
                                             }
                                         }
                                     }
@@ -583,7 +617,7 @@
                 ],
                 "parameters": [
                     {
-                        "name": "requestId",
+                        "name": "request_id",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -606,30 +640,7 @@
                 ],
                 "responses": {
                     "204": {
-                        "description": "Queued request was successfully deleted or did not exist",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "meta": {
-                                            "type": "object",
-                                            "properties": {
-                                                "deleted": {
-                                                    "type": "boolean",
-                                                    "example": true
-                                                }
-                                            }
-                                        }
-                                    }
-                                },
-                                "example": {
-                                    "meta": {
-                                        "deleted": true
-                                    }
-                                }
-                            }
-                        }
+                        "description": "Queued request was successfully deleted or did not exist"
                     },
                     "400": {
                         "description": "Bad request - cannot delete request in current state",
@@ -697,7 +708,7 @@
         },
         "/connections/{connection_id}/customers": {
             "get": {
-                "summary": "Query customers",
+                "summary": "Query Customers",
                 "description": "Executes a pre-built query to retrieve customer data from QuickBooks. Supports filtering by name, date range, and active status.",
                 "tags": [
                     "Pre-built Queries"
@@ -834,11 +845,16 @@
                 ],
                 "responses": {
                     "202": {
-                        "description": "Query accepted and queued for processing",
+                        "description": "Query accepted and queued for processing. Returns a queued request object.",
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/QueuedRequest"
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/QueuedRequest"
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -857,7 +873,7 @@
         },
         "/connections/{connection_id}/invoices": {
             "get": {
-                "summary": "Query invoices",
+                "summary": "Query Invoices",
                 "description": "Executes a pre-built query to retrieve invoice data from QuickBooks. Supports filtering by customer, date range, and paid status.",
                 "tags": [
                     "Pre-built Queries"
@@ -1006,11 +1022,16 @@
                 ],
                 "responses": {
                     "202": {
-                        "description": "Query accepted and queued for processing",
+                        "description": "Query accepted and queued for processing. Returns a queued request object.",
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/QueuedRequest"
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/QueuedRequest"
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1029,7 +1050,7 @@
         },
         "/connections/{connection_id}/vendors": {
             "get": {
-                "summary": "Query vendors",
+                "summary": "Query Vendors",
                 "description": "Executes a pre-built query to retrieve vendor data from QuickBooks. Supports filtering by name and date range.",
                 "tags": [
                     "Pre-built Queries"
@@ -1166,11 +1187,16 @@
                 ],
                 "responses": {
                     "202": {
-                        "description": "Query accepted and queued for processing",
+                        "description": "Query accepted and queued for processing. Returns a queued request object.",
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/QueuedRequest"
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/QueuedRequest"
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1287,11 +1313,16 @@
                 ],
                 "responses": {
                     "202": {
-                        "description": "Sales orders query accepted and queued for processing",
+                        "description": "Sales orders query accepted and queued for processing. Returns a queued request object.",
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/QueuedRequest"
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/QueuedRequest"
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1308,7 +1339,7 @@
                 }
             }
         },
-        "/connections/{connectionId}/password": {
+        "/connections/{connection_id}/password": {
             "post": {
                 "summary": "Generate or set password for a connection",
                 "description": "Generates a new password or sets a specific password for a connection",
@@ -1322,7 +1353,7 @@
                 ],
                 "parameters": [
                     {
-                        "name": "connectionId",
+                        "name": "connection_id",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -1356,12 +1387,19 @@
                                 "schema": {
                                     "type": "object",
                                     "properties": {
-                                        "id": {
-                                            "type": "string",
-                                            "format": "uuid"
-                                        },
-                                        "password": {
-                                            "type": "string"
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {
+                                                    "type": "string",
+                                                    "description": "ID of the connection",
+                                                    "format": "uuid"
+                                                },
+                                                "password": {
+                                                    "type": "string",
+                                                    "description": "Password for the connection. Regenerates each time this endpoint is called."
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -1377,7 +1415,7 @@
                 }
             }
         },
-        "/connections/{connectionId}/qwc": {
+        "/connections/{connection_id}/qwc": {
             "get": {
                 "summary": "Get QWC file for a connection",
                 "description": "Returns a QWC file for the specified connection",
@@ -1391,7 +1429,7 @@
                 ],
                 "parameters": [
                     {
-                        "name": "connectionId",
+                        "name": "connection_id",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -1405,9 +1443,16 @@
                     "200": {
                         "description": "QWC file generated successfully",
                         "content": {
-                            "application/xml": {
+                            "application/json": {
                                 "schema": {
-                                    "type": "string"
+                                    "type": "object",
+                                    "properties": {
+                                        "qwc": {
+                                            "type": "string",
+                                            "description": "The contents of the QWC file",
+                                            "example": "<?xml version=\"1.0\"?>\n<QBWCXML>\n  <AppName>My App</AppName>\n  <AppID></AppID>\n  <AppURL>https://myapp.com/qbwc</AppURL>\n  <AppDescription>My App Description</AppDescription>\n  <AppSupport>https://myapp.com/support</AppSupport>\n  <UserName>550e8400-e29b-41d4-a716-446655440001</UserName>\n  <OwnerID>{550e8400-e29b-41d4-a716-446655440000}</OwnerID>\n  <FileID>{123e4567-e89b-12d3-a456-426614174000}</FileID>\n  <QBType>QBFS</QBType>\n  <Scheduler>\n    <RunEveryNMinutes>5</RunEveryNMinutes>\n  </Scheduler>\n</QBWCXML>"
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1447,6 +1492,11 @@
                         "description": "Timestamp of when the connection was last used",
                         "nullable": true
                     },
+                    "name": {
+                        "type": "string",
+                        "example": "My Customer Inc.",
+                        "description": "Name of the connection"
+                    },
                     "app_id": {
                         "type": "string",
                         "format": "uuid",
@@ -1463,6 +1513,23 @@
                         "type": "string",
                         "example": "550e8400-e29b-41d4-a716-446655440001",
                         "description": "Automatically generated username for the connection"
+                    },
+                    "qbxml_version": {
+                        "type": "string",
+                        "example": "14.0",
+                        "description": "The latest QBXML version supported by the connected QuickBooks instance",
+                        "nullable": true
+                    },
+                    "quickbooks_product_name": {
+                        "type": "string",
+                        "example": "QuickBooks Pro 2021",
+                        "description": "The product name of the connected QuickBooks instance",
+                        "nullable": true
+                    },
+                    "type": {
+                        "type": "string",
+                        "example": "standard",
+                        "description": "Type of connection. Either 'standard' or 'realtime'."
                     }
                 },
                 "required": [
@@ -1538,7 +1605,7 @@
                             "request": {
                                 "name": "CustomerQueryRq",
                                 "attributes": {
-                                    "requestID": "1"
+                                    "request_id": "1"
                                 },
                                 "children": [
                                     {
@@ -1655,13 +1722,6 @@
                         "format": "uuid",
                         "example": "123e4567-e89b-12d3-a456-426614174000",
                         "description": "ID of the connection this request belongs to"
-                    },
-                    "completed_at": {
-                        "type": "string",
-                        "format": "date-time",
-                        "example": "2023-01-01T12:00:01Z",
-                        "nullable": true,
-                        "description": "When the request was completed, if applicable"
                     }
                 },
                 "required": [
@@ -1682,7 +1742,7 @@
                             "request": {
                                 "name": "CustomerQueryRq",
                                 "attributes": {
-                                    "requestID": "1"
+                                    "request_id": "1"
                                 },
                                 "children": [
                                     {
