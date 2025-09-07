@@ -458,7 +458,7 @@
                 }
             }
         },
-        "/queued_requests/{requestId}": {
+        "/queued_requests/{request_id}": {
             "get": {
                 "summary": "Get queued request by ID",
                 "description": "Retrieves detailed information about a specific queued request, including its current state, request/response data, and any associated errors. This endpoint can be used to poll for request completion or to check the status of a long-running operation.",
