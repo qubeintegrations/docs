@@ -49,7 +49,7 @@
             },
             "post": {
                 "summary": "Create a new connection",
-                "description": "Creates and returns a new connection for the authenticated application.",
+                "description": "Creates and returns a new connection for the authenticated application. Returns an onboarding URL for the user to complete the QuickBooks setup process.",
                 "tags": [
                     "Connections"
                 ],
@@ -58,17 +58,24 @@
                         "apiKey": []
                     }
                 ],
-                "parameters": [
-                    {
-                        "name": "name",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Optional name for the connection - if you leave this blank, the company name returned by QuickBooks will be used once the first request is processed"
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "description": "Optional name for the connection - if you leave this blank, the company name returned by QuickBooks will be used once the first request is processed"
+                                    },
+                                    "redirect_url": {
+                                        "$ref": "#/components/schemas/connection_redirect_url"
+                                    }
+                                }
+                            }
+                        }
                     }
-                ],
+                },
                 "responses": {
                     "201": {
                         "description": "Connection created successfully",
@@ -89,7 +96,18 @@
                                         "username": "550e8400-e29b-41d4-a716-446655440001",
                                         "name": "My Customer Inc.",
                                         "last_connected_at": null,
-                                        "company_file": null
+                                        "company_file": null,
+                                        "type": "standard",
+                                        "qbxml_version": null,
+                                        "quickbooks_product_name": null,
+                                        "redirect_url": "https://myapp.com/quickbooks-setup-callback",
+                                        "links": {
+                                            "self": "/api/v1/connections/123e4567-e89b-12d3-a456-426614174000",
+                                            "ui": "/app/connections/123e4567-e89b-12d3-a456-426614174000",
+                                            "onboarding": "https://qubesync.com/onboarding/abcdef123456"
+                                        },
+                                        "inserted_at": "2023-01-01T12:00:00Z",
+                                        "updated_at": "2023-01-01T12:00:00Z"
                                     }
                                 }
                             }
@@ -1465,6 +1483,71 @@
                     }
                 }
             }
+        },
+        "/connections/{connection_id}/onboarding_url": {
+            "post": {
+                "summary": "Regenerate onboarding URL for a connection",
+                "description": "Generates a new onboarding URL for the specified connection. The previous URL will be invalidated.",
+                "tags": [
+                    "Connections"
+                ],
+                "operationId": "regenerateOnboardingUrl",
+                "security": [
+                    {
+                        "apiKey": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "connection_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "ID of the connection"
+                    }
+                ],
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "redirect_url": {
+                                        "$ref": "#/components/schemas/connection_redirect_url"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Onboarding URL regenerated successfully. The full connection object is returned, with updated `links.onboarding` URL.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/Connection"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthorized"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    }
+                }
+            }
         }
     },
     "components": {
@@ -1476,6 +1559,12 @@
             }
         },
         "schemas": {
+            "connection_redirect_url": {
+                "type": "string",
+                "format": "uri",
+                "description": "The URL to redirect the user to after they complete (or cancel) the QuickBooks setup process. This URL should be able to handle the query parameters:\n * `?state=connected` if they completed the process,\n * `?state=cancelled` if they cancelled it or\n * `?state=expired` if they visit the onboarding link after it has expired",
+                "example": "https://myapp.com/quickbooks-setup-callback"
+            },
             "Connection": {
                 "type": "object",
                 "properties": {
@@ -1530,6 +1619,29 @@
                         "type": "string",
                         "example": "standard",
                         "description": "Type of connection. Either 'standard' or 'realtime'."
+                    },
+                    "redirect_url": {
+                        "$ref": "#/components/schemas/connection_redirect_url"
+                    },
+                    "links": {
+                        "type": "object",
+                        "properties": {
+                            "self": {
+                                "type": "string",
+                                "format": "uri",
+                                "example": "/api/v1/connections/123e4567-e89b-12d3-a456-426614174000"
+                            },
+                            "ui": {
+                                "type": "string",
+                                "format": "uri",
+                                "example": "/app/connections/123e4567-e89b-12d3-a456-426614174000"
+                            },
+                            "onboarding": {
+                                "type": "string",
+                                "format": "uri",
+                                "example": "https://qubesync.com/onboarding/123e4567-e89b-12d3-a456-426614174000"
+                            }
+                        }
                     }
                 },
                 "required": [
