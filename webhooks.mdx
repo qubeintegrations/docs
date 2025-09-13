@@ -59,6 +59,17 @@ signature = request.headers['X-Qube-Signature']
 event = QubeSync.verify_and_build_webhook!(payload, signature)
 ```
 
+In python with the [qubesync package](https://github.com/qubeintegrations/qube_sync_py/), you can verify a webhook as follows:
+
+```python
+payload = request.body.decode('utf-8')
+signature = request.headers['X-Qube-Signature']
+
+event = QubeSync.verify_and_build_webhook(payload, signature)
+```
+
+Please let us know if you would like to see official libraries for other languages.
+
 Otherwise, you can verify a webhook using the following steps:
 
 ### Step 1. Get the X-Qube-Signature header
@@ -106,18 +117,6 @@ def extract_timestamp_and_signatures(header, expected_schemes: ["v1"] ) do
       signatures: signatures
     }
   end)
-end
-```
-
-```python python
-def extract_timestamp_and_signatures(header, expected_schemes: ["v1"]):
-    parts = header.split(",").map(lambda part: part.split("=")).to_h
-    timestamp = parts["t"].to_i
-    signatures = parts.reject { |k, _| !expected_schemes.include?(k) }
-    {
-      timestamp: timestamp,
-      signatures: signatures.values
-    }
 end
 ```
 
@@ -178,21 +177,6 @@ def verify_and_build_webhook!(body, signature, max_age: 500) do
 
   JSON.parse(body)
 end
-```
-
-```python python
-def sign_payload(timestamp, body):
-    return hmac.new(api_secret, f"{timestamp}.{body}", hashlib.sha256).hexdigest()
-
-def verify_and_build_webhook!(body, signature, max_age: 500):
-    extract_signature_meta(signature) => { timestamp:, signatures:}
-
-    if timestamp < time.time() - max_age:
-        raise 'Timestamp diff too high'
-    
-    next((sig for sig in signatures if sign_payload(timestamp, body) == sig), None) or raise 'No matching signature'
-
-    json.loads(body)
 ```
 
 ```javascript javascript
