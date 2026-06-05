@@ -757,14 +757,6 @@
                         }
                     },
                     {
-                        "name": "iterate",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "$ref": "#/components/schemas/iterate"
-                        }
-                    },
-                    {
                         "name": "max_returned",
                         "in": "query",
                         "required": false,
@@ -1064,6 +1056,301 @@
                         "$ref": "#/components/responses/NotFound"
                     }
                 }
+            },
+            "post": {
+                "summary": "Create Invoice",
+                "description": "Create an invoice in QuickBooks.",
+                "tags": [
+                    "Pre-built Queries"
+                ],
+                "operationId": "createInvoice",
+                "security": [
+                    {
+                        "apiKey": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "connection_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "ID of the connection to use for invoice creation"
+                    },
+                    {
+                        "name": "request_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "$ref": "#/components/schemas/request_id"
+                        }
+                    },
+                    {
+                        "name": "webhook_url",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "$ref": "#/components/schemas/webhook_url"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "customer_list_id",
+                                    "transaction_date",
+                                    "lines"
+                                ],
+                                "properties": {
+                                    "customer_list_id": {
+                                        "type": "string",
+                                        "description": "Customer ListID for the invoice"
+                                    },
+                                    "class_list_id": {
+                                        "type": "string",
+                                        "description": "Optional class ListID applied to the invoice (and line items unless overridden)"
+                                    },
+                                    "receivables_account_list_id": {
+                                        "type": "string",
+                                        "description": "Optional accounts receivable account ListID"
+                                    },
+                                    "template_list_id": {
+                                        "type": "string",
+                                        "description": "Optional invoice template ListID"
+                                    },
+                                    "transaction_date": {
+                                        "type": "string",
+                                        "format": "date",
+                                        "description": "Invoice transaction date (YYYY-MM-DD)"
+                                    },
+                                    "ref_number": {
+                                        "type": "string",
+                                        "description": "Optional user-defined reference number"
+                                    },
+                                    "bill_address": {
+                                        "type": "object",
+                                        "description": "Optional bill-to address",
+                                        "properties": {
+                                            "addr1": {
+                                                "type": "string"
+                                            },
+                                            "addr2": {
+                                                "type": "string"
+                                            },
+                                            "addr3": {
+                                                "type": "string"
+                                            },
+                                            "addr4": {
+                                                "type": "string"
+                                            },
+                                            "addr5": {
+                                                "type": "string"
+                                            },
+                                            "city": {
+                                                "type": "string"
+                                            },
+                                            "state": {
+                                                "type": "string"
+                                            },
+                                            "postal_code": {
+                                                "type": "string"
+                                            },
+                                            "country": {
+                                                "type": "string"
+                                            },
+                                            "note": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    },
+                                    "ship_address": {
+                                        "type": "object",
+                                        "description": "Optional ship-to address",
+                                        "properties": {
+                                            "addr1": {
+                                                "type": "string"
+                                            },
+                                            "addr2": {
+                                                "type": "string"
+                                            },
+                                            "addr3": {
+                                                "type": "string"
+                                            },
+                                            "addr4": {
+                                                "type": "string"
+                                            },
+                                            "addr5": {
+                                                "type": "string"
+                                            },
+                                            "city": {
+                                                "type": "string"
+                                            },
+                                            "state": {
+                                                "type": "string"
+                                            },
+                                            "postal_code": {
+                                                "type": "string"
+                                            },
+                                            "country": {
+                                                "type": "string"
+                                            },
+                                            "note": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    },
+                                    "purchase_order_number": {
+                                        "type": "string",
+                                        "description": "Optional customer PO number"
+                                    },
+                                    "terms_list_id": {
+                                        "type": "string",
+                                        "description": "Optional payment terms ListID"
+                                    },
+                                    "due_date": {
+                                        "type": "string",
+                                        "format": "date",
+                                        "description": "Optional due date (YYYY-MM-DD)"
+                                    },
+                                    "memo": {
+                                        "type": "string",
+                                        "description": "Optional memo for reports"
+                                    },
+                                    "customer_message_list_id": {
+                                        "type": "string",
+                                        "description": "Optional customer message ListID"
+                                    },
+                                    "item_sales_tax_list_id": {
+                                        "type": "string",
+                                        "description": "Optional tax item or tax group ListID applied to the entire invoice"
+                                    },
+                                    "customer_sales_tax_code_list_id": {
+                                        "type": "string",
+                                        "description": "Optional customer sales tax code ListID applied to the invoice"
+                                    },
+                                    "is_pending": {
+                                        "type": "boolean",
+                                        "description": "Whether the invoice is pending/draft"
+                                    },
+                                    "is_to_be_printed": {
+                                        "type": "boolean",
+                                        "description": "Whether the invoice should be queued for print"
+                                    },
+                                    "is_to_be_emailed": {
+                                        "type": "boolean",
+                                        "description": "Whether the invoice should be queued for email"
+                                    },
+                                    "lines": {
+                                        "type": "array",
+                                        "minItems": 1,
+                                        "description": "Invoice line items",
+                                        "items": {
+                                            "type": "object",
+                                            "required": [
+                                                "item_list_id"
+                                            ],
+                                            "properties": {
+                                                "item_list_id": {
+                                                    "type": "string",
+                                                    "description": "Item ListID for the invoice line"
+                                                },
+                                                "description": {
+                                                    "type": "string",
+                                                    "description": "Optional line description"
+                                                },
+                                                "quantity": {
+                                                    "type": "number",
+                                                    "description": "Optional quantity"
+                                                },
+                                                "rate": {
+                                                    "type": "string",
+                                                    "description": "Optional rate as a decimal string"
+                                                },
+                                                "amount": {
+                                                    "type": "string",
+                                                    "description": "Optional line amount as a decimal string"
+                                                },
+                                                "class_list_id": {
+                                                    "type": "string",
+                                                    "description": "Optional class ListID override for this line"
+                                                },
+                                                "sales_tax_code_list_id": {
+                                                    "type": "string",
+                                                    "description": "Optional sales tax code ListID for this line"
+                                                },
+                                                "service_date": {
+                                                    "type": "string",
+                                                    "format": "date",
+                                                    "description": "Optional service date (YYYY-MM-DD)"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "example": {
+                                "customer_list_id": "80000001-1234567890",
+                                "transaction_date": "2026-06-02",
+                                "ref_number": "INV-1001",
+                                "bill_address": {
+                                    "addr1": "123 Main St",
+                                    "city": "Austin",
+                                    "state": "TX",
+                                    "postal_code": "78701"
+                                },
+                                "ship_address": {
+                                    "addr1": "500 Warehouse Rd",
+                                    "country": "US",
+                                    "note": "Receiving dock"
+                                },
+                                "item_sales_tax_list_id": "80000006-1234567890",
+                                "customer_sales_tax_code_list_id": "80000007-1234567890",
+                                "memo": "Created via pre-built endpoint",
+                                "lines": [
+                                    {
+                                        "item_list_id": "80000002-1234567890",
+                                        "description": "Implementation services",
+                                        "quantity": 2,
+                                        "rate": "150.00"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "202": {
+                        "description": "Invoice create request accepted and queued for processing. Returns a queued request object.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/QueuedRequest"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthorized"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    }
+                }
             }
         },
         "/connections/{connection_id}/vendors": {
@@ -1332,6 +1619,583 @@
                 "responses": {
                     "202": {
                         "description": "Sales orders query accepted and queued for processing. Returns a queued request object.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/QueuedRequest"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthorized"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    }
+                }
+            }
+        },
+        "/connections/{connection_id}/items": {
+            "get": {
+                "summary": "Query Items",
+                "description": "Executes a pre-built query to retrieve item data from QuickBooks. Supports filtering by name, modification date range, and active status.",
+                "tags": [
+                    "Pre-built Queries"
+                ],
+                "operationId": "queryItems",
+                "security": [
+                    {
+                        "apiKey": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "connection_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "ID of the connection to use for the query"
+                    },
+                    {
+                        "name": "request_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "$ref": "#/components/schemas/request_id"
+                        }
+                    },
+                    {
+                        "name": "iterate",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "$ref": "#/components/schemas/iterate"
+                        }
+                    },
+                    {
+                        "name": "max_returned",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Maximum number of results to return"
+                    },
+                    {
+                        "name": "include[]",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "FullName",
+                                    "ListID",
+                                    "etc"
+                                ]
+                            }
+                        },
+                        "description": "List of fields for QuickBooks to include in the response. Full list of possible values at https://developer.intuit.com/app/developer/qbdesktop/docs/api-reference/qbdesktop/itemquery"
+                    },
+                    {
+                        "name": "full_name[]",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "description": "Filter items by name (case-insensitive). Not usable with other filters."
+                    },
+                    {
+                        "name": "list_id[]",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "description": "Filter items by list ID. Not usable with other filters."
+                    },
+                    {
+                        "name": "from_name",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter items with names starting from this value (use with `to_name` for range)"
+                    },
+                    {
+                        "name": "to_name",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter items with names starting to this value (use with `from_name` for range)"
+                    },
+                    {
+                        "name": "name_starts_with",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter items with names starting with this value (case-insensitive, exclusive with other name filters)"
+                    },
+                    {
+                        "name": "name_contains",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter items with names containing this value (case-insensitive, exclusive with other name filters)"
+                    },
+                    {
+                        "name": "name_ends_with",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter items with names ending with this value (case-insensitive, exclusive with other name filters)"
+                    },
+                    {
+                        "name": "from_modified_date",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time"
+                        },
+                        "description": "Filter items modified after this date/time (ISO 8601 format)"
+                    },
+                    {
+                        "name": "to_modified_date",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time"
+                        },
+                        "description": "Filter items modified before this date/time (ISO 8601 format)"
+                    },
+                    {
+                        "name": "active",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "ActiveOnly",
+                                "InactiveOnly",
+                                "All"
+                            ],
+                            "default": "ActiveOnly"
+                        },
+                        "description": "Filter items by active status"
+                    },
+                    {
+                        "name": "webhook_url",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "$ref": "#/components/schemas/webhook_url"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Query accepted and queued for processing. Returns a queued request object.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/QueuedRequest"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthorized"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    }
+                }
+            }
+        },
+        "/connections/{connection_id}/sales_tax_items": {
+            "get": {
+                "summary": "Query Sales Tax Items",
+                "description": "Executes a pre-built query to retrieve item sales tax data from QuickBooks. Supports filtering by name, list identifiers, modification date range, and active status.",
+                "tags": [
+                    "Pre-built Queries"
+                ],
+                "operationId": "querySalesTaxItems",
+                "security": [
+                    {
+                        "apiKey": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "connection_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "ID of the connection to use for the query"
+                    },
+                    {
+                        "name": "request_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "$ref": "#/components/schemas/request_id"
+                        }
+                    },
+                    {
+                        "name": "iterate",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "$ref": "#/components/schemas/iterate"
+                        }
+                    },
+                    {
+                        "name": "max_returned",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Maximum number of results to return"
+                    },
+                    {
+                        "name": "include[]",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "FullName",
+                                    "ListID",
+                                    "etc"
+                                ]
+                            }
+                        },
+                        "description": "List of fields for QuickBooks to include in the response"
+                    },
+                    {
+                        "name": "name",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter by name (partial match, case-insensitive)"
+                    },
+                    {
+                        "name": "from_name",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter by lower bound of FullName (range query)"
+                    },
+                    {
+                        "name": "to_name",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter by upper bound of FullName (range query)"
+                    },
+                    {
+                        "name": "list_id[]",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "description": "Filter by one or more QuickBooks ListID values"
+                    },
+                    {
+                        "name": "full_name[]",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "description": "Filter by one or more QuickBooks FullName values"
+                    },
+                    {
+                        "name": "active",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "ActiveOnly",
+                                "InactiveOnly",
+                                "All"
+                            ],
+                            "default": "ActiveOnly"
+                        },
+                        "description": "Filter by active status"
+                    },
+                    {
+                        "name": "from_modified_date",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time"
+                        },
+                        "description": "Filter by modification date (start, inclusive)"
+                    },
+                    {
+                        "name": "to_modified_date",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time"
+                        },
+                        "description": "Filter by modification date (end, inclusive)"
+                    },
+                    {
+                        "name": "webhook_url",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "$ref": "#/components/schemas/webhook_url"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Sales tax item query accepted and queued for processing. Returns a queued request object.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/QueuedRequest"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthorized"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    }
+                }
+            }
+        },
+        "/connections/{connection_id}/sales_tax_codes": {
+            "get": {
+                "summary": "Query Sales Tax Codes",
+                "description": "Executes a pre-built query to retrieve sales tax code data from QuickBooks. Supports filtering by name, list identifiers, modification date range, and active status.",
+                "tags": [
+                    "Pre-built Queries"
+                ],
+                "operationId": "querySalesTaxCodes",
+                "security": [
+                    {
+                        "apiKey": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "connection_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "ID of the connection to use for the query"
+                    },
+                    {
+                        "name": "request_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "$ref": "#/components/schemas/request_id"
+                        }
+                    },
+                    {
+                        "name": "max_returned",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Maximum number of results to return"
+                    },
+                    {
+                        "name": "include[]",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "FullName",
+                                    "ListID",
+                                    "etc"
+                                ]
+                            }
+                        },
+                        "description": "List of fields for QuickBooks to include in the response"
+                    },
+                    {
+                        "name": "name",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter by name (partial match, case-insensitive)"
+                    },
+                    {
+                        "name": "from_name",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter by lower bound of FullName (range query)"
+                    },
+                    {
+                        "name": "to_name",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter by upper bound of FullName (range query)"
+                    },
+                    {
+                        "name": "list_id[]",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "description": "Filter by one or more QuickBooks ListID values"
+                    },
+                    {
+                        "name": "full_name[]",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "description": "Filter by one or more QuickBooks FullName values"
+                    },
+                    {
+                        "name": "active",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "ActiveOnly",
+                                "InactiveOnly",
+                                "All"
+                            ],
+                            "default": "ActiveOnly"
+                        },
+                        "description": "Filter by active status"
+                    },
+                    {
+                        "name": "from_modified_date",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time"
+                        },
+                        "description": "Filter by modification date (start, inclusive)"
+                    },
+                    {
+                        "name": "to_modified_date",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time"
+                        },
+                        "description": "Filter by modification date (end, inclusive)"
+                    },
+                    {
+                        "name": "webhook_url",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "$ref": "#/components/schemas/webhook_url"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Sales tax code query accepted and queued for processing. Returns a queued request object.",
                         "content": {
                             "application/json": {
                                 "schema": {
