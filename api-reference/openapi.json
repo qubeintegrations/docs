@@ -1931,6 +1931,175 @@
                 }
             }
         },
+        "/connections/{connection_id}/data_ext_mods": {
+            "post": {
+                "summary": "Modify Data Extension",
+                "description": "Sets the value of a previously defined data extension (custom field) on a list object, transaction, or the company in QuickBooks. Exactly one of list_data_ext_type, txn_data_ext_type, or other_data_ext_type must be provided to identify what the data extension belongs to.",
+                "tags": [
+                    "Pre-built Queries"
+                ],
+                "operationId": "modifyDataExt",
+                "security": [
+                    {
+                        "apiKey": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "connection_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "ID of the connection to use for the data extension modification"
+                    },
+                    {
+                        "name": "request_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "$ref": "#/components/schemas/request_id"
+                        }
+                    },
+                    {
+                        "name": "webhook_url",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "$ref": "#/components/schemas/webhook_url"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "owner_id",
+                                    "data_ext_name",
+                                    "data_ext_value"
+                                ],
+                                "properties": {
+                                    "owner_id": {
+                                        "type": "string",
+                                        "description": "Owner ID of the data extension. Use \"0\" for a data extension owned by this application, or a GUID for one owned by a specific third-party application."
+                                    },
+                                    "data_ext_name": {
+                                        "type": "string",
+                                        "maxLength": 31,
+                                        "description": "Name of the previously defined data extension field"
+                                    },
+                                    "data_ext_value": {
+                                        "type": "string",
+                                        "description": "New value to set for the data extension"
+                                    },
+                                    "list_data_ext_type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "Account",
+                                            "Customer",
+                                            "Employee",
+                                            "Item",
+                                            "OtherName",
+                                            "Vendor"
+                                        ],
+                                        "description": "Type of list object the data extension belongs to. Use with list_id or full_name. Mutually exclusive with txn_data_ext_type and other_data_ext_type."
+                                    },
+                                    "list_id": {
+                                        "type": "string",
+                                        "description": "ListID of the list object to modify (used with list_data_ext_type). Provide this or full_name."
+                                    },
+                                    "full_name": {
+                                        "type": "string",
+                                        "description": "FullName of the list object to modify (used with list_data_ext_type). Provide this or list_id."
+                                    },
+                                    "txn_data_ext_type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "ARRefundCreditCard",
+                                            "Bill",
+                                            "BillPaymentCheck",
+                                            "BillPaymentCreditCard",
+                                            "BuildAssembly",
+                                            "Charge",
+                                            "Check",
+                                            "CreditCardCharge",
+                                            "CreditCardCredit",
+                                            "CreditMemo",
+                                            "Deposit",
+                                            "Estimate",
+                                            "InventoryAdjustment",
+                                            "Invoice",
+                                            "ItemReceipt",
+                                            "JournalEntry",
+                                            "PurchaseOrder",
+                                            "ReceivePayment",
+                                            "SalesOrder",
+                                            "SalesReceipt",
+                                            "SalesTaxPaymentCheck",
+                                            "VendorCredit"
+                                        ],
+                                        "description": "Type of transaction the data extension belongs to. Use with txn_id. Mutually exclusive with list_data_ext_type and other_data_ext_type."
+                                    },
+                                    "txn_id": {
+                                        "type": "string",
+                                        "description": "TxnID of the transaction to modify (required with txn_data_ext_type)"
+                                    },
+                                    "txn_line_id": {
+                                        "type": "string",
+                                        "description": "Optional TxnLineID for a line-level transaction data extension"
+                                    },
+                                    "other_data_ext_type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "Company"
+                                        ],
+                                        "description": "Set to \"Company\" to target the company data extension. Mutually exclusive with list_data_ext_type and txn_data_ext_type."
+                                    }
+                                }
+                            },
+                            "example": {
+                                "owner_id": "0",
+                                "data_ext_name": "Loyalty Tier",
+                                "data_ext_value": "Gold",
+                                "list_data_ext_type": "Customer",
+                                "list_id": "80000001-1234567890"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "202": {
+                        "description": "Data extension modification request accepted and queued for processing. Returns a queued request object.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/QueuedRequest"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/Unauthorized"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFound"
+                    }
+                }
+            }
+        },
         "/connections/{connection_id}/vendors": {
             "get": {
                 "summary": "Query Vendors",
@@ -2192,6 +2361,28 @@
                             "format": "date"
                         },
                         "description": "Filter sales orders to this transaction date (ISO 8601 format)"
+                    },
+                    {
+                        "name": "include_line_items",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean",
+                            "default": false
+                        },
+                        "description": "Whether to include line item details in the response"
+                    },
+                    {
+                        "name": "owner_id[]",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "description": "Owner IDs of private data extensions to include in the response. Use \"0\" for data owned by this application, or a GUID for a specific third-party owner."
                     }
                 ],
                 "responses": {
