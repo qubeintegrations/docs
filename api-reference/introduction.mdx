@@ -5,27 +5,9 @@ description: "The QuBe Sync API lets you talk to QuickBooks Enterprise / Desktop
 
 ## Welcome
 
-The API for QuBe Sync is intentionally small and focused. You **create connections** for your users, **retrieve the QWC File and password** for their web connector, and then **queue requests** for QuickBooks on their behalf.
+The API for QuBe Sync is intentionally small and focused. You **create connections** for your users, **send them to our onboarding url**, and then **queue requests or workflows** for QuickBooks on their behalf.
 
-Nothing answers synchronously: QuickBooks Desktop is only reachable through the customer's Web Connector, which polls QuBe Sync, so every endpoint queues the request and returns it immediately (`201`, a `QueuedRequest`) — the actual answer arrives seconds to minutes later. **Pass a `webhook_url` with every request**: once QuickBooks has answered, QuBe Sync `POST`s that same document back to it (`state` set, `response_json` filled in), signed with `X-QUBE-Signature` — see the [Webhooks guide](/webhooks). `links.self` lets you fetch the request on demand (a dashboard, a retry, a script), but it isn't the integration path.
-
-## v2 vs v1
-
-**v2 is the default and recommended API.** It's a single generic operation surface driven directly off the qbXML schema — every request/query QuickBooks supports gets a REST endpoint under `/api/v2/connections/:connection_id/...`, generated straight from the same schema the [MCP server](/mcp-server) uses, so the surface and its documentation can't drift apart. New integrations should build against v2.
-
-v1 (`/api/v1/connections/:connection_id/...`) is still fully supported for existing integrations, but is no longer being extended — it only covers a hand-maintained subset of entities. Both versions queue requests and deliver results the same way (see below), so switching an endpoint from v1 to v2 is usually just a path change.
-
-Connections themselves (create, list, get, update, delete, plus the QWC file, password, onboarding URL, and simulator control) are managed under `/api/v2/connections` too, mirroring v1's `/api/v1/connections` one-to-one — a v2 integration never has to drop back to v1 for anything.
-
-## Development
-
-If you're using Ruby or Python, you can use the corresponding library to interact with the API, and specify your QuickBooks requests.
-- [Ruby SDK (qube_sync_rb)](https://github.com/qubeintegrations/qube_sync_rb)
-- [Python SDK (qube_sync_py)](https://github.com/qubeintegrations/qube_sync_py)
-
-SDKs for other languages are in the works - please send a support request to [support@qubesync.com](mailto:support@qubesync.com) if you'd like your language to be prioritized. You can also use the OpenAPI spec to generate an SDK to fit your needs, or implement the API directly (it's not hard), or explore the API interactively through the [MCP server](/mcp-server).
-
-[View the v2 OpenAPI specification file](/api-reference/v2/openapi.json) · [View the v1 (legacy) specification file](/api-reference/v1/openapi.json)
+QuickBooks Desktop integration is a fundamentally asynchronous process, because your customer's QuickBooks is only reachable through the customer's Web Connector. Their Web Connector polls QuBe Sync, so we enqueue requests and send the result to you in a webhook the next time it connects. **Passing a `webhook_url` with your request** ensures you'll get the result (parsed and transformed into nice, clean JSON) `POST`ed to that URL, signed with `X-QUBE-Signature` — see the [Webhooks guide](/webhooks).
 
 ## Authentication
 

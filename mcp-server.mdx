@@ -1,6 +1,6 @@
 ---
 title: "MCP Server"
-description: "Let an LLM explore QuBe Sync's qbXML operations and compile requests for you."
+description: "Let an LLM explore QuBe Sync's QuickBooks operations and build v2 API requests for you."
 ---
 
 ## Overview
@@ -11,13 +11,17 @@ QuBe Sync runs a public, unauthenticated [MCP](https://modelcontextprotocol.io) 
 https://qubesync.com/mcp
 ```
 
-It speaks plain JSON-RPC 2.0 over HTTP (the MCP "Streamable HTTP" transport, without a session or an SSE stream — every request gets a single JSON response). Point any MCP client at this URL and it can list every qbXML operation QuBe Sync supports and compile one into ready-to-send qbXML.
+Point any MCP client at this URL and it can list every QuickBooks operation QuBe Sync supports and build the v2 REST request that runs one.
 
-No API key is required to use the MCP server itself: `tools/call` only **compiles** a request through the same deterministic compiler the [v2 REST API](/api-reference/introduction) uses — it never touches a real QuickBooks connection. The result includes both the compiled qbXML *and* a ready-to-copy v2 REST API request, so you can go from "what does a CustomerQuery look like?" straight to sending it, without ever exposing your API key or a customer's connection to the MCP server.
+No API key is required to use the MCP server itself: `tools/call` only **checks** your parameters, through the same deterministic compiler the [v2 REST API](/api-reference/introduction) uses, and returns the v2 request to send — it never touches a real QuickBooks connection. You go from "how do I find active customers?" straight to sending that request, without ever exposing your API key or a customer's connection to the MCP server. You send JSON to `/api/v2`, never qbXML.
 
 <Note>
-  Because the MCP server is unauthenticated, don't send real customer data through it — use it to explore operations and build requests, then submit the compiled request yourself against `/api/v2` with your API key.
+  Because the MCP server is unauthenticated, don't send real customer data through it — use it to explore operations and build requests, then send the request yourself to `/api/v2` with your API key.
 </Note>
+
+## For real power, give your agent a sandbox-only CLI session
+
+The [qube cli](/cli) defaults to providing sandbox-only access to QuBeSync, and in combination with the MCP can expedite your agent's progress greatly.
 
 ## Connecting a client
 
@@ -51,7 +55,7 @@ curl https://qubesync.com/mcp \
   }'
 ```
 
-```bash Compile a request
+```bash Build a request
 curl https://qubesync.com/mcp \
   -H "Content-Type: application/json" \
   -d '{
@@ -73,4 +77,19 @@ alphabetical order; follow `nextCursor` (pass it back as `params.cursor`) for th
 several dependent QuickBooks steps server-side -- create a customer and handle a duplicate name, find-or-create the
 items on an order, then invoice it -- and the templates are complete, tested charts to start from.
 
-The `tools/call` response contains the compiled qbXML alongside an example v2 request — copy that request, swap in your API key and a real `connection_id`, and send it to `/api/v2/connections/:connection_id/...` as described in the [API Reference](/api-reference/introduction).
+The `tools/call` result carries the v2 request twice: as a ready-to-copy `curl` in its text, and as `structuredContent` an agent can use directly:
+
+```json structuredContent for find_customers (webhook abridged)
+{
+  "method": "GET",
+  "url": "https://qubesync.com/api/v2/connections/{connection_id}/customers",
+  "query": { "max_returned": 10 },
+  "webhook": { "type": "object", "properties": { "state": { ... }, "response_json": { "oneOf": [ ... ] }, ... } }
+}
+```
+
+A `GET` puts your arguments in `query`; a create or update puts them in `body`. Swap in a real `connection_id`, authenticate with your API key, and send it as described in the [API Reference](/api-reference/introduction). The request is queued, and the answer is delivered to your `webhook_url`.
+
+The result also carries `webhook` (the JSON Schema of the [webhook payload](/webhooks) that answer arrives in), with this operation's own `response_json`: the `data` a success returns, and the QuickBooks status codes it can fail with, each with what it means and what to do. The text repeats it, after a short guide to handling each `state`. So an agent writing your webhook handler gets the data shape and the error cases from the same call that built the request.
+
+To see the qbXML QuBe Sync will send QuickBooks, pass `"include_qbxml": true` with the arguments. The result then adds it (as `qbxml` in `structuredContent`, and in the text). It's for reference and debugging only: the v2 request stays the same, and you never send qbXML yourself.

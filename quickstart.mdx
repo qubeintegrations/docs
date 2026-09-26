@@ -33,16 +33,10 @@ description: "Send your first request to QuickBooks in 5 minutes."
 
 ### No QuickBooks machine handy? Use a simulated connection
 
-Create a connection with `"type": "simulated"` and QuBe Sync answers it itself with a fake company file
+Choose type `simulated` and QuBe Sync will generate a fake company file and web connector
 (customers, items, invoices, the usual QuickBooks errors). It is connected the moment it exists and answers
-within seconds, so you can build and test the whole integration -- requests, workflows, webhooks -- before a
-single customer installs the Web Connector.
-
-```bash
-curl -u "$QUBE_API_KEY:" -X POST https://qubesync.com/api/v2/connections \
-     -H 'Content-Type: application/json' \
-     -d '{"type": "simulated", "name": "My first fake QuickBooks"}'
-```
+within seconds, so you can start building immediately. Definitely get yourself a [not-for-resale version of Quickbooks](/nfr-quickbooks), though,
+for real-world testing.
 
 The dashboard's connection page shows a **Simulator** panel to run the fake Web Connector on demand, reset the
 company file, or make it fail on purpose (QuickBooks closed, a modal dialog, an XML error, a 3100 name clash...).
@@ -51,18 +45,11 @@ The `/connections/:id/simulator` endpoints (under `/api/v1` or `/api/v2`) do the
 
 ### Set up the QuickBooks Web Connector
 
-The Web Connector should come pre-installed with QuickBooks, and allows QuickBooks to communicate with web applications.
+The Web Connector should come pre-installed with [QuickBooks](/nfr-quickbooks), and allows QuickBooks to communicate with web applications.
 
-<AccordionGroup>
-  <Accordion title="Follow the onboarding process" description="The easiest way to onboard  your customers (and you!) is to use the pre-built onboarding flow." icon="list-check">
-    From your new connection, you can get an onboarding url by clicking "Copy Onboarding URL". You'll need to open this URL from the Windows computer or VM where you have QuickBooks installed and follow the simple instructions\!
+From a new (unsimulated) connection, you can get an onboarding url by clicking "Copy Onboarding URL". You'll need to open this URL from the Windows computer or VM where you have QuickBooks installed and follow the simple instructions\!
 
-    ![Copy Onboarding Url Pn](/images/copy-onboarding-url.png)
-  </Accordion>
-  <Accordion title="Test the connection" icon="arrows-spin">
-    Check the checkbox next to your app in the Web Connector and click "Update Selected". You should see it authenticate and then finish with "No data exchange required" in green if everything has gone according to plan\!
-  </Accordion>
-</AccordionGroup>
+![Copy Onboarding Url Pn](/images/copy-onboarding-url.png)
 
 ### Make a Test Request
 

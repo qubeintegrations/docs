@@ -21,10 +21,8 @@ curl -u "$QUBE_API_KEY:" -X POST "https://qubesync.com/api/v1/connections/$CONN_
   -d '{"request_xml": "<QBXML>...</QBXML>", "webhook_url": "https://my-app.example/webhooks/qube"}'
 ```
 
-When the request is answered (or fails), QuBe Sync POSTs the **answered request** to that URL. It is the request
-`links.self` returns, with `state` set and `response_json` filled in, minus the bookkeeping fields
-(`request_xml`, `request_types`, `links`, `webhook_url`, `webhook_state`, `webhook_attempts`) and plus `app_id`,
-`app_name`, `sandbox` and `timestamp`:
+When the request is answered (or fails), QuBe Sync POSTs the **answered request** to that URL. It contains metadata about the request,
+as well as QuickBooks' response transformed into clean JSON under `response_json`:
 
 ```json
 {
@@ -62,8 +60,8 @@ When the request is answered (or fails), QuBe Sync POSTs the **answered request*
   (`error_type`) and, for a business error, `response_json` too -- it carries QuickBooks' own
   `{"status": "error", "error": {"code", "type", "message"}}`. See [Error Handling](/error_handling).
 * `response_json` is `{"status": "success", "data": ...}` or `{"status": "error", "error": {...}}`, with `data`
-  derived from the qbXML `*Ret` (snake_case, typed) -- exactly what the v2 reference documents for the operation.
-* `page`, `page_request_id` and `iteration_state` describe multi-page (iterated) answers; each page is its own webhook.
+  derived from the qbXML response.
+* `page`, `page_request_id` and `iteration_state` describe multi-page (iterated) answers; each page fires its own webhook.
 * `id` is the request you queued (the first page's id); `page_request_id` is this page's own id.
 
 Workflow runs send their own events (`workflow_run.completed`, `workflow_run.failed`,
@@ -223,6 +221,4 @@ function verifyAndBuildWebhook(body, header, maxAge = 300) {
 
 #### Prevent replay attacks
 
-Checking the age of the timestamp (in **seconds**) defeats replays of a captured webhook. Five minutes is a reasonable `max_age`: a retried delivery is signed afresh, so a healthy receiver never sees an old timestamp. 
-  
-
+Checking the age of the timestamp (in **seconds**) defeats replays of a captured webhook. Five minutes is a reasonable `max_age`: a retried delivery is signed afresh, so a healthy receiver never sees an old timestamp.
