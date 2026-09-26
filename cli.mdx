@@ -1,0 +1,72 @@
+---
+title: "The qube CLI"
+description: "Log in once from a terminal; get your app's keys, create connections (simulated ones too), watch requests, drive the simulator and push workflows -- from a shell, a script, or an agent."
+---
+
+## Install
+
+Download the archive for your platform from the
+[releases page](https://github.com/qubeintegrations/qube-cli/releases), unpack it and put `qube` on your
+`PATH`. With a Go toolchain (1.16 or newer):
+
+```bash
+go install github.com/qubeintegrations/qube-cli/cmd/qube@latest
+```
+
+`qube version` prints what you have; `eval "$(qube completion bash)"` (or `zsh`, `fish`) adds tab completion.
+
+## Log in
+
+```bash
+qube login                              # production
+qube login --host dev.qubesync.com      # a dev deployment; the host is remembered
+```
+
+`qube login` shows a short code and opens the dashboard. You confirm the code there, logged in as yourself, and
+choose what the session may reach -- **sandbox apps only** by default. The terminal then receives a session token,
+stored in your config directory with owner-only permissions. Nothing is typed into the terminal and nothing is
+pasted into a chat, which makes this the right way to let an AI agent work against your account: it never sees a
+secret it could leak, and you can revoke the session at any time.
+
+`qube status` shows, without a network call, which host, user and app the CLI is pointed at and when the session
+expires. If you are logged in to several hosts, `qube use --host dev.qubesync.com` picks the default; `--host` on
+any command overrides it once.
+
+## Everyday commands
+
+```bash
+qube apps                                  # the apps this session may act on
+qube use "My App Dev"                      # pick a default
+qube env --write .env                      # QUBE_URL / QUBE_API_KEY / QUBE_WEBHOOK_SECRET into .env (never printed)
+qube connections list
+qube connections create --simulated --name "Local dev"   # a fake QuickBooks, connected at once
+qube requests list <connection> --page 2   # what is queued / answered, 20 per page
+qube requests show <id>                    # one request, as JSON
+qube simulator faults <connection> --next 3100           # the next request answers "name already in use"
+qube simulator sync <connection>           # run the fake Web Connector now
+qube workflows push ./chart.json --publish
+qube workflows run sync_order --connection <id> --input @order.json --webhook-url https://my-app.test/webhooks/qube
+qube workflows runs <connection>           # runs on a connection; add a run id for one run, --events for its log
+qube workflows decide <connection> <run> keep_existing
+qube api GET "/api/v2/connections/<id>/customers?max_returned=5"   # anything else, with the app's key
+```
+
+`qube help` lists every command and flag. Every command takes `--json` for machine-readable output, `--app` to act
+as a specific app, `--host`, and `--timeout` (seconds; default 60). Exit codes: 0 ok, 1 failed, 2 wrong usage,
+130 interrupted.
+
+<Note>
+  `qube requests tail` polls a connection so you can watch it from a terminal. That is a developer convenience,
+  not a pattern for your integration: an integration passes a `webhook_url` with every request and is told when
+  it is answered (see [Webhooks](/webhooks)).
+</Note>
+
+## Sessions and scope
+
+A session belongs to you, in one organization. With the default **sandbox** scope it can list the organization's
+sandbox apps, read their API keys and webhook secrets, and act on their connections; it cannot see production apps
+or change billing, members or your account. Choosing **every app** at approval time lifts the first restriction.
+Sessions expire after 30 days. `qube logout` revokes the current one, `qube sessions` lists yours on the host and
+`qube sessions revoke <id>` ends one, and **CLI sessions** in the dashboard does the same for every session.
+
+An app's API key is only ever sent to the host that issued it, so a mistyped `--host` cannot leak it.

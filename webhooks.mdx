@@ -6,45 +6,77 @@ description: "Receive webhooks from QuBe Sync when QuickBooks responds to your r
 
 Any time a request is completed or fails, a webhook is sent to the `webhook_url` you provided with the request. The webhook contains the request ID and the result of the request.
 
+Every request you queue should carry a `webhook_url`: it is how answers are delivered. On the v2 API it is a
+query parameter on every endpoint, GET or POST; on v1 it is a field of the queued request body:
+
+```bash
+# v2: any operation, as a query parameter
+curl -u "$QUBE_API_KEY:" -X POST \
+  "https://qubesync.com/api/v2/connections/$CONN_ID/customers?webhook_url=https://my-app.example/webhooks/qube" \
+  -H 'Content-Type: application/json' -d '{"name": "Riverbend Electric"}'
+
+# v1: in the body
+curl -u "$QUBE_API_KEY:" -X POST "https://qubesync.com/api/v1/connections/$CONN_ID/queued_requests" \
+  -H 'Content-Type: application/json' \
+  -d '{"request_xml": "<QBXML>...</QBXML>", "webhook_url": "https://my-app.example/webhooks/qube"}'
+```
+
+When the request is answered (or fails), QuBe Sync POSTs the **answered request** to that URL. It is the request
+`links.self` returns, with `state` set and `response_json` filled in, minus the bookkeeping fields
+(`request_xml`, `request_types`, `links`, `webhook_url`, `webhook_state`, `webhook_attempts`) and plus `app_id`,
+`app_name`, `sandbox` and `timestamp`:
+
 ```json
 {
-    "timestamp": "2023-01-01T12:00:00Z",
-    "id": "550e8400-e29b-41d4-a716-446655440000",
-    "page_request_id": "550e8400-e29b-41d4-a716-446655440001",
-    "page": 1,
-    "state": "completed",
-    "response_xml": "<QBXML><QBXMLMsgsRs statusCode='0' statusSeverity='Info' statusMessage='Status OK'><CustomerQueryRs requestID='1' statusCode='0' statusSeverity='Info' statusMessage='Status OK'><CustomerRet><ListID>80000001-1234567890</ListID><Name>Sample Customer</Name></CustomerRet></CustomerQueryRs></QBXMLMsgsRs></QBXML>",
-    "response_json": [
+  "id": "01a0d3f1-b539-768e-8f80-e62bad29ee69",
+  "timestamp": 1790262228,
+  "state": "response_received",
+  "page": 1,
+  "page_request_id": "01a0d3f1-b539-768e-8f80-e62bad29ee69",
+  "iteration_state": "not_applicable",
+  "app_id": "0bb157d7-5984-46f7-9998-73da1b42cab6",
+  "app_name": "My App Dev",
+  "sandbox": true,
+  "response_xml": "<?xml version=\"1.0\"?><?qbxml version=\"16.0\"?><QBXML>...</QBXML>",
+  "response_json": {
+    "status": "success",
+    "data": [
       {
-        "QBXMLMsgsRs": {
-          "CustomerQueryRs": {
-            "@requestID": "32",
-            "@statusCode": 0,
-            "@statusSeverity": "Info",
-            "@statusMessage": "Status OK",
-            "@iteratorRemainingCount": 3,
-            "@iteratorID": "{a667c96a-48d0-4e63-866e-d37ce9d607e9}",
-            "CustomerRet": [
-              {
-                "ListID": "80000003-1665678791",
-                "Name": "Babcock's Music Shop",
-                "FullName": "Babcock's Music Shop",
-                "IsActive": true
-              },
-              {
-                "ListID": "80000003-1665678792",
-                "Name": "John Doe",
-                "FullName": "John Doe",
-                "IsActive": true
-              }
-            ]
-          }
-        }
+        "list_id": "80000020-1790258733",
+        "name": "Hillcrest Dental",
+        "full_name": "Hillcrest Dental",
+        "is_active": true,
+        "edit_sequence": "1790258733",
+        "balance": 0.0
       }
-    ],
-    "error": null
+    ]
+  },
+  "error": null
 }
 ```
+
+* `timestamp` is Unix seconds and is also the `t=` in the signature header.
+* `state` is `response_received` when QuickBooks answered successfully (read `response_json.data`), and `error`
+  when it did not: the Web Connector could not reach QuickBooks, the qbXML was rejected, **or QuickBooks answered
+  with a business error** (a 3100 name clash, a 3140 invalid reference...). Read `error` for the kind
+  (`error_type`) and, for a business error, `response_json` too -- it carries QuickBooks' own
+  `{"status": "error", "error": {"code", "type", "message"}}`. See [Error Handling](/error_handling).
+* `response_json` is `{"status": "success", "data": ...}` or `{"status": "error", "error": {...}}`, with `data`
+  derived from the qbXML `*Ret` (snake_case, typed) -- exactly what the v2 reference documents for the operation.
+* `page`, `page_request_id` and `iteration_state` describe multi-page (iterated) answers; each page is its own webhook.
+* `id` is the request you queued (the first page's id); `page_request_id` is this page's own id.
+
+Workflow runs send their own events (`workflow_run.completed`, `workflow_run.failed`,
+`workflow_run.awaiting_input`, `workflow_run.cancelled`), signed the same way; the `WorkflowRunWebhookPayload`
+schema in the v2 reference describes them.
+
+## Responding to a webhook
+
+Answer with any **2xx** status within 5 seconds; the body is ignored. Do the work after responding (a job queue)
+rather than inside the request. Anything else -- a 3xx, 4xx, 5xx, a timeout -- counts as a failed delivery: QuBe
+Sync retries with backoff, up to five attempts, and marks the request's `webhook_state` `failed` after the last one
+(the attempts are on the request as `webhook_attempts`, and the dashboard offers "resend webhook"). Deliveries can
+arrive out of order and, after a retry, more than once: key on `page_request_id` and treat a repeat as already handled.
 
 ## Securing your webhook endpoint(s)
 
@@ -76,130 +108,121 @@ Otherwise, you can verify a webhook using the following steps:
 
 To ensure the webhook is coming from QuBe Sync, you can verify the `X-Qube-Signature` header. This header contains a SHA-256 HMAC of the payload using your application's active secret keys. You can manage your webhook secret keys in the _Application_'s settings.
 
-The header will be in the following format:
-<Note>Newlines have been added for readability.</Note>
-```bash
-X-Qube-Signature: 
-t=1492774577, 
-v1=signature1, 
-v2=signature2
+The header is the timestamp and one `v1=` signature per active webhook secret, comma-separated with no spaces
+(two signatures while you are rotating secrets, otherwise one). The scheme is always `v1`:
+
+```
+X-Qube-Signature: t=1790262228,v1=5257a869e7ecebeda32affa62cdca3fa51cad7e98f1da4da5da4f3a1f2a3d5e6
 ```
 
 #### Step 2. Extract the timestamp and signatures
 
 <CodeGroup>
 ```ruby ruby
-def extract_timestamp_and_signatures(header, expected_schemes: ["v1"])
-  parts = header.split(',').map { |part| part.split('=') }.to_h
-  timestamp = parts["t"].to_i
-  signatures = parts.select { |k, _| expected_schemes.include?(k) }
-  {
-    timestamp: timestamp,
-    signatures: signatures.values
-  }
+def extract_timestamp_and_signatures(header)
+  parts = header.split(",").map { |part| part.split("=", 2) }
+  timestamp = parts.find { |k, _| k == "t" }&.last.to_i
+  signatures = parts.select { |k, _| k == "v1" }.map(&:last)
+  { timestamp: timestamp, signatures: signatures }
 end
 ```
 
 ```elixir elixir
-def extract_timestamp_and_signatures(header, expected_schemes: ["v1"] ) do
-  header
-  |> String.split(",")
-  |> Stream.map(&String.split(&1, "="))
-  |> Enum.into(%{})
-  |> Kernel.then(fn map ->
-    signatures = 
-      map
-      |> Enum.filter(fn {k, _} -> expected_schemes |> Enum.member?(k) end)
-      |> Enum.values()
-      
-    %{
-      timestamp: map["t"],
-      signatures: signatures
-    }
-  end)
+def extract_timestamp_and_signatures(header) do
+  parts = header |> String.split(",") |> Enum.map(&String.split(&1, "=", parts: 2))
+  {"t", timestamp} = Enum.find(parts, fn [k, _] -> k == "t" end) |> List.to_tuple()
+  signatures = for ["v1", sig] <- parts, do: sig
+  %{timestamp: String.to_integer(timestamp), signatures: signatures}
 end
 ```
 
 ```javascript javascript
-function extractTimestampAndSignatures(header, expectedSchemes = ["v1"]) {
-  const parts = header.split(",").map(part => part.split("=")).to_h;
-  const timestamp = parts["t"].to_i;
-  const signatures = parts.reject((_, k) => !expectedSchemes.includes(k));
-  return {
-    timestamp,
-    signatures: signatures.values
-  };
+function extractTimestampAndSignatures(header) {
+  const parts = header.split(",").map((part) => part.split("=", 2));
+  const timestamp = Number(parts.find(([k]) => k === "t")?.[1]);
+  const signatures = parts.filter(([k]) => k === "v1").map(([, v]) => v);
+  return { timestamp, signatures };
 }
 ```
 </CodeGroup>
 
 #### Step 3. Compare the signatures
 
-Compute the expected signature value by calculating the SHA256 HMAC of the timestamp and raw request body (`{{timestamp}}.{{body}}`) using your application's secret key. Then check if that matches any of the signatures in the header.
+Compute the expected signature: the SHA-256 HMAC, hex-encoded, of `"<timestamp>.<raw request body>"` using your
+application's webhook secret. Compare it with each signature in the header using a constant-time comparison. The
+body must be the exact bytes received -- verify before parsing it, and never re-serialize.
 
 <CodeGroup>
 ```ruby ruby
+require "openssl"
+require "json"
+
 def sign_payload(timestamp, body)
-  OpenSSL::HMAC.hexdigest('sha256', api_secret, "#{timestamp}.#{body}")
+  OpenSSL::HMAC.hexdigest("sha256", ENV.fetch("QUBE_WEBHOOK_SECRET"), "#{timestamp}.#{body}")
 end
 
-def verify_and_build_webhook!(body, signature, max_age: 500)
-  extract_timestamp_and_signatures(signature) => { timestamp:, signatures:}
+# max_age is in seconds
+def verify_and_build_webhook!(body, header, max_age: 300)
+  meta = extract_timestamp_and_signatures(header)
+  raise "webhook is too old" if meta[:timestamp] < Time.now.to_i - max_age
 
-  if timestamp < Time.now.to_i - max_age
-    raise 'Timestamp diff too high'
-  end
-  
-  signatures.detect { |sig| sign_payload(timestamp, body) == sig } or raise 'No matching signature'
+  expected = sign_payload(meta[:timestamp], body)
+  raise "no matching signature" unless meta[:signatures].any? { |sig| OpenSSL.secure_compare(sig, expected) }
 
   JSON.parse(body)
 end
 
 payload = request.body.read
-signature = request.headers['X-Qube-Signature']
-
-event = verify_and_build_webhook!(payload, signature)
+event = verify_and_build_webhook!(payload, request.headers["X-Qube-Signature"])
 ```
 
 ```elixir elixir
 def sign_payload(timestamp, body) do
-  :crypto.hmac(:sha256, api_secret, "#{timestamp}.#{body}")
+  :crypto.mac(:hmac, :sha256, System.fetch_env!("QUBE_WEBHOOK_SECRET"), "#{timestamp}.#{body}")
+  |> Base.encode16(case: :lower)
 end
 
-def verify_and_build_webhook!(body, signature, max_age: 500) do
-  %{timestamp: timestamp, signatures: signatures} = extract_signatures(signature)
+# max_age is in seconds
+def verify_and_build_webhook!(body, header, max_age \\ 300) do
+  %{timestamp: timestamp, signatures: signatures} = extract_timestamp_and_signatures(header)
 
-  if timestamp < System.system_time(:second) - max_age do
-    raise 'Timestamp diff too high'
-  end
+  if timestamp < System.system_time(:second) - max_age, do: raise("webhook is too old")
 
-  Enum.find(signatures, fn sig -> sign_payload(timestamp, body) == sig end) or raise 'No matching signature'
+  expected = sign_payload(timestamp, body)
 
-  JSON.parse(body)
+  unless Enum.any?(signatures, &Plug.Crypto.secure_compare(&1, expected)),
+    do: raise("no matching signature")
+
+  Jason.decode!(body)
 end
 ```
 
 ```javascript javascript
+const crypto = require("crypto");
+
 function signPayload(timestamp, body) {
-  return crypto.createHmac('sha256', api_secret).update(`${timestamp}.${body}`).digest('hex');
+  return crypto.createHmac("sha256", process.env.QUBE_WEBHOOK_SECRET).update(`${timestamp}.${body}`).digest("hex");
 }
 
-function verifyAndBuildWebhook!(body, signature, maxAge = 500) {
-  const { timestamp, signatures } = extractSignatures(signature);
+// maxAge is in seconds
+function verifyAndBuildWebhook(body, header, maxAge = 300) {
+  const { timestamp, signatures } = extractTimestampAndSignatures(header);
+  if (timestamp < Date.now() / 1000 - maxAge) throw new Error("webhook is too old");
 
-  if (timestamp < Date.now() / 1000 - maxAge) {
-    throw new Error('Timestamp diff too high');
-  }
+  const expected = Buffer.from(signPayload(timestamp, body));
+  const ok = signatures.some((sig) => {
+    const given = Buffer.from(sig);
+    return given.length === expected.length && crypto.timingSafeEqual(given, expected);
+  });
+  if (!ok) throw new Error("no matching signature");
 
-  signatures.find(sig => signPayload(timestamp, body) === sig) || throw new Error('No matching signature');
-
-  JSON.parse(body);
+  return JSON.parse(body);
 }
 ```
 </CodeGroup>
 
 #### Prevent replay attacks
 
-You can see we're also checking the age of the timestamp to prevent replay attacks. You can choose a `max_age` that makes sense for your application. 
+Checking the age of the timestamp (in **seconds**) defeats replays of a captured webhook. Five minutes is a reasonable `max_age`: a retried delivery is signed afresh, so a healthy receiver never sees an old timestamp. 
   
 

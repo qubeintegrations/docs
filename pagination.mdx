@@ -9,18 +9,31 @@ QuickBooks frequently needs to paginate responses to avoid timeouts and other is
 
 ## Auto-pagination to the rescue
 
-QuBe Sync can automatically paginate any QuickBooks request that supports it. Each result page will be sent to the `webhook_url` provided with the original request. Each webhook will contain the `page` and `page_request_id` attributes to help you distinguish between pages.
+QuBe Sync can automatically paginate any QuickBooks request that supports it. Each result page will be sent to the `webhook_url` provided with the original request. Each webhook will contain the `page`, `page_request_id`, and `iteration_state` attributes to help you distinguish between pages and tell when the iteration is complete (`iteration_state` is `"done"` on the last page).
 
-If you are using [pre-built requests](/api-reference/pre-built-queries/query-customers), you can auto-paginate them by setting the `iterate` parameter to `true`.
+On the [v2 API](/api-reference/introduction), set the `iterator` parameter to `true`:
 
 <CodeGroup>
 
 ```curl curl
-curl https://qubesync.com/api/v1/connections/$CONN_ID/customers?iterate=true \
+curl "https://qubesync.com/api/v2/connections/$CONN_ID/customers?iterator=true" \
      --user $QUBE_API_KEY:
 ```
 
 </CodeGroup>
+
+On the [v1 API](/api-reference/introduction), the equivalent parameter is `iterate`:
+
+<CodeGroup>
+
+```curl curl
+curl "https://qubesync.com/api/v1/connections/$CONN_ID/customers?iterate=true" \
+     --user $QUBE_API_KEY:
+```
+
+</CodeGroup>
+
+Not using webhooks? Every queued request also carries a `links.pages` URL that lists every page of its iteration, keyed by `iteration_state` -- handy in a dashboard or a script; an integration receives each page at its `webhook_url`.
 
 If you're building custom requests, QuBe Sync will automatically paginate any request you send with `iterator="Start"`.
 

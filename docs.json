@@ -7,9 +7,9 @@
     "light": "#07C983",
     "dark": "#15803D"
   },
-  "favicon": { 
-    "light": "/favicon.ico", 
-    "dark": "/favicon.ico" 
+  "favicon": {
+    "light": "/favicon.ico",
+    "dark": "/favicon.ico"
   },
   "navigation": {
     "tabs": [
@@ -35,9 +35,16 @@
           {
             "group": "Your Dev Environment",
             "pages": [
+              "cli",
               "nfr-quickbooks",
               "qwc-logs",
               "ngrok"
+            ]
+          },
+          {
+            "group": "AI / MCP",
+            "pages": [
+              "mcp-server"
             ]
           }
         ]
@@ -52,8 +59,12 @@
             ]
           },
           {
-            "group": "API Documentation",
-            "openapi": "api-reference/openapi.json"
+            "group": "API Documentation (v2)",
+            "openapi": "api-reference/v2/openapi.json"
+          },
+          {
+            "group": "API Documentation (v1, legacy)",
+            "openapi": "api-reference/v1/openapi.json"
           }
         ]
       }

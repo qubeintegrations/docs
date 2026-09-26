@@ -9,24 +9,57 @@ When a queued request fails, a webhook is sent to the `webhook_url` you provided
 
 ```json
 {
-    "timestamp": "2023-01-01T12:00:00Z",
-    "id": "550e8400-e29b-41d4-a716-446655440000",
-    "page_request_id": "550e8400-e29b-41d4-a716-446655440001",
+    "id": "01a0d3f1-b539-768e-8f80-e62bad29ee69",
+    "timestamp": 1790262228,
+    "state": "error",
     "page": 1,
-    "state": "failed",
-    "request_xml": "...",
-    "request_json": "...",
-    ...
+    "page_request_id": "01a0d3f1-b539-768e-8f80-e62bad29ee69",
+    "response_xml": null,
+    "response_json": null,
     "error": {
         "error_type": "quickbooks_connection_error",
-        "message": "The raw QuickBooks error message",
-        "hresult": "the error code from QuickBooks",
-        "human_message": "A friendly error message for the end-user"
+        "message": "The raw QuickBooks / Web Connector message",
+        "hresult": "0x80040408",
+        "error_code": null,
+        "user_message": "A friendly message for the end-user",
+        "debug_message": null
     }
 }
 ```
 
+`state` is `error` whenever the request did not succeed -- including when QuickBooks itself said no (a
+**business** error: 3100 "name already in use", 3120 "object not found", 3140 "invalid reference", 3200 "edit
+sequence out of date"...). For a business error, `error.error_type` is `quickbooks_business_error`, `error.error_code`
+is QuickBooks' status code, and `response_json` is also set, to QuickBooks' own answer:
+`{"status": "error", "error": {"code": 3100, "type": "name_in_use", "message": "..."}}`. Branch on
+`response_json.error.code` (or `error.error_code`; they are the same number) -- it is QuickBooks' own status code
+and the stable thing. `response_xml` carries the raw `*Rs` element for the curious.
+
+## Other terminal states
+
+`state` is `error` for everything above, but two other terminal states mean the request will never be answered
+and carry no `error` object at all:
+
+- `timed_out` -- the Web Connector's session dropped while the request was in flight (`sent`), so QuickBooks
+  never got a chance to answer it. Still sends a webhook, so you don't need to poll to notice it. Safe to requeue.
+- `discarded` -- the request was withdrawn before QuickBooks saw it and won't be retried. Doesn't send a webhook;
+  check `links.self` if you need to notice one.
+
 ## Error Types
+
+### `quickbooks_business_error`
+
+QuickBooks itself said no: the connection worked and the qbXML was well-formed, but QuickBooks rejected the
+request on its own terms. Some common ones:
+
+- 3100 "name already in use"
+- 3120 "object not found" (a `ListID`/`TxnID` reference that doesn't exist)
+- 3140 "invalid reference" (a reference to the wrong kind of object)
+- 3200 "edit sequence out of date" (the object changed since you last read it)
+
+`response_json` carries QuickBooks' own answer here too:
+`{"status": "error", "error": {"code": 3100, "type": "name_in_use", "message": "..."}}`. `error.error_code` is the
+same number as `response_json.error.code` -- branch on it, since it's QuickBooks' own stable status code.
 
 ### `quickbooks_connection_error`
 

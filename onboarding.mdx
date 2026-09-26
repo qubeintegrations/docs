@@ -6,7 +6,7 @@ description: "Getting your customers connected to QuickBooks is as simple as sen
 You'll want a button on your site that says "Connect to QuickBooks Desktop" or something similar. This button should do two things:
 
 
-1. Use the `Connections` API to [create a connection](/api-reference/connections/create-a-new-connection) for the customer, and pass a `redirect_url` to redirect them to once they've completed the setup process.
+1. Use the `Connections` API to [create a connection](/api-reference/connections/create-a-connection) for the customer, and pass a `redirect_url` to redirect them to once they've completed the setup process.
 2. Send them to the `links.onboarding` url returned with the connection you created.
 
 <Note>
@@ -15,11 +15,17 @@ You'll want a button on your site that says "Connect to QuickBooks Desktop" or s
 
 Once they've completed the short setup process, they'll be redirected to the `redirect_url` you provided with a query parameter `state=connected` .
 
+<Tip>
+  While you are building, skip onboarding altogether with a **simulated** connection
+  (`POST /api/v2/connections` with `"type": "simulated"`): it is connected immediately and answered by QuBe
+  Sync's fake QuickBooks. See the [Quickstart](/quickstart).
+</Tip>
+
 ## What if they don't complete the process?
 
-If for some reason they choose to cancel the process, they'll be redirected back to you with `state=cancelled`. You can choose to let them try again, or delete the connection using the [Delete a Connection API](/api-reference/connections/delete-a-connection).
+If for some reason they choose to cancel the process, they'll be redirected back to you with `state=cancelled`. You can choose to let them try again, or delete the connection using the [Remove a Connection API](/api-reference/connections/remove-a-connection).
 
-Onboarding links expire after 48 hours, and can be [regenerated using the API](/api-reference/connections/regenerate-onboarding-url-for-a-connection). If a user attempts to use an expired onboarding url, they'll be redirected to the `redirect_url` with `state=expired`.
+Onboarding links expire after 48 hours, and can be [regenerated using the API](/api-reference/connections/regenerate-the-onboarding-url). If a user attempts to use an expired onboarding url, they'll be redirected to the `redirect_url` with `state=expired`.
 
 
 ## Start making requests\!
@@ -30,5 +36,5 @@ Use the [pre-built requests](/api-reference/pre-built-queries/query-customers) o
 
 Instead of using the `onboarding` url, once you've created the connection your user will need two essentials to get set up. Use the corresponding connection endpoints to provide them:
 
-1. [Generate a QWC file](/api-reference/connections/get-qwc-file-for-a-connection) for their web connector and let them download it.
-2. [Generate a password](/api-reference/connections/generate-or-set-password-for-a-connection) to enter into their web connector once they've added the QWC file.
+1. [Generate a QWC file](/api-reference/connections/get-the-qwc-file) for their web connector and let them download it.
+2. [Generate a password](/api-reference/connections/generate-or-set-a-password) to enter into their web connector once they've added the QWC file.

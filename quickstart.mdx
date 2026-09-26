@@ -22,9 +22,32 @@ description: "Send your first request to QuickBooks in 5 minutes."
 
     Usually, this will be done programmatically by posting to the connections endpoint:
 
-    `post https://qubesync.com/api/v1/connections`
+    `post https://qubesync.com/api/v2/connections`
+
+    <Note>
+      Connections (create, list, get, update, delete, plus the QWC file, password, and onboarding URL) work the same under `/api/v1` and `/api/v2` — pick whichever version you're using for QuickBooks requests below. See [v2 vs v1](/api-reference/introduction#v2-vs-v1).
+    </Note>
+
   </Accordion>
 </AccordionGroup>
+
+### No QuickBooks machine handy? Use a simulated connection
+
+Create a connection with `"type": "simulated"` and QuBe Sync answers it itself with a fake company file
+(customers, items, invoices, the usual QuickBooks errors). It is connected the moment it exists and answers
+within seconds, so you can build and test the whole integration -- requests, workflows, webhooks -- before a
+single customer installs the Web Connector.
+
+```bash
+curl -u "$QUBE_API_KEY:" -X POST https://qubesync.com/api/v2/connections \
+     -H 'Content-Type: application/json' \
+     -d '{"type": "simulated", "name": "My first fake QuickBooks"}'
+```
+
+The dashboard's connection page shows a **Simulator** panel to run the fake Web Connector on demand, reset the
+company file, or make it fail on purpose (QuickBooks closed, a modal dialog, an XML error, a 3100 name clash...).
+The `/connections/:id/simulator` endpoints (under `/api/v1` or `/api/v2`) do the same from code; see the
+[CLI guide](/cli) for driving one without them at all.
 
 ### Set up the QuickBooks Web Connector
 
@@ -62,7 +85,7 @@ From that same connection screen, you can click "Create Test Request" to fire of
     export QUBE_API_KEY="..." # get this from My Applications tab
     export CONN_ID="..." # get this from the Connections tab
     
-    curl https://qubesync.com/api/v1/connections/$CONN_ID/customers?max_returned=10 \
+    curl "https://qubesync.com/api/v2/connections/$CONN_ID/customers?max_returned=10&webhook_url=https://my-app.example/webhooks/qube" \
          --user $QUBE_API_KEY:
     ```
 
@@ -75,8 +98,8 @@ From that same connection screen, you can click "Create Test Request" to fire of
     require 'json'
     
     connection_id = "..."
-    connection_url = "https://qubesync.com/api/v1/connections/#{connection_id}"
-    uri = URI.parse("#{connection_url}/customers?max_returned=10")
+    connection_url = "https://qubesync.com/api/v2/connections/#{connection_id}"
+    uri = URI.parse("#{connection_url}/customers?max_returned=10&webhook_url=https://my-app.example/webhooks/qube")
     
     request = Net::HTTP::Get.new(uri)
     request.basic_auth(ENV["QUBE_API_KEY"], "")
@@ -101,6 +124,9 @@ From that same connection screen, you can click "Create Test Request" to fire of
 
     </CodeGroup>
 
-    The response has a link to the request in the UI (`data.links.ui` ) to watch the request as it's processed by the web connector. Hit "Update Selected" on the Web Connector and see your customers\!
+    The request is **queued** (`201`) and answered when the Web Connector next syncs. Pass a `webhook_url` and the
+    answered request is POSTed to you -- that is the integration path (see [Webhooks](/webhooks)). The response
+    also has a link to the request in the UI (`data.links.ui`) to watch it being processed. Hit "Update Selected" on
+    the Web Connector and see your customers\!
   </Accordion>
 </AccordionGroup>

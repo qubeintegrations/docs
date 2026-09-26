@@ -1,0 +1,76 @@
+---
+title: "MCP Server"
+description: "Let an LLM explore QuBe Sync's qbXML operations and compile requests for you."
+---
+
+## Overview
+
+QuBe Sync runs a public, unauthenticated [MCP](https://modelcontextprotocol.io) (Model Context Protocol) server at:
+
+```
+https://qubesync.com/mcp
+```
+
+It speaks plain JSON-RPC 2.0 over HTTP (the MCP "Streamable HTTP" transport, without a session or an SSE stream — every request gets a single JSON response). Point any MCP client at this URL and it can list every qbXML operation QuBe Sync supports and compile one into ready-to-send qbXML.
+
+No API key is required to use the MCP server itself: `tools/call` only **compiles** a request through the same deterministic compiler the [v2 REST API](/api-reference/introduction) uses — it never touches a real QuickBooks connection. The result includes both the compiled qbXML *and* a ready-to-copy v2 REST API request, so you can go from "what does a CustomerQuery look like?" straight to sending it, without ever exposing your API key or a customer's connection to the MCP server.
+
+<Note>
+  Because the MCP server is unauthenticated, don't send real customer data through it — use it to explore operations and build requests, then submit the compiled request yourself against `/api/v2` with your API key.
+</Note>
+
+## Connecting a client
+
+Add it to any MCP-compatible client (Claude, an agent framework, your own JSON-RPC client) as a remote HTTP server:
+
+```json Example MCP client config
+{
+  "mcpServers": {
+    "qubesync-qbxml": {
+      "url": "https://qubesync.com/mcp"
+    }
+  }
+}
+```
+
+`GET https://qubesync.com/mcp` intentionally returns `405 Method Not Allowed` — this server only accepts `POST`.
+
+## Calling it directly
+
+You can also talk to it with plain `curl`, which is useful for scripting or debugging.
+
+<CodeGroup>
+
+```bash List available tools
+curl https://qubesync.com/mcp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/list"
+  }'
+```
+
+```bash Compile a request
+curl https://qubesync.com/mcp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "tools/call",
+    "params": {
+      "name": "find_customers",
+      "arguments": { "max_returned": 10 }
+    }
+  }'
+```
+
+</CodeGroup>
+
+`tools/list` is paged: the first page holds the **workflow tools** (`list_workflow_templates`,
+`get_workflow_template`, `get_workflow_authoring_guide`, `validate_workflow_chart`) and the first operations in
+alphabetical order; follow `nextCursor` (pass it back as `params.cursor`) for the rest. Workflows are the way to run
+several dependent QuickBooks steps server-side -- create a customer and handle a duplicate name, find-or-create the
+items on an order, then invoice it -- and the templates are complete, tested charts to start from.
+
+The `tools/call` response contains the compiled qbXML alongside an example v2 request — copy that request, swap in your API key and a real `connection_id`, and send it to `/api/v2/connections/:connection_id/...` as described in the [API Reference](/api-reference/introduction).
