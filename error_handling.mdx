@@ -11,7 +11,7 @@ When a queued request fails, a webhook is sent to the `webhook_url` you provided
 {
     "id": "01a0d3f1-b539-768e-8f80-e62bad29ee69",
     "timestamp": 1790262228,
-    "state": "error",
+    "state": "retryable",
     "page": 1,
     "page_request_id": "01a0d3f1-b539-768e-8f80-e62bad29ee69",
     "response_xml": null,
@@ -27,7 +27,8 @@ When a queued request fails, a webhook is sent to the `webhook_url` you provided
 }
 ```
 
-`state` is `error` whenever the request did not succeed -- including when QuickBooks itself said no (a
+`state` is `retryable` when the Web Connector couldn't reach QuickBooks and QuBe Sync will try again (below), and
+`error` when the request failed for good -- including when QuickBooks itself said no (a
 **business** error: 3100 "name already in use", 3120 "object not found", 3140 "invalid reference", 3200 "edit
 sequence out of date"...). For a business error, `error.error_type` is `quickbooks_business_error`, `error.error_code`
 is QuickBooks' status code, and `response_json` is also set, to QuickBooks' own answer:
@@ -35,14 +36,48 @@ is QuickBooks' status code, and `response_json` is also set, to QuickBooks' own 
 `response_json.error.code` (or `error.error_code`; they are the same number) -- it is QuickBooks' own status code
 and the stable thing. `response_xml` carries the raw `*Rs` element for the curious.
 
+## When QuickBooks is out of reach
+
+A `retryable` webhook means the Web Connector ran on your customer's computer but couldn't get the request into
+QuickBooks: QuickBooks wasn't running, no company file (or the wrong one) was open, or a dialog was open in
+QuickBooks. Nothing was applied. `error.error_type` is `quickbooks_connection_error`, and `error.user_message` tells
+your customer what to fix ("QuickBooks can't sync if any modal dialog is open. Please close all dialogs and try
+again.") -- show it to them.
+
+Don't resend the request. QuBe Sync keeps it and tries again on the Web Connector's next runs, for as long as it
+takes. You get a `retryable` webhook when the error first appears, and another only if the error changes --
+otherwise the next webhook is the answer.
+
+While QuickBooks stays out of reach, QuBe Sync spaces the Web Connector's automatic runs out -- each wait double
+the last, up to 30 minutes apart -- and the Web Connector shows "Update postponed by application". Your customer
+doesn't have to wait once they've fixed the problem: clicking **Update Selected** in the Web Connector tries right
+away. (If that first click also says "Update postponed by application", click it again.)
+
+The Web Connector sends a connection's requests in the order they were queued, so everything queued after a
+`retryable` request waits behind it. If a later request depends on this one -- an invoice for the customer this one
+adds -- queue it from this request's `response_received` webhook rather than alongside it.
+
+If you no longer want the request, discard it:
+
+```bash
+curl -u "$QUBE_API_KEY:" -X POST \
+  "https://qubesync.com/api/v2/connections/$CONN_ID/queued_requests/$REQUEST_ID/discard"
+```
+
+It becomes `discarded`, is never sent, and a `discarded` webhook follows. Only a request the Web Connector hasn't
+picked up yet -- `waiting`, or `retryable` between tries -- can be discarded: one it already has goes ahead
+(`409` with `"in_flight"`), and one that has ended stays as it is (`409` with `"already_finished"`).
+
+If requests on a connection wait a week without reaching QuickBooks, QuBe Sync emails your organization's owners.
+
 ## Other terminal states
 
-`state` is `error` for everything above, but two other terminal states mean the request will never be answered
-and carry no `error` object at all:
+Besides `error`, two terminal states mean the request will never be answered:
 
 - `timed_out` -- the Web Connector received the request but never answered. Still sends a webhook, so you don't need to poll to notice it. Safe to requeue queries, but any requests that would mutate data should enter a process for determining whether changes were applied. 
-- `discarded` -- the request was withdrawn before QuickBooks saw it and won't be retried. Doesn't send a webhook;
-  check `links.self` if you need to notice one.
+- `discarded` -- your app [discarded it](#when-quickbooks-is-out-of-reach) before the Web Connector picked it up,
+  so QuickBooks never saw it. Sends a webhook too. `error` is set only if an earlier try had failed to reach
+  QuickBooks.
 
 ## Error Types
 
@@ -74,8 +109,9 @@ This error occurs when the connection to QuickBooks fails. This can happen for a
 - The company file open in QuickBooks isn't the one this connection belongs to
 
 Nothing reached QuickBooks, so nothing was applied, and only your customer can fix it. Show them
-`error.user_message` -- it says what to do (open QuickBooks, open the right company file, close the dialog) -- and
-send the request again once they have.
+`error.user_message` -- it says what to do (open QuickBooks, open the right company file, close the dialog). These
+arrive as `retryable`, and QuBe Sync sends the request again by itself once they have: see
+[When QuickBooks is out of reach](#when-quickbooks-is-out-of-reach).
 
 ### `xml_error`
 
@@ -96,7 +132,8 @@ You can also contact [support@qubesync.com](mailto:support@qubesync.com) for hel
 Some problems stop the Web Connector before it ever talks to QuBe Sync: a wrong password, a log file it can't
 write, a damaged `.qwc` file. Those never arrive as an error. The Web Connector just stops calling in, and your
 requests wait in `waiting`. If requests to a connection stop being answered, ask your customer to open the Web
-Connector and look at the status next to your app.
+Connector and look at the status next to your app. If they have waited a week, QuBe Sync emails your
+organization's owners.
 
 The Web Connector shows these as `QBWC` codes (QBWC1039, QBWC1085...). Intuit keeps the fixes in
 [Fix common Web Connector errors in QuickBooks Desktop](https://quickbooks.intuit.com/learn-support/en-us/help-article/open-programs/fix-common-web-connector-errors-quickbooks-desktop/L9slolvg0_US_en_US)

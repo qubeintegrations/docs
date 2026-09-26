@@ -55,10 +55,20 @@ as well as QuickBooks' response transformed into clean JSON under `response_json
 
 * `timestamp` is Unix seconds and is also the `t=` in the signature header.
 * `state` is `response_received` when QuickBooks answered successfully (read `response_json.data`), and `error`
-  when it did not: the Web Connector could not reach QuickBooks, the qbXML was rejected, **or QuickBooks answered
-  with a business error** (a 3100 name clash, a 3140 invalid reference...). Read `error` for the kind
-  (`error_type`) and, for a business error, `response_json` too -- it carries QuickBooks' own
-  `{"status": "error", "error": {"code", "type", "message"}}`. See [Error Handling](/error_handling).
+  when it did not: the qbXML was rejected, **or QuickBooks answered with a business error** (a 3100 name clash,
+  a 3140 invalid reference...). Read `error` for the kind (`error_type`) and, for a business error,
+  `response_json` too -- it carries QuickBooks' own `{"status": "error", "error": {"code", "type", "message"}}`.
+  See [Error Handling](/error_handling).
+* `state` is `retryable` when the Web Connector couldn't get the request into QuickBooks: QuickBooks wasn't
+  running, the company file open wasn't this connection's, or a dialog was open in QuickBooks. Nothing was
+  applied, and QuBe Sync keeps trying on the Web Connector's runs until it gets through, so don't resend it. Show
+  your customer `error.user_message` -- it says what to fix ("Please close all dialogs...") -- and once they
+  have, clicking **Update Selected** in the Web Connector tries right away. This webhook comes when the error first
+  appears or changes, not on every try. If you no longer want the request, discard it:
+  `POST /api/v2/connections/{connection_id}/queued_requests/{id}/discard`. See
+  [When QuickBooks is out of reach](/error_handling#when-quickbooks-is-out-of-reach).
+* `discarded` means your app discarded the request before the Web Connector picked it up, and `timed_out` that it
+  was abandoned without an answer; see [Error Handling](/error_handling).
 * `response_json` is `{"status": "success", "data": ...}` or `{"status": "error", "error": {...}}`, with `data`
   derived from the qbXML response.
 * `page`, `page_request_id` and `iteration_state` describe multi-page (iterated) answers; each page fires its own webhook.

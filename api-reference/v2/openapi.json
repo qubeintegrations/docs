@@ -76,7 +76,7 @@
       "QueuedRequest": {
         "properties": {
           "error": {
-            "description": "Set when `state` is `error`. `error_type` says where it failed; `user_message` is safe to show an end user; `error_code` is QuickBooks' own status code for a business error, `hresult` the Web Connector's for a connection/XML error; `debug_message` is for you.",
+            "description": "Set when `state` is `error` or `retryable` (and kept if a `retryable` request is then discarded). `error_type` says where it failed; `user_message` is safe to show an end user; `error_code` is QuickBooks' own status code for a business error, `hresult` the Web Connector's for a connection/XML error; `debug_message` is for you.",
             "nullable": true,
             "properties": {
               "debug_message": {
@@ -186120,6 +186120,85 @@
         }
       }
     },
+    "/connections/{connection_id}/queued_requests/{id}/discard": {
+      "post": {
+        "operationId": "discardQueuedRequest",
+        "summary": "Discard a queued request",
+        "description": "Withdraws a request your app no longer wants, before the Web Connector picks it up: one that is `waiting`, or `retryable` between tries. It becomes `discarded`, is never sent to QuickBooks, and a webhook with that state goes to its `webhook_url`. The request itself stays, so it can still be retrieved. A request the Web Connector already has (`ticketed` or `sent`) goes ahead regardless, and one that has ended can't be discarded: both answer 409.",
+        "tags": [
+          "Queued Requests"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "connection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The connection to act on."
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The queued request."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Discarded: the request, now `discarded`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/QueuedRequest"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "`in_flight`: the Web Connector already has the request, so it goes ahead. `already_finished`: the request has already ended.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "errors": {
+                      "type": "string",
+                      "enum": [
+                        "in_flight",
+                        "already_finished"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/connections/{connection_id}/queued_requests/{id}/pages": {
       "get": {
         "operationId": "listQueuedRequestPages",
@@ -186565,7 +186644,7 @@
       "post": {
         "operationId": "syncSimulator",
         "summary": "Run the simulator now",
-        "description": "Runs one fake Web Connector session against this connection immediately, and waits for it -- instead of waiting for the simulator's own poll interval.",
+        "description": "Runs one fake Web Connector session against this connection immediately, and waits for it -- instead of waiting for the simulator's own poll interval. It stands for a person clicking Update Selected, so QuBe lets it through even while it is spacing out scheduled runs (QuickBooks unreachable). The one exception: right after a failed session, before QuBe has told the schedule when to run again, it can't be told apart from a scheduled run and answers `result: postponed` -- run it again to go ahead.",
         "tags": [
           "Connections"
         ],
@@ -186620,8 +186699,13 @@
                             "nothing_to_do",
                             "completed",
                             "connection_error",
-                            "auth_failed"
+                            "auth_failed",
+                            "postponed"
                           ]
+                        },
+                        "retry_in": {
+                          "type": "integer",
+                          "description": "With `result: postponed`: QuickBooks couldn't be reached on the last tries, so QuBe asked the Web Connector to wait this many seconds before its next scheduled run."
                         }
                       }
                     }
@@ -187033,7 +187117,7 @@
       "name": "Connections"
     },
     {
-      "description": "Listing the requests queued on a connection. A `webhook_url` on each request is the integration path (see the Webhooks guide) -- this is for a dashboard, a script, or catching up after downtime.",
+      "description": "Listing the requests queued on a connection, and discarding one the app no longer wants. A `webhook_url` on each request is the integration path (see the Webhooks guide) -- this is for a dashboard, a script, or catching up after downtime.",
       "name": "Queued Requests"
     }
   ]
