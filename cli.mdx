@@ -67,11 +67,38 @@ that instead.
     qube connections list
     qube connections create --simulated --name "Local dev"
     qube connections create --name "Riverbend" --redirect-url https://your-app.example/qb/callback
-    qube requests list <connection> --page 2 --page-size 50   # 20 per page by default
-    qube requests show <id>                                   # one request, as JSON
+    qube connections show <connection>
+    qube connections update <connection> --name "Riverbend Electric"
+    qube connections onboarding-url <connection>              # a fresh link; the old one stops working
+    qube connections qwc <connection> --output riverbend.qwc  # the file the Web Connector adds
+    qube connections password <connection>                    # a new Web Connector password
+    qube connections delete <connection>                      # asks first; --yes in a script
+    qube requests list <connection> --state error --page-size 50   # 20 per page by default
+    qube requests show <connection> <id>                      # one request, as JSON
+    qube requests pages <connection> <id>                     # every page of an iterated query
     qube requests tail <connection>                           # watch requests as they're answered
     qube requests discard <connection> <id>                   # withdraw one the Web Connector hasn't taken
     ```
+  </Accordion>
+  <Accordion title="QuickBooks operations" icon="book">
+    ```bash
+    qube qb                                                   # every resource and its verbs
+    qube qb customers                                         # one resource's operations
+    qube qb customers list --help                             # its flags
+    qube qb customers list <connection> --name-starts-with North --max-returned 5 --wait
+    qube qb customers create <connection> --name "Northwind Builders" --bill-address '{"city": "Austin"}'
+    qube qb invoices create <connection> --data @invoice.json
+    qube qb txn-void execute <connection> --txn-id 1A2B-3C --txn-void-type Invoice
+    qube qb items list <connection> --iterator --max-returned 100 --wait    # every page
+    ```
+    `qube qb` runs every QuickBooks operation in the [API reference](/api-reference/introduction). It
+    reads them from the API's own OpenAPI document, so the CLI offers the flags and body fields your
+    host has. Query parameters and the body's top-level fields are flags (`max_returned` is
+    `--max-returned`), and `--data` takes a whole body as JSON, `@file` or `-` for standard input.
+    Each operation queues a request. `--wait` waits for QuickBooks' answer and prints it, every page
+    of an iterated query, and exits `1` if it failed. It waits up to 10 minutes; use `--wait=30m` for
+    longer. Otherwise pass `--webhook-url` to be sent the answer, or look it up later with
+    `qube requests show`. `--help --json` prints an operation's full parameters and body schema.
   </Accordion>
   <Accordion title="The simulator" icon="flask">
     ```bash
@@ -86,24 +113,36 @@ that instead.
   </Accordion>
   <Accordion title="Workflows" icon="diagram-project">
     ```bash
+    qube workflows templates                        # the shipped templates
+    qube workflows install create_customer_safely --publish
     qube workflows list
+    qube workflows show sync_order
+    qube workflows validate ./chart.json            # check a chart without saving it
     qube workflows push ./chart.json --publish --notes "Handle vendors too"
+    qube workflows publish sync_order --notes "Handle vendors too"
+    qube workflows versions sync_order
+    qube workflows usage sync_order                 # how to call it, as Markdown
+    qube workflows schema                           # the chart JSON Schema
     qube workflows run sync_order --connection <id> --input @order.json \
-      --webhook-url https://your-app.example/webhooks/qube          # --version published|working|N on sandbox
+      --wait                                        # until it ends or needs a decision; --version published|working|N on sandbox
     qube workflows runs <connection>                # runs on a connection
-    qube workflows runs <connection> <run> --events # one run, with its event log
+    qube workflows runs <connection> <run> --events # one run's event log; --after SEQ for the next page
     qube workflows decide <connection> <run> rename --data '{"name": "Riverbend Electric LLC"}'
+    qube workflows cancel <connection> <run> --reason "Wrong customer"
+    qube workflows delete-run <connection> <run>    # an ended run and its history
+    qube workflows unpublish sync_order
+    qube workflows delete sync_order
     ```
     See [Workflows](/workflows).
   </Accordion>
   <Accordion title="Anything else" icon="code">
     ```bash
-    qube api GET "/api/v2/connections/<id>/customers?max_returned=5"
-    qube api POST "/api/v2/connections/<id>/customers" --data '{"name": "Northwind Builders"}'
-    qube api PUT "/api/v2/connections/<id>/customers" --data @update.json
+    qube api GET "/connections/<id>/customers?max_returned=5"
+    qube api POST /connections/<id>/customers --data '{"name": "Northwind Builders"}'
+    qube api PUT /connections/<id>/customers --data @update.json
     ```
-    `qube api` calls any API path with the current app's key. `--data` takes JSON, `@file` or `-` for
-    standard input.
+    `qube api` calls any v2 path with the current app's key. A path that doesn't start with `/api/` is
+    a v2 path. `--data` takes JSON, `@file` or `-` for standard input.
   </Accordion>
 </AccordionGroup>
 
@@ -115,14 +154,27 @@ that instead.
 | `--app` | Act as a specific app, this once. |
 | `--host` | A different QuBe Sync host, this once. |
 | `--timeout` | Seconds (or `2m`). Default 60. |
+| `--yes` | Answer yes to a confirmation, for scripts. See [Production apps](#production-apps). |
 
 Exit codes: `0` ok, `1` the command failed, `2` wrong usage, `130` interrupted.
 
 <Note>
-  `qube requests tail` polls, so you can watch a connection from a terminal. It's a developer convenience.
-  Your integration should pass a `webhook_url` with every request and be told when it's answered
-  ([Webhooks](/webhooks)).
+  `--wait` and `qube requests tail` poll, so you can see answers from a terminal or a script. They're a
+  developer convenience. Your integration should pass a `webhook_url` with every request and be told
+  when it's answered ([Webhooks](/webhooks)).
 </Note>
+
+## Production apps
+
+In a production app, every request that changes something asks before it's sent, and names the app.
+That covers every `qube qb` operation except `list`, since each one writes to the customer's real
+company file. It also covers creating or changing a connection (its password and onboarding link
+too), discarding a request, driving the simulator, every workflow change, run or answer, and
+`qube api` with any method but `GET`. Reads never ask. Removing something (a connection, a workflow,
+a run) asks in any app.
+
+A script answers with `--yes`. Without a terminal, or under `--json`, a request that would ask is refused
+until `--yes` is given, so nothing reaches a production company file by accident.
 
 ## Let an AI agent use it
 
