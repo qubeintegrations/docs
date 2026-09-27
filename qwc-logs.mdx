@@ -1,6 +1,27 @@
 ---
-title: "Verbose Web Connector Logs"
-description: "Enable verbose logging for the web connector to help debug issues."
+title: "Web Connector logs"
+description: "When a connection misbehaves on your customer's PC, the Web Connector's own log shows what it was doing."
+icon: "file-lines"
 ---
 
-[Turn on verbose logging](https://help.developer.intuit.com/s/article/QBWC-Logging) in the QuickBooks Web Connector to see more detailed logs (they are heavily truncated otherwise).
+Most problems show up in QuBe Sync: every request, answer and error is on the connection's page in the
+dashboard. Some happen before the Web Connector ever reaches us, such as a wrong password, a damaged `.qwc`
+file, or QuickBooks refusing the connection. For those, the Web Connector's own log is the place to look.
+
+## Read the log
+
+In the Web Connector, click **View Log**. By default the log is heavily truncated, which often leaves out the
+line you need.
+
+## Turn on verbose logging
+
+Intuit explains how in [QBWC logging](https://help.developer.intuit.com/s/article/QBWC-Logging). With verbose
+logging on, the log records each call the Web Connector makes and the full error text QuickBooks returns.
+Turn it on on your own test machine from the start, and ask a customer to turn it on when a problem needs
+more detail than the dashboard shows.
+
+## Web Connector error codes
+
+The Web Connector reports its own problems as `QBWC` codes (QBWC1039, QBWC1085...). Intuit keeps the fixes in
+[Fix common Web Connector errors in QuickBooks Desktop](https://quickbooks.intuit.com/learn-support/en-us/help-article/open-programs/fix-common-web-connector-errors-quickbooks-desktop/L9slolvg0_US_en_US).
+See also [Problems on your customer's PC](/error_handling#problems-on-your-customers-pc).

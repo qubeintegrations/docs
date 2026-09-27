@@ -1,67 +1,74 @@
 ---
-title: "Auto-Pagination"
-description: "Auto-paginate requests / responses from QuickBooks."
+title: "Pagination"
+description: "Import thousands of records without tracking iterators. Add iterator=true and each page of the answer arrives as its own webhook."
+icon: "layer-group"
 ---
 
-## Overview
+QuickBooks Desktop returns large result sets in pages, through an iterator you'd normally have to track
+yourself: remember its id, ask for the next page, and know when you're done. QuBe Sync does that for you.
+Add `iterator=true` to any query that supports it, and `max_returned` becomes the page size:
 
-QuickBooks frequently needs to paginate responses to avoid timeouts and other issues. Usually this would require tracking iterator metadata and making multiple requests to QuickBooks.
-
-## Auto-pagination to the rescue
-
-QuBe Sync can automatically paginate any QuickBooks request that supports it. Each result page will be sent to the `webhook_url` provided with the original request. Each webhook will contain the `page`, `page_request_id`, and `iteration_state` attributes to help you distinguish between pages and tell when the iteration is complete (`iteration_state` is `"done"` on the last page).
-
-On the [v2 API](/api-reference/introduction), set the `iterator` parameter to `true`:
-
-<CodeGroup>
-
-```curl curl
-curl "https://qubesync.com/api/v2/connections/$CONN_ID/customers?iterator=true" \
-     --user $QUBE_API_KEY:
+```bash
+curl -u "$QUBE_API_KEY:" \
+  "https://qubesync.com/api/v2/connections/$CONN_ID/customers?iterator=true&max_returned=100&webhook_url=$WEBHOOK_URL"
 ```
 
-</CodeGroup>
+QuBe Sync keeps asking QuickBooks for the next page until there are none left, and sends each page to your
+`webhook_url` as it arrives:
 
-On the [v1 API](/api-reference/introduction), the equivalent parameter is `iterate`:
-
-<CodeGroup>
-
-```curl curl
-curl "https://qubesync.com/api/v1/connections/$CONN_ID/customers?iterate=true" \
-     --user $QUBE_API_KEY:
+```mermaid
+%%{init: {"sequence": {"width": 130, "actorMargin": 40, "mirrorActors": false}}}%%
+sequenceDiagram
+  participant App as Your app
+  participant Q as QuBe Sync
+  participant QB as QuickBooks
+  App->>Q: GET /customers?iterator=true
+  Q-->>App: 201
+  Q->>QB: iterator="Start"
+  QB-->>Q: customers 1–100
+  Q->>App: page 1, "continue"
+  Q->>QB: iterator="Continue"
+  QB-->>Q: customers 101–200
+  Q->>App: page 2, "continue"
+  Q->>QB: iterator="Continue"
+  QB-->>Q: customers 201–240
+  Q->>App: page 3, "done"
 ```
 
-</CodeGroup>
+## Telling pages apart
 
-Not using webhooks? Every queued request also carries a `links.pages` URL that lists every page of its iteration, keyed by `iteration_state` -- handy in a dashboard or a script; an integration receives each page at its `webhook_url`.
+Every page's webhook has the same `id` (the request you queued) and its own `page_request_id`:
 
-If you're building custom requests, QuBe Sync will automatically paginate any request you send with `iterator="Start"`.
+| Field | Page 1 | Page 2 | Last page |
+| --- | --- | --- | --- |
+| `id` | `01a0e05d-9068…` | `01a0e05d-9068…` | `01a0e05d-9068…` |
+| `page_request_id` | `01a0e05d-9068…` | `01a0e05d-90bb…` | `01a0e05d-9a12…` |
+| `page` | `1` | `2` | `3` |
+| `iteration_state` | `continue` | `continue` | `done` |
 
-<CodeGroup>
+- Process each page as it arrives. You don't need to wait for the last one.
+- Pages can arrive out of order, and a retried delivery can arrive twice. Key on `page_request_id`.
+- The import is complete once you've handled the page whose `iteration_state` is `done`.
 
-```xml qbxml
-<?xml version="1.0" encoding="utf-8"?>
-<?qbxml version="13.0"?>
-<QBXML>
-  <QBXMLMsgsRq>
-    <CustomerQueryRq iterator="Start">
-      <MaxReturned>100</MaxReturned>
-    </CustomerQueryRq>
-  </QBXMLMsgsRq>
-</QBXML>
+<Note>
+  In a **sandbox** app, an iteration stops after 4 pages. The last page's `iteration_state` is then
+  `max_sandbox_iterations_reached` instead of `done`. Production apps page through everything.
+</Note>
+
+## Pages on demand
+
+Each queued request also has a `links.pages` URL, which returns every page answered so far, oldest first,
+each with its own `iteration_state`. That's handy for a script or a support tool. Your integration should
+still take each page from its webhook.
+
+```bash
+curl -u "$QUBE_API_KEY:" \
+  "https://qubesync.com/api/v2/connections/$CONN_ID/queued_requests/$REQUEST_ID/pages"
 ```
 
+## Tips
 
-```ruby ruby
-QubeSync::RequestBuilder.new do |r|
-  r.QBXML do
-    r.QBXMLMsgsRq do
-      r.CustomerQueryRq(iterator: "Start") do
-        r.MaxReturned(100)
-      end
-    end
-  end
-end
-```
-
-</CodeGroup>
+- **Pick a page size QuickBooks can handle comfortably.** A few hundred records per page keeps each round
+  trip quick on a slow machine. Transactions with many lines are heavier than list records.
+- **Import once, then sync changes.** After the first full import, query with `from_modified_date` so
+  each sync only fetches what changed.

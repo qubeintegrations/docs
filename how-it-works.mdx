@@ -1,0 +1,133 @@
+---
+title: "How it works"
+description: "The handful of ideas behind every QuBe Sync integration: apps, connections, queued requests, and the Web Connector's cycle."
+icon: "gears"
+---
+
+## The pieces
+
+```mermaid
+flowchart TB
+  org["Organization"] --> sandbox["Sandbox app"] & prod["Production app"]
+  sandbox --> sim["Simulated<br/>connection"] & nfr["Your test<br/>QuickBooks"]
+  prod --> c1["Customer A's<br/>company file"] & c2["Customer B's<br/>company file"]
+```
+
+**Organization.** Your company's account, shared with your teammates. Its owners get the alerts: a webhook
+that couldn't be delivered, a connection whose requests have waited a week.
+
+**App.** Your product's identity in QuBe Sync, with its own API key, webhook secrets, connections and
+workflows. A **sandbox** app is for building and testing. A **production** app holds your customers'
+connections. You start with one of each, and nothing crosses between them: a sandbox key can't reach a
+production connection.
+
+**Connection.** One QuickBooks company file, usually one per customer. It carries the Web Connector's
+credentials and knows when it last checked in (`last_connected_at`). It is `standard` (the Web Connector
+checks in every 5 minutes), `realtime` (every 10 seconds) or `simulated` (a fake QuickBooks hosted by QuBe
+Sync, for development).
+
+**Queued request.** One QuickBooks operation, such as listing customers or adding an invoice, queued
+against a connection. You queue it with JSON, and its answer is delivered to your `webhook_url`.
+
+**Workflow run.** A multi-step job QuBe Sync runs for you: several requests, the logic between them, and
+questions for your app when the chart calls for one. See [Workflows](/workflows).
+
+## Why every request is asynchronous
+
+QuickBooks Desktop runs on your customer's Windows machine, behind their firewall. Nothing on the internet
+can call it. Intuit's **Web Connector**, installed alongside QuickBooks, calls out instead: on a schedule it
+asks QuBe Sync whether there is work, runs it in QuickBooks, and hands back the answers.
+
+So an API call to QuBe Sync can't return QuickBooks data. It returns a queued request, and the data follows
+by webhook once the Web Connector has been by:
+
+```mermaid
+%%{init: {"sequence": {"width": 130, "actorMargin": 40, "mirrorActors": false}}}%%
+sequenceDiagram
+  autonumber
+  participant App as Your app
+  participant Q as QuBe Sync
+  participant WC as Web Connector
+  participant QB as QuickBooks
+  App->>Q: POST /customers
+  Q-->>App: 201, "waiting"
+  Note over WC: every 5 min or 10 s,<br/>or Update Selected
+  WC->>Q: any work?
+  Q-->>WC: yes
+  WC->>Q: sendRequestXML
+  Q-->>WC: CustomerAddRq
+  WC->>QB: run it
+  QB-->>WC: CustomerAddRs
+  WC->>Q: receiveResponseXML
+  Q->>App: webhook: the answer
+  App-->>Q: 200 OK
+```
+
+Design for that from the start:
+
+- **Queue from anywhere, act on the webhook.** Do the follow-up work, such as storing the new customer's
+  `list_id`, in your webhook handler, not after the API call.
+- **One request at a time, in order.** A connection's requests go to QuickBooks in the order you queued
+  them. If a request depends on the answer to another, for example an invoice for a customer you're
+  creating, queue it from the first one's webhook, or let a [workflow](/workflows) do the sequencing.
+- **Minutes, not milliseconds.** A standard connection answers within about five minutes. Where a person
+  is waiting on the result, use a `realtime` connection.
+
+## The life of a request
+
+```mermaid
+stateDiagram-v2
+  [*] --> waiting: queued
+  waiting --> ticketed: a session takes it
+  ticketed --> sent: to QuickBooks
+  sent --> response_received: answered
+  sent --> error: refused
+  sent --> timed_out: session lost
+  ticketed --> retryable: unreachable
+  retryable --> ticketed: next session
+  waiting --> discarded: you discard it
+  retryable --> discarded: you discard it
+  classDef ask fill:#fef3c7,stroke:#d97706,color:#78350f
+  classDef good fill:#dcfce7,stroke:#16a34a,color:#14532d
+  classDef quiet fill:#f1f5f9,stroke:#64748b,color:#1e293b
+  classDef bad fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+  class retryable ask
+  class response_received good
+  class timed_out, discarded quiet
+  class error bad
+```
+
+| State | Meaning | Webhook? |
+| --- | --- | --- |
+| `waiting` | Queued; the Web Connector hasn't picked it up yet. | |
+| `ticketed` | A Web Connector session has taken it. | |
+| `sent` | Handed to QuickBooks; waiting for its answer. | |
+| `retryable` | The Web Connector couldn't reach QuickBooks (not running, a dialog open, the wrong company file). QuBe Sync tries again on the next runs. | Yes, when the error first appears or changes |
+| `response_received` | QuickBooks answered. Read `response_json.data`. | Yes |
+| `error` | Failed for good, for example QuickBooks refused it (a duplicate name, a stale `edit_sequence`). | Yes |
+| `timed_out` | QuickBooks received it, but the session ended without an answer. It may or may not have been applied. | Yes |
+| `discarded` | Your app withdrew it before the Web Connector took it. It never reached QuickBooks. | Yes |
+
+The last four are final. [Error handling](/error_handling) covers what to do with each.
+
+## Speed and scheduling
+
+- **Standard** connections are checked every 5 minutes, and **realtime** connections every 10 seconds.
+  Choose with `type` when you create the connection.
+- **Update Selected** in the Web Connector runs a sync immediately, whatever the schedule.
+- **While QuickBooks is out of reach**, QuBe Sync spaces out the Web Connector's automatic runs (each wait
+  double the last, up to 30 minutes) so it isn't retrying against a closed QuickBooks. A manual
+  **Update Selected** is never held back.
+- **Simulated** connections answer within a few seconds, with no Web Connector involved.
+
+## Security
+
+- **API keys belong to one app.** They reach that app's connections, requests and workflows, and nothing
+  else. Keys start with `sk_`, and you can create and expire them in the dashboard.
+- **Webhooks are signed** with your app's webhook secret (HMAC-SHA256 over a timestamp and the body), so
+  you can reject anything that didn't come from QuBe Sync. [Verify signatures](/webhooks#verify-the-signature).
+- **Sandbox and production are separate apps**, with separate keys, secrets and connections.
+- **QuBe Sync never needs your customer's QuickBooks login.** The Web Connector authenticates to QuBe Sync
+  with a per-connection username and password, and QuickBooks itself is only ever reached from their PC.
+- **Retention:** a finished request and its answer are kept for 60 days, then deleted. Workflow runs age
+  out on the same schedule.

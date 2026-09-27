@@ -1,18 +1,65 @@
 ---
-title: "Introduction"
-description: "The QuBe Sync API lets you talk to QuickBooks Enterprise / Desktop with ease."
+title: "API reference"
+sidebarTitle: "Introduction"
+description: "Every endpoint of the QuBe Sync API, generated from the API itself."
+icon: "book"
 ---
 
-## Welcome
+The reference in this section is generated from the OpenAPI document the API serves, so it always matches
+what's running. It's organized in two parts:
 
-The API for QuBe Sync is intentionally small and focused. You **create connections** for your users, **send them to our onboarding url**, and then **queue requests or workflows** for QuickBooks on their behalf.
+<CardGroup cols={2}>
+  <Card title="Connections, requests and workflows" icon="plug" href="/api-reference/v2/connections/list-connections">
+    Create and manage connections, read and discard queued requests, drive the simulator, and install, run
+    and answer workflows.
+  </Card>
+  <Card title="QuickBooks operations" icon="book-open" href="/api-reference/v2/customers/list-customers">
+    261 operations across 125 QuickBooks resources, from Accounts to Workers Comp Codes. Each page lists the
+    request's fields, the `data` its answer carries, and the QuickBooks errors it can raise.
+  </Card>
+</CardGroup>
 
-QuickBooks Desktop integration is a fundamentally asynchronous process, because your customer's QuickBooks is only reachable through the customer's Web Connector. Their Web Connector polls QuBe Sync, so we enqueue requests and send the result to you in a webhook the next time it connects. **Passing a `webhook_url` with your request** ensures you'll get the result (parsed and transformed into nice, clean JSON) `POST`ed to that URL, signed with `X-QUBE-Signature` — see the [Webhooks guide](/webhooks).
+## Basics
 
-## Authentication
+<ResponseField name="Base URL" type="string">
+  `https://qubesync.com/api/v2`
+</ResponseField>
+<ResponseField name="Authentication" type="HTTP Basic">
+  Your app's API key as the username, with a blank password: `curl -u "$QUBE_API_KEY:" ...`. Each app
+  (sandbox or production) has its own keys; find them under **My Applications** in the dashboard.
+</ResponseField>
+<ResponseField name="Format" type="JSON">
+  Request and response bodies are JSON. QuickBooks fields are snake_case (`list_id`, `edit_sequence`).
+</ResponseField>
+<ResponseField name="webhook_url" type="query parameter">
+  Accepted by every QuickBooks operation, whatever its method: where the answer is delivered. See
+  [Webhooks](/webhooks).
+</ResponseField>
 
-All API endpoints are authenticated using your Application's API key and Basic Auth. The API key should be entered as the username, and the password left blank.
+## Responses
 
-## Webhooks
+Every QuickBooks operation answers **`201 Created` with a queued request**, not with QuickBooks' data.
+QuickBooks Desktop is only reachable when its Web Connector checks in, so the data arrives later, at your
+`webhook_url`. Each operation's page documents that webhook as the operation's callback. See
+[How it works](/how-it-works#why-every-request-is-asynchronous).
 
-To protect yourself from timing attacks and other common API vulnerabilities, it's best practice to follow the [Webhooks Guide](/webhooks). It will show you how to verify the webhooks you're receiving are genuinely from QuBe Sync.
+| Status | Means |
+| --- | --- |
+| `200`, `201` | Done, or queued. |
+| `400` | The request was invalid and nothing was queued. `errors` says why. |
+| `401` | Missing or wrong API key. |
+| `404` | No such connection, request or workflow in this app. |
+| `409` | A conflict, such as discarding a request the Web Connector already has. |
+| `422` | Well-formed but refused, such as a workflow input that doesn't match its declared inputs. |
+
+A QuickBooks refusal, such as a duplicate name, is not an HTTP error: the request was queued fine, and its
+answer arrives by webhook with `state: "error"`. See [Error handling](/error_handling).
+
+## For code generators and AI agents
+
+- The OpenAPI 3.1 document is at [`https://qubesync.com/api/v2/openapi.json`](https://qubesync.com/api/v2/openapi.json).
+  Point a client generator at it, or give it to your assistant.
+- The [MCP server](/mcp-server) builds the exact request for any operation, with its webhook schema and error
+  codes, without needing your API key.
+- The workflow chart's JSON Schema is at
+  [`https://qubesync.com/api/v2/workflows/schema.json`](https://qubesync.com/api/v2/workflows/schema.json).

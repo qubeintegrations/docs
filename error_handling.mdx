@@ -1,141 +1,165 @@
 ---
-title: "Error Handling"
-description: "Gracefully handle QuickBooks errors."
+title: "Error handling"
+description: "What can go wrong between your app and your customer's QuickBooks, how QuBe Sync tells you, and what to do about each case."
+icon: "triangle-exclamation"
 ---
 
-## Overview
+A QuickBooks Desktop integration fails in more places than most APIs: QuickBooks' own rules, a PC that's
+switched off, a dialog left open, a Web Connector that stopped running. QuBe Sync sorts every failure into
+a small set of states, each with a clear next step, and gives you a message you can show your customer.
 
-When a queued request fails, a webhook is sent to the `webhook_url` you provided with the request. The webhook contains the request ID and the error that occurred.
+```mermaid
+flowchart LR
+  A{"state"} -- "response_received" --> OK["Apply the data"]
+  A -- "error" --> C{"error_type"}
+  C -- "business" --> D["Branch on the<br/>QuickBooks code"]
+  C -- "other" --> E["Log it; ask support<br/>if it repeats"]
+  A -- "retryable" --> F["Show user_message;<br/>don't resend"]
+  A -- "timed_out" --> G["Check before<br/>resending a change"]
+  A -- "discarded" --> H["Nothing to do"]
+```
+
+## The error object
+
+When `state` is `error` or `retryable`, the webhook's `error` says what happened. Here QuickBooks refused a
+new customer because the name is taken:
 
 ```json
 {
-    "id": "01a0d3f1-b539-768e-8f80-e62bad29ee69",
-    "timestamp": 1790262228,
-    "state": "retryable",
-    "page": 1,
-    "page_request_id": "01a0d3f1-b539-768e-8f80-e62bad29ee69",
-    "response_xml": null,
-    "response_json": null,
-    "error": {
-        "error_type": "quickbooks_connection_error",
-        "message": "The raw QuickBooks / Web Connector message",
-        "hresult": "The Web Connector's HRESULT, when it gave one",
-        "error_code": null,
-        "user_message": "A friendly message for the end-user",
-        "debug_message": null
-    }
+  "state": "error",
+  "error": {
+    "error_type": "quickbooks_business_error",
+    "error_code": 3100,
+    "message": "The name \"Riverbend Electric\" of the list element is already in use.",
+    "user_message": "QuickBooks already has a record with this name. Choose a different name, or update the existing record instead of creating a new one.",
+    "debug_message": "value \"Riverbend Electric\" was supplied via CustomerAddRq > CustomerAdd > Name",
+    "hresult": null
+  },
+  "response_json": {
+    "status": "error",
+    "error": { "code": 3100, "type": "name_in_use", "message": "The name \"Riverbend Electric\" of the list element is already in use." }
+  }
 }
 ```
 
-`state` is `retryable` when the Web Connector couldn't reach QuickBooks and QuBe Sync will try again (below), and
-`error` when the request failed for good -- including when QuickBooks itself said no (a
-**business** error: 3100 "name already in use", 3120 "object not found", 3140 "invalid reference", 3200 "edit
-sequence out of date"...). For a business error, `error.error_type` is `quickbooks_business_error`, `error.error_code`
-is QuickBooks' status code, and `response_json` is also set, to QuickBooks' own answer:
-`{"status": "error", "error": {"code": 3100, "type": "name_in_use", "message": "..."}}`. Branch on
-`response_json.error.code` (or `error.error_code`; they are the same number) -- it is QuickBooks' own status code
-and the stable thing. `response_xml` carries the raw `*Rs` element for the curious.
+| Field | What it's for |
+| --- | --- |
+| `error_type` | Where it failed: `quickbooks_business_error`, `quickbooks_connection_error`, `xml_error` or `unexpected_error`. |
+| `error_code` | QuickBooks' status code, for a business error. The stable thing to branch on. |
+| `user_message` | Plain language for your end user: what went wrong and what to do. |
+| `message` | The raw message from QuickBooks or the Web Connector. |
+| `debug_message` | For you. It names the field that caused it, when QuickBooks says. |
+| `hresult` | The Web Connector's error code, for a connection or XML error. |
+
+## QuickBooks said no
+
+A **business error** means the connection worked and the request was well-formed, but QuickBooks refused
+it on its own terms. `state` is `error`, `error.error_type` is `quickbooks_business_error`, and
+`response_json.error` carries QuickBooks' code with a stable name:
+
+| Code | `type` | Meaning | Usual fix |
+| --- | --- | --- | --- |
+| 3100 | `name_in_use` | The name is already used by a customer, vendor, employee or other name. | Use the existing record, or pick another name. [`create_customer_safely`](/workflows#templates) asks your app which. |
+| 3120 | `object_not_found` | No record has that `list_id` or `txn_id`. | Re-sync the record; it may have been deleted in QuickBooks. |
+| 3140 | `invalid_reference` | A reference (a `customer_ref`, `item_ref`...) names a record the company file doesn't have. | Create the referenced record first, or look it up by name. |
+| 3170 | `cannot_modify` | QuickBooks refused to save a change to an existing record. | Read `message` for why, such as a closed accounting period. |
+| 3175 | `in_use` | The record is in use, so it can't be changed right now. | Try again later; someone may be editing it in QuickBooks. |
+| 3180 | `cannot_save` | QuickBooks refused to save a new record. | The text after "QuickBooks error message:" says why. |
+| 3200 | `stale_edit_sequence` | The record changed in QuickBooks after you read it. | Query it again and retry with the fresh `edit_sequence`. |
+| 3210 | `invalid_value` | A field's value isn't one QuickBooks accepts. | `message` names the field and value. |
+| 3250 | `feature_not_enabled` | The feature is off in this company file, or this edition lacks it. | Ask the customer to turn it on, or skip the feature. |
+| 3260 | `insufficient_permission` | QuickBooks didn't grant permission for this action. | The customer changes your app's access in QuickBooks' Integrated Applications preferences. |
+
+Branch on the **code**, not the message text. Intuit's
+[status code reference](https://developer.intuit.com/app/developer/qbdesktop/docs/develop/exploring-the-quickbooks-desktop-sdk/status-codes-in-response-messages)
+lists every one. Each operation in the [API reference](/api-reference/introduction) and each
+[MCP tool](/mcp-server) names the codes that operation can raise.
+
+<Tip>
+  Test these before your customers do. The [simulator](/simulator) can answer the next request with any of
+  them: `{"faults": {"next_status": {"code": 3200}}}`.
+</Tip>
+
+A query that matches nothing is **not** an error. It's `response_received` with an empty `data` list, and
+QuickBooks' message alongside.
 
 ## When QuickBooks is out of reach
 
-A `retryable` webhook means the Web Connector ran on your customer's computer but couldn't get the request into
-QuickBooks: QuickBooks wasn't running, no company file (or the wrong one) was open, or a dialog was open in
-QuickBooks. Nothing was applied. `error.error_type` is `quickbooks_connection_error`, and `error.user_message` tells
-your customer what to fix ("QuickBooks can't sync if any modal dialog is open. Please close all dialogs and try
-again.") -- show it to them.
+A `retryable` webhook means the Web Connector ran on your customer's computer but couldn't get the request
+into QuickBooks. QuickBooks wasn't running, no company file (or the wrong one) was open, or a dialog was
+open. Nothing was applied, and only your customer can fix it:
 
-Don't resend the request. QuBe Sync keeps it and tries again on the Web Connector's next runs, for as long as it
-takes. You get a `retryable` webhook when the error first appears, and another only if the error changes --
-otherwise the next webhook is the answer.
+```json
+{
+  "state": "retryable",
+  "error": {
+    "error_type": "quickbooks_connection_error",
+    "hresult": "0x80040408",
+    "message": "QBWC1039: The Web Connector could not start QuickBooks. Make sure QuickBooks is installed and running on this computer.",
+    "user_message": "QuickBooks is either not running or not installed on the same computer as the Web Connector. Please ensure QuickBooks is installed and running.",
+    "error_code": null,
+    "debug_message": null
+  },
+  "response_json": null
+}
+```
 
-While QuickBooks stays out of reach, QuBe Sync spaces the Web Connector's automatic runs out -- each wait double
-the last, up to 30 minutes apart -- and the Web Connector shows "Update postponed by application". Your customer
-doesn't have to wait once they've fixed the problem: clicking **Update Selected** in the Web Connector tries right
-away. (If that first click also says "Update postponed by application", click it again.)
+**Show your customer `error.user_message`, and don't resend the request.** QuBe Sync keeps it and tries
+again on the Web Connector's next runs, for as long as it takes. You get a `retryable` webhook when the error
+first appears and another only if it changes. After that, the next webhook is the answer.
 
-The Web Connector sends a connection's requests in the order they were queued, so everything queued after a
-`retryable` request waits behind it. If a later request depends on this one -- an invoice for the customer this one
-adds -- queue it from this request's `response_received` webhook rather than alongside it.
+```mermaid
+flowchart TB
+  run["Web Connector runs"] -- "QuickBooks closed" --> r["retryable<br/>(one webhook)"]
+  r -- "waits 5, 10, 20,<br/>then 30 min" --> run
+  r -. "customer fixes it and<br/>clicks Update Selected" .-> ok["response_received"]
+```
 
-If you no longer want the request, discard it:
+While QuickBooks stays out of reach, QuBe Sync spaces out the Web Connector's automatic runs: each wait is
+double the last, up to 30 minutes apart, and the Web Connector shows "Update postponed by application". Your
+customer doesn't have to wait once they've fixed the problem. Clicking **Update Selected** tries right
+away. If that first click also says "Update postponed by application", they click it again.
+
+Requests on a connection go to QuickBooks in the order they were queued, so everything queued after a
+`retryable` request waits behind it.
+
+### Discarding a request
+
+If you no longer want a request, for example because your customer cancelled the order, discard it:
 
 ```bash
 curl -u "$QUBE_API_KEY:" -X POST \
   "https://qubesync.com/api/v2/connections/$CONN_ID/queued_requests/$REQUEST_ID/discard"
 ```
 
-It becomes `discarded`, is never sent, and a `discarded` webhook follows. Only a request the Web Connector hasn't
-picked up yet -- `waiting`, or `retryable` between tries -- can be discarded: one it already has goes ahead
-(`409` with `"in_flight"`), and one that has ended stays as it is (`409` with `"already_finished"`).
+It becomes `discarded`, is never sent, and a `discarded` webhook follows. Only a request the Web Connector
+hasn't picked up yet (`waiting`, or `retryable` between tries) can be discarded. One it already has goes
+ahead (`409`, `in_flight`), and one that has finished stays as it is (`409`, `already_finished`).
 
-If requests on a connection wait a week without reaching QuickBooks, QuBe Sync emails your organization's owners.
+If a connection's requests wait a week without reaching QuickBooks, QuBe Sync emails your organization's
+owners.
 
-## Other terminal states
+## Other endings
 
-Besides `error`, two terminal states mean the request will never be answered:
+- **`timed_out`**: QuickBooks received the request, but the Web Connector session ended before it answered.
+  QuickBooks may or may not have applied it. A query is safe to queue again. For a create or update,
+  query first to see whether it happened.
+- **`discarded`**: your app [discarded it](#discarding-a-request). QuickBooks never saw it.
+- **`error` with `xml_error`**: QuickBooks couldn't parse the request. Requests built through the API are
+  validated against QuickBooks' schema first, so this is rare, but it can happen with characters QuickBooks
+  can't handle. Sent again as-is, it fails again.
+- **`error` with `unexpected_error`**: QuickBooks failed without saying why. The Web Connector's log
+  (**View Log** in the Web Connector) usually has more; turn on [verbose logging](/qwc-logs) if it doesn't.
+  [support@qubesync.com](mailto:support@qubesync.com) can help.
 
-- `timed_out` -- the Web Connector received the request but never answered. Still sends a webhook, so you don't need to poll to notice it. Safe to requeue queries, but any requests that would mutate data should enter a process for determining whether changes were applied. 
-- `discarded` -- your app [discarded it](#when-quickbooks-is-out-of-reach) before the Web Connector picked it up,
-  so QuickBooks never saw it. Sends a webhook too. `error` is set only if an earlier try had failed to reach
-  QuickBooks.
+## Problems on your customer's PC
 
-## Error Types
+Some problems stop the Web Connector before it ever reaches QuBe Sync: a wrong password, a log file it
+can't write, a damaged `.qwc` file. Those never arrive as an error. The Web Connector just stops checking
+in, and requests wait in `waiting`.
 
-### `quickbooks_business_error`
-
-QuickBooks itself said no: the connection worked and the qbXML was well-formed, but QuickBooks rejected the
-request on its own terms. Some common ones:
-
-- 3100 "name already in use"
-- 3120 "object not found" (a `ListID`/`TxnID` reference that doesn't exist)
-- 3140 "invalid reference" (a reference to the wrong kind of object)
-- 3200 "edit sequence out of date" (the object changed since you last read it)
-
-Intuit's [Status codes in response messages](https://developer.intuit.com/app/developer/qbdesktop/docs/develop/exploring-the-quickbooks-desktop-sdk/status-codes-in-response-messages)
-lists every code. Each operation's API reference, and its [MCP tool](/mcp-server), names the ones that operation
-can raise, with `error.type`'s name for each.
-
-`response_json` carries QuickBooks' own answer here too:
-`{"status": "error", "error": {"code": 3100, "type": "name_in_use", "message": "..."}}`. `error.error_code` is the
-same number as `response_json.error.code` -- branch on it, since it's QuickBooks' own stable status code.
-
-### `quickbooks_connection_error`
-
-This error occurs when the connection to QuickBooks fails. This can happen for a variety of reasons, such as:
-
-- QuickBooks is not running, and the user did not enable "Allow access even when QuickBooks is closed" in the Web Connector
-- No company file is open in QuickBooks
-- QuickBooks has a modal open, such as a login screen
-- The company file open in QuickBooks isn't the one this connection belongs to
-
-Nothing reached QuickBooks, so nothing was applied, and only your customer can fix it. Show them
-`error.user_message` -- it says what to do (open QuickBooks, open the right company file, close the dialog). These
-arrive as `retryable`, and QuBe Sync sends the request again by itself once they have: see
-[When QuickBooks is out of reach](#when-quickbooks-is-out-of-reach).
-
-### `xml_error`
-
-If the QBXML request to QuickBooks was malformed, this error will be returned. This should never happen when using QuBeSync's tools,
-but could theoretically be caused by:
-
-- Incorrect QBXML structure or tags
-- Characters that QuickBooks cannot handle
-
-### `unexpected_error`
-
-Every once in a while, QB throws an error even it doesn't understand. Sometimes the user will need to send you the contents of their QuickBooks log file to help you debug the issue.
-
-You can also contact [support@qubesync.com](mailto:support@qubesync.com) for help if you're unable to resolve the issue on your own.
-
-## Web Connector errors on your customer's PC
-
-Some problems stop the Web Connector before it ever talks to QuBe Sync: a wrong password, a log file it can't
-write, a damaged `.qwc` file. Those never arrive as an error. The Web Connector just stops calling in, and your
-requests wait in `waiting`. If requests to a connection stop being answered, ask your customer to open the Web
-Connector and look at the status next to your app. If they have waited a week, QuBe Sync emails your
-organization's owners.
-
-The Web Connector shows these as `QBWC` codes (QBWC1039, QBWC1085...). Intuit keeps the fixes in
-[Fix common Web Connector errors in QuickBooks Desktop](https://quickbooks.intuit.com/learn-support/en-us/help-article/open-programs/fix-common-web-connector-errors-quickbooks-desktop/L9slolvg0_US_en_US)
--- send your customer there. For anything that page doesn't cover, [verbose logs](/qwc-logs) show what the
-Web Connector was doing.
+If a connection's requests stop being answered, compare its `last_connected_at` with the current time, then
+ask your customer to open the Web Connector and read the status next to your app. It shows these problems as
+`QBWC` codes (QBWC1039, QBWC1085...). Intuit keeps the fixes in
+[Fix common Web Connector errors in QuickBooks Desktop](https://quickbooks.intuit.com/learn-support/en-us/help-article/open-programs/fix-common-web-connector-errors-quickbooks-desktop/L9slolvg0_US_en_US).
+For anything that page doesn't cover, [verbose logs](/qwc-logs) show what the Web Connector was doing.

@@ -1,6 +1,36 @@
 ---
-title: "Receive Webhooks in Development"
+title: "Receive webhooks in development"
+description: "QuBe Sync delivers answers to a public URL. Here's how to point one at the app on your laptop."
+icon: "tower-broadcast"
 ---
 
+Answers from QuickBooks arrive as a `POST` to the `webhook_url` you pass with each request, so QuBe Sync has
+to be able to reach it. On your laptop, a tunnel gives your local server a public HTTPS address.
 
-Use [ngrok](https://ngrok.com), [CloudFlare tunnels](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) (our preference), or a similar tool to expose your local development environment to the internet. This is useful for receiving webhooks in development. Every request you queue for QuickBooks can have its own `webhook_url` to receive the result of the request.
+<CodeGroup>
+```bash Cloudflare Tunnel
+# https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/
+cloudflared tunnel --url http://localhost:3000
+```
+
+```bash ngrok
+# https://ngrok.com
+ngrok http 3000
+```
+</CodeGroup>
+
+Both print a public URL. Use it as the base of your `webhook_url`:
+
+```bash
+curl -u "$QUBE_API_KEY:" \
+  "https://qubesync.com/api/v2/connections/$CONN_ID/customers?max_returned=5&webhook_url=https://abc123.trycloudflare.com/webhooks/qube"
+```
+
+Tips:
+
+- **Keep the URL in configuration** (an `APP_HOST` environment variable, say) and build every `webhook_url`
+  from it, because a free tunnel's address changes each time it starts.
+- **Verify signatures in development too.** Your sandbox app has its own webhook secret, so the code path is
+  the same as in production. [Verify the signature](/webhooks#verify-the-signature).
+- **Missed one while the tunnel was down?** QuBe Sync retries each delivery several times, and any request's
+  page in the dashboard has **Resend webhook**.

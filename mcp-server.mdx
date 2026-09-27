@@ -1,95 +1,137 @@
 ---
-title: "MCP Server"
-description: "Let an LLM explore QuBe Sync's QuickBooks operations and build v2 API requests for you."
+title: "MCP server"
+description: "Point Claude Code, Cursor or any MCP client at QuBe Sync. Your agent can look up every QuickBooks operation, build the exact API request, write and validate workflows, and never needs your API key."
+icon: "robot"
 ---
 
-## Overview
-
-QuBe Sync runs a public, unauthenticated [MCP](https://modelcontextprotocol.io) (Model Context Protocol) server at:
+QuBe Sync runs a public [Model Context Protocol](https://modelcontextprotocol.io) server at:
 
 ```
 https://qubesync.com/mcp
 ```
 
-Point any MCP client at this URL and it can list every QuickBooks operation QuBe Sync supports and build the v2 REST request that runs one.
+Connect an AI coding agent to it and the agent knows QuickBooks Desktop the way QuBe Sync does: every
+operation and field, the errors each one can raise, the webhook your app will receive, and how to write a
+workflow. It works for anything from "how do I find inactive vendors?" to building your whole integration.
 
-No API key is required to use the MCP server itself: `tools/call` only **checks** your parameters, through the same deterministic compiler the [v2 REST API](/api-reference/introduction) uses, and returns the v2 request to send — it never touches a real QuickBooks connection. You go from "how do I find active customers?" straight to sending that request, without ever exposing your API key or a customer's connection to the MCP server. You send JSON to `/api/v2`, never qbXML.
+```mermaid
+flowchart LR
+  agent["Your coding agent"] -- "which operation?" --> mcp["MCP server<br/>no key needed"]
+  mcp -- "request, webhook,<br/>error codes" --> agent
+  agent -- "sends it with your<br/>sandbox key" --> api["QuBe Sync API"]
+```
 
-<Note>
-  Because the MCP server is unauthenticated, don't send real customer data through it — use it to explore operations and build requests, then send the request yourself to `/api/v2` with your API key.
-</Note>
+## Connect your agent
 
-## For real power, give your agent a sandbox-only CLI session
+The server speaks Streamable HTTP and needs no authentication.
 
-The [qube cli](/cli) defaults to providing sandbox-only access to QuBeSync, and in combination with the MCP can expedite your agent's progress greatly.
+<Tabs>
+  <Tab title="Claude Code">
+    ```bash
+    claude mcp add --transport http qubesync https://qubesync.com/mcp
+    ```
+  </Tab>
+  <Tab title="Cursor">
+    Add it to `.cursor/mcp.json` in your project, or to `~/.cursor/mcp.json` for every project:
 
-## Connecting a client
-
-Add it to any MCP-compatible client (Claude, an agent framework, your own JSON-RPC client) as a remote HTTP server:
-
-```json Example MCP client config
-{
-  "mcpServers": {
-    "qubesync-qbxml": {
-      "url": "https://qubesync.com/mcp"
+    ```json
+    {
+      "mcpServers": {
+        "qubesync": { "url": "https://qubesync.com/mcp" }
+      }
     }
-  }
+    ```
+  </Tab>
+  <Tab title="Other clients">
+    Add a remote (HTTP) MCP server with the URL `https://qubesync.com/mcp`. Most clients take a config like:
+
+    ```json
+    {
+      "mcpServers": {
+        "qubesync": { "type": "http", "url": "https://qubesync.com/mcp" }
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## What it can do
+
+The server **never touches a QuickBooks connection** and never needs an API key. Its tools check parameters,
+build requests and validate charts, and your agent sends what they build with your key. So there is nothing
+for the server to leak.
+
+<CardGroup cols={2}>
+  <Card title="261 operation tools" icon="code">
+    One per QuickBooks operation: `find_customers`, `create_invoice`, `update_vendor`, `record_payment`,
+    `execute_txn_void`... Each checks the arguments against QuickBooks' schema and returns the API request
+    that runs it.
+  </Card>
+  <Card title="4 workflow tools" icon="diagram-project">
+    `get_workflow_authoring_guide`, `validate_workflow_chart`, `list_workflow_templates` and
+    `get_workflow_template`: everything an agent needs to write a [workflow](/workflow-authoring) and check
+    it.
+  </Card>
+</CardGroup>
+
+A fifth hand-written tool, `report_confusion`, lets an agent tell us when a tool, guide or API response
+confused it, without sending any keys or customer data. We read those reports to improve the tools.
+
+## What an operation tool returns
+
+Calling `create_customer` with a name and email returns the request to send, ready to use:
+
+```json structuredContent
+{
+  "method": "POST",
+  "url": "https://qubesync.com/api/v2/connections/{connection_id}/customers",
+  "body": { "name": "Northwind Builders", "email": "ap@northwind.example" },
+  "webhook": { "type": "object", "properties": { "state": { ... }, "response_json": { ... } } }
 }
 ```
 
-`GET https://qubesync.com/mcp` intentionally returns `405 Method Not Allowed` — this server only accepts `POST`.
+- `method`, `url`, and `query` (for a `GET`) or `body`: the API call. Swap in a real `connection_id`, add
+  your `webhook_url`, and send it with your API key.
+- `webhook`: the JSON Schema of the [webhook](/webhooks) the answer will arrive in, including this
+  operation's own `data` and every QuickBooks status code it can fail with, each with what it means and
+  what to do.
+- The text content repeats the same as a ready-to-run `curl` command, plus a short guide to handling each
+  webhook `state`.
+
+So an agent writing your webhook handler gets the data shape and the error cases from the same call that
+built the request. Pass `"include_qbxml": true` to also see the qbXML QuBe Sync will send QuickBooks. That's
+for curiosity and debugging only: your app always sends JSON.
+
+## Pair it with the CLI
+
+The MCP server tells your agent what to send. The [qube CLI](/cli) lets it send it safely: log in yourself
+with the default **sandbox** scope, and your agent can create a simulated connection, run the requests it
+built, inject faults, and push the workflows it wrote, without ever seeing a secret or a production app.
 
 ## Calling it directly
 
-You can also talk to it with plain `curl`, which is useful for scripting or debugging.
+It's plain JSON-RPC over `POST`, so `curl` works for scripting or debugging. (A `GET` answers `405`.)
 
 <CodeGroup>
-
-```bash List available tools
-curl https://qubesync.com/mcp \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "tools/list"
-  }'
+```bash List tools
+curl https://qubesync.com/mcp -H "Content-Type: application/json" \
+  -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}'
 ```
 
 ```bash Build a request
-curl https://qubesync.com/mcp \
-  -H "Content-Type: application/json" \
+curl https://qubesync.com/mcp -H "Content-Type: application/json" \
   -d '{
-    "jsonrpc": "2.0",
-    "id": 2,
-    "method": "tools/call",
-    "params": {
-      "name": "find_customers",
-      "arguments": { "max_returned": 10 }
-    }
+    "jsonrpc": "2.0", "id": 2, "method": "tools/call",
+    "params": {"name": "find_customers", "arguments": {"active_status": "ActiveOnly", "max_returned": 25}}
   }'
 ```
-
 </CodeGroup>
 
-`tools/list` is paged: the first page holds the **workflow tools** (`list_workflow_templates`,
-`get_workflow_template`, `get_workflow_authoring_guide`, `validate_workflow_chart`) and the first operations in
-alphabetical order; follow `nextCursor` (pass it back as `params.cursor`) for the rest. Workflows are the way to run
-several dependent QuickBooks steps server-side -- create a customer and handle a duplicate name, find-or-create the
-items on an order, then invoice it -- and the templates are complete, tested charts to start from.
+`tools/list` returns 100 tools per page. The first page starts with the workflow tools and
+`report_confusion`, then the operations in alphabetical order. Pass `nextCursor` back as `params.cursor`
+for the rest.
 
-The `tools/call` result carries the v2 request twice: as a ready-to-copy `curl` in its text, and as `structuredContent` an agent can use directly:
-
-```json structuredContent for find_customers (webhook abridged)
-{
-  "method": "GET",
-  "url": "https://qubesync.com/api/v2/connections/{connection_id}/customers",
-  "query": { "max_returned": 10 },
-  "webhook": { "type": "object", "properties": { "state": { ... }, "response_json": { "oneOf": [ ... ] }, ... } }
-}
-```
-
-A `GET` puts your arguments in `query`; a create or update puts them in `body`. Swap in a real `connection_id`, authenticate with your API key, and send it as described in the [API Reference](/api-reference/introduction). The request is queued, and the answer is delivered to your `webhook_url`.
-
-The result also carries `webhook` (the JSON Schema of the [webhook payload](/webhooks) that answer arrives in), with this operation's own `response_json`: the `data` a success returns, and the QuickBooks status codes it can fail with, each with what it means and what to do. The text repeats it, after a short guide to handling each `state`. So an agent writing your webhook handler gets the data shape and the error cases from the same call that built the request.
-
-To see the qbXML QuBe Sync will send QuickBooks, pass `"include_qbxml": true` with the arguments. The result then adds it (as `qbxml` in `structuredContent`, and in the text). It's for reference and debugging only: the v2 request stays the same, and you never send qbXML yourself.
+<Note>
+  The server is public, so don't send it real customer data. Use it to explore and build requests, then send
+  them yourself with your API key.
+</Note>

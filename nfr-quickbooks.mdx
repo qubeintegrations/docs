@@ -1,8 +1,40 @@
 ---
-title: "Get free QuickBooks Desktop or Enterprise for development"
-description: "Intuit offers a not-for-resale licenses for QuickBooks Desktop or Enterprise."
+title: "Get QuickBooks for testing"
+description: "Intuit gives developers a free not-for-resale license for QuickBooks Desktop and Enterprise. Here's how to set up a test machine."
+icon: "desktop"
 ---
 
-1. Download a trial version of your target QuickBooks version and install it on a Windows machine or VM. 
-2. Request a [Not-For-Resale version of QuickBooks](https://developer.intuit.com/app/developer/qbdesktop/docs/get-started/not-for-resale-software) so you'll have a valid license when the trial expires. 
-3. When you open QuickBooks, you will be able to choose a sample company file to prepopulate realistic data.
+[Simulated connections](/simulator) cover most of your development. Before you launch, test against the
+real thing once: a copy of QuickBooks Desktop on Windows, with the Web Connector, exactly as your customers
+run it.
+
+<Steps>
+  <Step title="Get a Windows machine">
+    QuickBooks Desktop runs only on Windows. A Windows virtual machine works fine, and makes it easy to
+    snapshot a clean install.
+  </Step>
+  <Step title="Install QuickBooks">
+    Download a trial of the edition your customers use (Pro, Premier or Enterprise) and install it. The Web
+    Connector comes with QuickBooks.
+  </Step>
+  <Step title="Request a not-for-resale license">
+    Intuit gives developers a free
+    [Not-For-Resale license](https://developer.intuit.com/app/developer/qbdesktop/docs/get-started/not-for-resale-software),
+    so you keep a working copy when the trial ends. Approval can take a few days, so request it early.
+  </Step>
+  <Step title="Open a sample company">
+    When QuickBooks starts, choose one of its sample company files. They're full of realistic customers,
+    items and transactions to test against.
+  </Step>
+  <Step title="Connect it to your sandbox app">
+    Create a connection in your **sandbox** app and open its onboarding link on the Windows machine
+    ([Connect your customers](/onboarding) walks through it). Then turn on
+    [verbose Web Connector logs](/qwc-logs) in case you need them.
+  </Step>
+</Steps>
+
+<Tip>
+  Run QuickBooks as the administrator, in single-user mode, the first time your app connects. QuickBooks
+  asks the admin to authorize a new integration, and that dialog blocks every request until someone answers
+  it.
+</Tip>

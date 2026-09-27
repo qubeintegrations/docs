@@ -1,7 +1,7 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
-  "name": "QuBe Sync API",
+  "name": "QuBe Sync",
   "colors": {
     "primary": "#16A34A",
     "light": "#07C983",
@@ -10,74 +10,6 @@
   "favicon": {
     "light": "/favicon.ico",
     "dark": "/favicon.ico"
-  },
-  "navigation": {
-    "tabs": [
-      {
-        "tab": "Guides",
-        "groups": [
-          {
-            "group": "Get Started",
-            "pages": [
-              "index",
-              "quickstart"
-            ]
-          },
-          {
-            "group": "Essentials",
-            "pages": [
-              "onboarding",
-              "pagination",
-              "webhooks",
-              "error_handling"
-            ]
-          },
-          {
-            "group": "Your Dev Environment",
-            "pages": [
-              "cli",
-              "nfr-quickbooks",
-              "qwc-logs",
-              "ngrok"
-            ]
-          },
-          {
-            "group": "AI / MCP",
-            "pages": [
-              "mcp-server"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "API Reference",
-        "groups": [
-          {
-            "group": "QuBe Sync API",
-            "pages": [
-              "api-reference/introduction"
-            ]
-          },
-          {
-            "group": "API Documentation (v2)",
-            "openapi": "api-reference/v2/openapi.json"
-          },
-          {
-            "group": "API Documentation (v1, legacy)",
-            "openapi": "api-reference/v1/openapi.json"
-          }
-        ]
-      }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "QuBe Sync Slack",
-          "href": "https://qubeintegrations.slack.com",
-          "icon": "slack"
-        }
-      ]
-    }
   },
   "logo": {
     "light": "/logo/full-light.png",
@@ -96,6 +28,134 @@
       "href": "https://qubesync.com/app"
     }
   },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Get started",
+            "pages": [
+              "index",
+              "quickstart",
+              "how-it-works"
+            ]
+          },
+          {
+            "group": "Build your integration",
+            "pages": [
+              "onboarding",
+              "making-requests",
+              "webhooks",
+              "pagination",
+              "error_handling"
+            ]
+          },
+          {
+            "group": "Workflows",
+            "pages": [
+              "workflows",
+              "workflow-authoring"
+            ]
+          },
+          {
+            "group": "Test and launch",
+            "pages": [
+              "simulator",
+              "going-live"
+            ]
+          },
+          {
+            "group": "Tools for you and your agent",
+            "pages": [
+              "cli",
+              "mcp-server"
+            ]
+          },
+          {
+            "group": "Your dev environment",
+            "pages": [
+              "nfr-quickbooks",
+              "ngrok",
+              "qwc-logs"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api-reference/introduction"
+            ]
+          },
+          {
+            "group": "API v2",
+            "openapi": {
+              "source": "api-reference/v2/openapi.json",
+              "directory": "api-reference/v2"
+            }
+          },
+          {
+            "group": "API v1 (legacy)",
+            "openapi": {
+              "source": "api-reference/v1/openapi.json",
+              "directory": "api-reference/v1"
+            }
+          }
+        ]
+      }
+    ],
+    "global": {
+      "anchors": [
+        {
+          "anchor": "QuBe Sync Slack",
+          "href": "https://qubeintegrations.slack.com",
+          "icon": "slack"
+        }
+      ]
+    }
+  },
+  "contextual": {
+    "options": [
+      "copy",
+      "view",
+      "chatgpt",
+      "claude"
+    ]
+  },
+  "redirects": [
+    {
+      "source": "/connecting",
+      "destination": "/onboarding"
+    },
+    {
+      "source": "/development",
+      "destination": "/"
+    },
+    {
+      "source": "/essentials/:slug*",
+      "destination": "/"
+    },
+    {
+      "source": "/api-reference",
+      "destination": "/api-reference/introduction"
+    },
+    {
+      "source": "/api-reference/connections/:slug*",
+      "destination": "/api-reference/v1/connections/:slug*"
+    },
+    {
+      "source": "/api-reference/queued-requests/:slug*",
+      "destination": "/api-reference/v1/queued-requests/:slug*"
+    },
+    {
+      "source": "/api-reference/pre-built-queries/:slug*",
+      "destination": "/api-reference/v1/pre-built-queries/:slug*"
+    }
+  ],
   "footer": {
     "socials": {
       "github": "https://github.com/qubeintegrations",

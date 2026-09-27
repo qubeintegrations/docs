@@ -1,0 +1,114 @@
+---
+title: "Test without QuickBooks"
+description: "Simulated connections answer like QuickBooks Desktop within seconds, and fail on demand, so you can build and test every path of your integration before touching a real company file."
+icon: "flask"
+---
+
+Testing a QuickBooks Desktop integration has usually meant a Windows VM, a licensed copy of QuickBooks, and
+waiting minutes for the Web Connector on every change. Worse, the failures that matter most, such as a
+duplicate name, QuickBooks closed or a stale `edit_sequence`, are hard to reproduce on purpose.
+
+A **simulated connection** replaces all of that. It's a fake QuickBooks Desktop company file hosted by QuBe
+Sync, driven by the same Web Connector session code as a real connection, so your requests, webhooks and
+workflows behave exactly as they will in production. It answers within seconds, and you can make it fail
+however you like.
+
+## Create one
+
+```bash
+curl -u "$QUBE_API_KEY:" -X POST https://qubesync.com/api/v2/connections \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Test company", "type": "simulated"}'
+```
+
+It's connected as soon as it exists. There's nothing to install and no onboarding. From the CLI:
+`qube connections create --simulated --name "Test company"`. Simulated connections are never billed.
+
+## What's in the company file
+
+Every simulated company starts with the same small, realistic data set, so your tests can rely on it:
+
+| Kind | Records |
+| --- | --- |
+| Customers | Riverbend Electric, Hillcrest Dental, Marisol Vega |
+| Vendors | Lone Star Supply Co, Capital Freight |
+| Items | Consulting ($150, service), Installation ($95, service), Shipping ($25, non-inventory), Widget ($40, 120 on hand), Gadget ($129, 35 on hand), Rush Fee ($50, other charge) |
+| Accounts | Checking, Accounts Receivable, Inventory Asset, Undeposited Funds, Accounts Payable, Sales Tax Payable, Opening Balance Equity, Sales, Cost of Goods Sold, Office Supplies |
+| Other lists | Terms (Net 15, Net 30, Due on receipt), sales tax codes (Tax, Non), payment methods (Check, Cash, Visa), ship methods, customer types, classes |
+
+Customers, vendors, employees, items and transactions such as invoices, bills and payments can be queried,
+added and modified. The simulator enforces QuickBooks' rules along the way: names are unique across lists
+(3100), references must exist (3140), and updates need the current `edit_sequence` (3200). Iterated queries
+page like the real thing. Requests it doesn't model yet, such as reports, are answered with status 1030,
+"not supported by this implementation".
+
+Reset it to the starting data at any time:
+
+```bash
+curl -u "$QUBE_API_KEY:" -X POST "https://qubesync.com/api/v2/connections/$CONN_ID/simulator/reset"
+```
+
+## Make it fail
+
+`PUT /connections/{id}/simulator` sets **faults**. Resetting clears them all.
+
+```bash
+curl -u "$QUBE_API_KEY:" -X PUT "https://qubesync.com/api/v2/connections/$CONN_ID/simulator" \
+  -H "Content-Type: application/json" \
+  -d '{"faults": {"connection_error": "modal_dialog"}}'
+```
+
+| Fault | Values | Behaves like | Lasts |
+| --- | --- | --- | --- |
+| `connection_error` | `qb_closed`, `modal_dialog`, `company_file_mismatch`, `unexpected` | QuickBooks not running, a dialog open, the wrong company file open, or an unexplained failure. Requests go `retryable`. | Until you clear it (`null`) |
+| `next_status` | `{"code": 3100}`, or any QuickBooks status code, with an optional `message` | QuickBooks refusing the next request with that code. | One request |
+| `next_response_error` | `"xml_error"`, or `{"hresult", "message"}` | QuickBooks failing to parse the next request. | One request |
+| `latency_ms` | `0` to `60000` | QuickBooks taking its time over each answer. | Until you change it |
+
+`GET /connections/{id}/simulator` shows the current faults and a summary of the company file, and
+`POST /connections/{id}/simulator/sync` runs the fake Web Connector right away, like clicking **Update
+Selected**.
+
+<Tabs>
+  <Tab title="CLI">
+    ```bash
+    qube simulator faults <connection> --next 3100      # the next request: name already in use
+    qube simulator faults <connection> --qb closed      # QuickBooks closed until you say otherwise
+    qube simulator faults <connection> --qb ok          # QuickBooks is back
+    qube simulator faults <connection> --latency 5000   # five seconds per answer
+    qube simulator sync <connection>                    # run the Web Connector now
+    qube simulator reset <connection>
+    ```
+  </Tab>
+  <Tab title="Dashboard">
+    A simulated connection's page has a **Simulator** panel: set any fault, run the Web Connector now,
+    or reset the company file, and watch each request get queued and answered live.
+  </Tab>
+</Tabs>
+
+## A test plan for your integration
+
+Walk every path before your customers do:
+
+| Scenario | Set up | Your app should |
+| --- | --- | --- |
+| Happy path | nothing | Store the returned `list_id` / `txn_id` |
+| Duplicate name | `next_status: {code: 3100}` | Ask the user, or use [`create_customer_safely`](/workflows) |
+| Record changed in QuickBooks | `next_status: {code: 3200}` | Re-query, then retry the update |
+| Missing reference | `next_status: {code: 3140}` | Create the referenced record, or tell the user |
+| QuickBooks closed | `connection_error: qb_closed` | Show `error.user_message`, not resend; the answer follows once you clear the fault |
+| Wrong company file | `connection_error: company_file_mismatch` | Show `error.user_message` |
+| Slow QuickBooks | `latency_ms: 20000` | Keep your UI responsive while it waits |
+| Large import | `iterator=true&max_returned=2` | Handle several pages, out of order |
+| Your webhook endpoint down | stop your server, then queue a request | Recover from QuBe Sync's retries and not process a repeat twice |
+
+## Then test against the real thing
+
+The simulator models QuickBooks' behavior, not every corner of it. Before you launch, run your integration
+against a real copy of QuickBooks Desktop: Intuit gives developers a free
+[not-for-resale license](/nfr-quickbooks).
+
+<Note>
+  In a sandbox app, an [iterated query](/pagination) stops after 4 pages, with `iteration_state`
+  `max_sandbox_iterations_reached`, on simulated and real connections alike.
+</Note>

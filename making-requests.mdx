@@ -1,0 +1,215 @@
+---
+title: "Making requests"
+description: "Query, create, update and delete anything in QuickBooks Desktop with plain JSON. Every operation follows the same pattern."
+icon: "code"
+---
+
+Every QuickBooks operation is a REST endpoint under a connection. There are 261 of them, covering lists
+(customers, vendors, items, accounts), transactions (invoices, bills, payments, sales receipts, journal
+entries), payroll and reports. They all behave the same way:
+
+1. You send JSON to `https://qubesync.com/api/v2/connections/{connection_id}/{resource}`.
+2. QuBe Sync checks it against QuickBooks' schema. An invalid request is refused immediately, with a
+   message saying what's wrong.
+3. A valid one is queued, and you get `201 Created` with the queued request.
+4. When the Web Connector next checks in, QuickBooks runs it and the answer is POSTed to your
+   `webhook_url` as JSON.
+
+## The pattern
+
+| You want to | Method | Example | QuickBooks request |
+| --- | --- | --- | --- |
+| List or search | `GET` | `GET /connections/{id}/customers?name_starts_with=River` | `CustomerQueryRq` |
+| Create | `POST` | `POST /connections/{id}/invoices` | `InvoiceAddRq` |
+| Update | `PUT` | `PUT /connections/{id}/customers` | `CustomerModRq` |
+| Delete | `DELETE` | `DELETE /connections/{id}/lists` | `ListDelRq` |
+| Do something else | `POST` | `POST /connections/{id}/txn-void` | `TxnVoidRq` |
+
+Fields are snake_case versions of QuickBooks' own names (`ListID` becomes `list_id`, `EditSequence` becomes
+`edit_sequence`), in the request body and in the answer. The [API reference](/api-reference/introduction)
+lists every resource and field, and the [MCP server](/mcp-server) can build any request for you.
+
+Add `webhook_url` as a **query parameter** to every call, whatever the method. That's where the answer
+goes.
+
+## A small API client
+
+Every example here uses the same few lines: JSON in, the response's `data` out.
+
+<CodeGroup>
+```ruby Ruby
+require "net/http"
+require "json"
+
+module Qube
+  def self.api(method, path, body = nil, query: {})
+    uri = URI("https://qubesync.com/api/v2#{path}")
+    uri.query = URI.encode_www_form(query) if query.any?
+
+    req = Net::HTTP.const_get(method.to_s.capitalize).new(uri, "Content-Type" => "application/json")
+    req.basic_auth(ENV.fetch("QUBE_API_KEY"), "")
+    req.body = body.to_json if body
+
+    res = Net::HTTP.start(uri.host, uri.port, use_ssl: true) { |http| http.request(req) }
+    raise "QuBe Sync answered #{res.code}: #{res.body}" unless res.is_a?(Net::HTTPSuccess)
+
+    JSON.parse(res.body).fetch("data")
+  end
+end
+```
+
+```javascript Node.js
+const AUTH = "Basic " + Buffer.from(`${process.env.QUBE_API_KEY}:`).toString("base64");
+
+async function qube(method, path, body, query = {}) {
+  const url = new URL(`https://qubesync.com/api/v2${path}`);
+  Object.entries(query).forEach(([k, v]) => url.searchParams.set(k, v));
+
+  const res = await fetch(url, {
+    method,
+    headers: { Authorization: AUTH, "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) throw new Error(`QuBe Sync answered ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+```
+
+```python Python
+import os
+import requests
+
+def qube(method, path, body=None, **query):
+    res = requests.request(method, f"https://qubesync.com/api/v2{path}",
+                           auth=(os.environ["QUBE_API_KEY"], ""), json=body, params=query)
+    res.raise_for_status()
+    return res.json()["data"]
+```
+</CodeGroup>
+
+## Query
+
+Filters are query parameters. Each resource has QuickBooks' own filters, such as names, modified dates,
+active status and reference numbers:
+
+```bash
+curl -u "$QUBE_API_KEY:" \
+  "https://qubesync.com/api/v2/connections/$CONN_ID/customers?active_status=ActiveOnly&name_starts_with=River&max_returned=25&webhook_url=$WEBHOOK_URL"
+```
+
+A query's answer is always a **list** in `response_json.data`, even when one record or none matches. For
+large result sets, add `iterator=true` and each page arrives as its own webhook. See [Pagination](/pagination).
+
+<Tip>
+  Ask only for what changed. `from_modified_date` and `to_modified_date` turn a full import into a cheap
+  incremental sync.
+</Tip>
+
+## Create
+
+The body is the record's fields, flat. Refer to other records by `full_name` or `list_id`:
+
+```bash
+curl -u "$QUBE_API_KEY:" -X POST \
+  "https://qubesync.com/api/v2/connections/$CONN_ID/invoices?webhook_url=$WEBHOOK_URL" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_ref": {"full_name": "Riverbend Electric"},
+    "invoice_line_add": [
+      {"item_ref": {"full_name": "Consulting"}, "quantity": 3, "rate": 150},
+      {"item_ref": {"full_name": "Widget"}, "quantity": 2}
+    ]
+  }'
+```
+
+A create's answer is the **new record** in `response_json.data`, with the ids QuickBooks gave it:
+
+```json response_json (abridged)
+{
+  "status": "success",
+  "data": {
+    "txn_id": "1-1790470623",
+    "ref_number": "1001",
+    "txn_date": "2026-09-27",
+    "due_date": "2026-10-27",
+    "customer_ref": { "list_id": "8000001F-1790470623", "full_name": "Riverbend Electric" },
+    "subtotal": 530.0,
+    "balance_remaining": 530.0,
+    "is_paid": false,
+    "edit_sequence": "1790470623",
+    "invoice_line_ret": [
+      { "txn_line_id": "1L-1790470623", "item_ref": { "full_name": "Consulting" }, "desc": "Consulting services (hourly)", "quantity": 3.0, "rate": 150.0, "amount": 450.0 },
+      { "txn_line_id": "2L-1790470623", "item_ref": { "full_name": "Widget" }, "desc": "Standard widget", "quantity": 2.0, "rate": 40.0, "amount": 80.0 }
+    ]
+  }
+}
+```
+
+Store the `list_id` or `txn_id` against your own record. A `list_id` is stable for the life of the company
+file; a `full_name` changes when someone renames the record in QuickBooks.
+
+<Warning>
+  Names are unique across QuickBooks' customer, vendor, employee and other-name lists together. Creating a
+  customer whose name a vendor already has fails with error 3100 (`name_in_use`). Plan for it: the
+  [`create_customer_safely`](/workflows#templates) workflow handles it for you.
+</Warning>
+
+## Update
+
+QuickBooks uses optimistic locking. Send the record's `list_id` (or `txn_id`) with the `edit_sequence` you
+last read, plus only the fields you're changing:
+
+```bash
+curl -u "$QUBE_API_KEY:" -X PUT \
+  "https://qubesync.com/api/v2/connections/$CONN_ID/customers?webhook_url=$WEBHOOK_URL" \
+  -H "Content-Type: application/json" \
+  -d '{"list_id": "80000020-1790470623", "edit_sequence": "1790470623", "phone": "512-555-0100"}'
+```
+
+The answer is the updated record, with a **new** `edit_sequence`. If the record changed in QuickBooks since
+you read it, the update is refused with error 3200 (`stale_edit_sequence`): query the record again and
+retry with the fresh `edit_sequence`.
+
+## When a request is refused straight away
+
+QuBe Sync validates every request against QuickBooks' schema before queuing it, so a typo fails in your
+test suite, not on your customer's PC. You get `400` and nothing is queued:
+
+```json 400 Bad Request
+{ "errors": "unknown parameter: \"emial\"" }
+```
+
+```json 400 Bad Request
+{ "errors": "active_status: must be one of [:all, :active_only, :inactive_only], got \"Sometimes\"" }
+```
+
+A connection that doesn't exist or belongs to another app answers `404`, and a missing or wrong API key
+answers `401`.
+
+## Ordering, dependencies and retries
+
+- **Requests run in the order you queued them**, one connection at a time. Queue a request that depends on
+  another (an invoice for a customer you're creating) from the first one's webhook, not alongside it.
+  Or let a [workflow](/workflows) run the sequence for you.
+- **QuBe Sync never sends the same request to QuickBooks twice.** There is no idempotency key, so a second
+  `POST` from your app is a second request. Record the `id` of each request you queue, and check it before
+  queuing again.
+- **Don't resend a request that's `retryable`.** QuBe Sync is already retrying it. See
+  [Error handling](/error_handling).
+
+## Keep track of why you asked
+
+The webhook tells you which request was answered (`id`), not what it was for. Keep a row per request:
+
+```ruby
+create_table :quickbooks_requests do |t|
+  t.references :account, null: false
+  t.string :qube_id, null: false, index: { unique: true }  # the queued request's id
+  t.string :purpose, null: false                            # "import_customers", "add_invoice"...
+  t.references :subject, polymorphic: true                  # the record it's about
+  t.string :state
+  t.timestamps
+end
+```
+
+Your [webhook handler](/webhooks) then looks up `qube_id`, and branches on `purpose`.

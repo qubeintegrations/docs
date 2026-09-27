@@ -1,234 +1,273 @@
 ---
 title: "Webhooks"
-description: "Receive webhooks from QuBe Sync when QuickBooks responds to your requests."
+description: "How answers reach your app: what QuBe Sync POSTs to your webhook_url, when, and how to verify it came from us."
+icon: "bell"
 ---
 
+QuickBooks Desktop answers on its own schedule, so QuBe Sync pushes each answer to you rather than making
+you poll. Pass a `webhook_url` with every request. It's a query parameter on every endpoint, whatever the
+method. When QuickBooks answers, or the request fails, QuBe Sync POSTs the answered request there.
 
-Any time a request is completed or fails, a webhook is sent to the `webhook_url` you provided with the request. The webhook contains the request ID and the result of the request.
-
-Every request you queue should carry a `webhook_url`: it is how answers are delivered. On the v2 API it is a
-query parameter on every endpoint, GET or POST; on v1 it is a field of the queued request body:
-
-```bash
-# v2: any operation, as a query parameter
-curl -u "$QUBE_API_KEY:" -X POST \
-  "https://qubesync.com/api/v2/connections/$CONN_ID/customers?webhook_url=https://my-app.example/webhooks/qube" \
-  -H 'Content-Type: application/json' -d '{"name": "Riverbend Electric"}'
-
-# v1: in the body
-curl -u "$QUBE_API_KEY:" -X POST "https://qubesync.com/api/v1/connections/$CONN_ID/queued_requests" \
-  -H 'Content-Type: application/json' \
-  -d '{"request_xml": "<QBXML>...</QBXML>", "webhook_url": "https://my-app.example/webhooks/qube"}'
+```mermaid
+%%{init: {"sequence": {"width": 130, "actorMargin": 40, "mirrorActors": false}}}%%
+sequenceDiagram
+  participant Q as QuBe Sync
+  participant App as Your endpoint
+  participant Job as Your job queue
+  Q->>App: POST, signed
+  App->>App: verify signature
+  App->>Job: enqueue payload
+  App-->>Q: 200 within 5 s
+  Job->>Job: apply the answer
+  Note over Q,App: no 2xx? retried with backoff,<br/>up to 5 attempts
 ```
 
-When the request is answered (or fails), QuBe Sync POSTs the **answered request** to that URL. It contains metadata about the request,
-as well as QuickBooks' response transformed into clean JSON under `response_json`:
+## The payload
+
+This is a real answer to `POST /customers`:
 
 ```json
 {
-  "id": "01a0d3f1-b539-768e-8f80-e62bad29ee69",
-  "timestamp": 1790262228,
+  "id": "01a0e05d-8fdc-7531-9bcf-dbd53e26500c",
+  "timestamp": 1790470625,
   "state": "response_received",
   "page": 1,
-  "page_request_id": "01a0d3f1-b539-768e-8f80-e62bad29ee69",
+  "page_request_id": "01a0e05d-8fdc-7531-9bcf-dbd53e26500c",
   "iteration_state": "not_applicable",
-  "app_id": "0bb157d7-5984-46f7-9998-73da1b42cab6",
+  "app_id": "98f339a4-32e8-424a-987e-ccaf5bcaa620",
   "app_name": "My App Dev",
   "sandbox": true,
-  "response_xml": "<?xml version=\"1.0\"?><?qbxml version=\"16.0\"?><QBXML>...</QBXML>",
   "response_json": {
     "status": "success",
-    "data": [
-      {
-        "list_id": "80000020-1790258733",
-        "name": "Hillcrest Dental",
-        "full_name": "Hillcrest Dental",
-        "is_active": true,
-        "edit_sequence": "1790258733",
-        "balance": 0.0
-      }
-    ]
+    "data": {
+      "list_id": "80000024-1790470623",
+      "edit_sequence": "1790470623",
+      "name": "Northwind Builders",
+      "full_name": "Northwind Builders",
+      "email": "ap@northwind.example",
+      "is_active": true,
+      "balance": 0.0,
+      "total_balance": 0.0,
+      "sublevel": 0,
+      "bill_address": { "addr1": "400 Congress Ave", "city": "Austin", "state": "TX", "postal_code": "78701" },
+      "time_created": "2026-09-27T00:57:03",
+      "time_modified": "2026-09-27T00:57:03"
+    }
   },
+  "response_xml": "<?xml version=\"1.0\"?><?qbxml version=\"16.0\"?><QBXML>...</QBXML>",
   "error": null
 }
 ```
 
-* `timestamp` is Unix seconds and is also the `t=` in the signature header.
-* `state` is `response_received` when QuickBooks answered successfully (read `response_json.data`), and `error`
-  when it did not: the qbXML was rejected, **or QuickBooks answered with a business error** (a 3100 name clash,
-  a 3140 invalid reference...). Read `error` for the kind (`error_type`) and, for a business error,
-  `response_json` too -- it carries QuickBooks' own `{"status": "error", "error": {"code", "type", "message"}}`.
-  See [Error Handling](/error_handling).
-* `state` is `retryable` when the Web Connector couldn't get the request into QuickBooks: QuickBooks wasn't
-  running, the company file open wasn't this connection's, or a dialog was open in QuickBooks. Nothing was
-  applied, and QuBe Sync keeps trying on the Web Connector's runs until it gets through, so don't resend it. Show
-  your customer `error.user_message` -- it says what to fix ("Please close all dialogs...") -- and once they
-  have, clicking **Update Selected** in the Web Connector tries right away. This webhook comes when the error first
-  appears or changes, not on every try. If you no longer want the request, discard it:
-  `POST /api/v2/connections/{connection_id}/queued_requests/{id}/discard`. See
-  [When QuickBooks is out of reach](/error_handling#when-quickbooks-is-out-of-reach).
-* `discarded` means your app discarded the request before the Web Connector picked it up, and `timed_out` that it
-  was abandoned without an answer; see [Error Handling](/error_handling).
-* `response_json` is `{"status": "success", "data": ...}` or `{"status": "error", "error": {...}}`, with `data`
-  derived from the qbXML response.
-* `page`, `page_request_id` and `iteration_state` describe multi-page (iterated) answers; each page fires its own webhook.
-* `id` is the request you queued (the first page's id); `page_request_id` is this page's own id.
+<ResponseField name="id" type="string">
+  The request you queued, as returned by the `201`. For a multi-page answer, every page carries the first
+  page's `id`.
+</ResponseField>
+<ResponseField name="state" type="string">
+  Why you're being told: `response_received`, `error`, `retryable`, `timed_out` or `discarded`. See below.
+</ResponseField>
+<ResponseField name="response_json" type="object | null">
+  QuickBooks' answer as JSON. Either `{"status": "success", "data": ...}` or
+  `{"status": "error", "error": {"code", "type", "message"}}`. A query's `data` is always a list; a create
+  or update's `data` is the record.
+</ResponseField>
+<ResponseField name="error" type="object | null">
+  Set when `state` is `error` or `retryable`: `error_type`, `error_code`, `message`, `user_message` (safe
+  to show your customer), `hresult` and `debug_message`. See [Error handling](/error_handling).
+</ResponseField>
+<ResponseField name="page, page_request_id, iteration_state" type="integer, string, string">
+  For [paginated](/pagination) answers. Each page has its own `page_request_id`; `iteration_state` is
+  `continue` until the last page, which is `done`. It's `not_applicable` for a single-page answer.
+</ResponseField>
+<ResponseField name="timestamp" type="integer">
+  Unix seconds when this delivery was signed. It's also the `t=` in the signature header.
+</ResponseField>
+<ResponseField name="app_id, app_name, sandbox" type="string, string, boolean">
+  The app the request belongs to. Handy when one endpoint serves both your sandbox and production apps.
+</ResponseField>
+<ResponseField name="response_xml" type="string | null">
+  The raw qbXML QuickBooks sent back, if you ever need it.
+</ResponseField>
 
-Workflow runs send their own events (`workflow_run.completed`, `workflow_run.failed`,
-`workflow_run.awaiting_input`, `workflow_run.cancelled`), signed the same way; the `WorkflowRunWebhookPayload`
-schema in the v2 reference describes them.
+## What `state` tells you
 
-## Responding to a webhook
+| `state` | What happened | What to do |
+| --- | --- | --- |
+| `response_received` | QuickBooks answered. | Apply `response_json.data`. |
+| `error` | It failed for good. Usually QuickBooks refused it (a duplicate name, a stale `edit_sequence`). | Branch on `response_json.error.code`; show your customer `error.user_message`. |
+| `retryable` | The Web Connector couldn't get it into QuickBooks: QuickBooks wasn't running, a dialog was open, or the wrong company file was. Nothing was applied. | **Don't resend.** QuBe Sync keeps trying. Show your customer `error.user_message` so they can fix it. |
+| `timed_out` | QuickBooks received it, but the session ended without an answer. | Queries are safe to queue again. For a create or update, check whether it was applied first. |
+| `discarded` | Your app [discarded](/error_handling#when-quickbooks-is-out-of-reach) it before the Web Connector took it. | Nothing: QuickBooks never saw it. |
 
-Answer with any **2xx** status within 5 seconds; the body is ignored. Do the work after responding (a job queue)
-rather than inside the request. Anything else -- a 3xx, 4xx, 5xx, a timeout -- counts as a failed delivery: QuBe
-Sync retries with backoff, up to five attempts, and marks the request's `webhook_state` `failed` after the last one
-(the attempts are on the request as `webhook_attempts`, and the dashboard offers "resend webhook"). Deliveries can
-arrive out of order and, after a retry, more than once: key on `page_request_id` and treat a repeat as already handled.
+A `retryable` webhook arrives when the error first appears and again only if it changes. The next webhook
+after that is usually the answer.
 
-## Securing your webhook endpoint(s)
+## Respond quickly, work later
 
-To protect yourself from timing attacks, JSON parsing vulnerabilities, etc., it's best practice to verify the webhooks you're receiving are genuinely from QuBe Sync.
+Answer with any **2xx** status within **5 seconds**. The body is ignored. Put the work in a background job:
 
-If you are using Ruby with the [qube_sync gem](https://github.com/qubeintegrations/qube_sync_rb/), you can verify a webhook as follows:
+- Anything else counts as a failed delivery: a 3xx, 4xx or 5xx, a timeout, or a refused connection. QuBe Sync
+  retries with backoff, up to 5 attempts in all. After the last one the request's `webhook_state` becomes
+  `failed`, your organization's owners get an email, and the dashboard offers **Resend webhook**.
+- Deliveries can arrive out of order and, after a retry, more than once. Key your processing on
+  `page_request_id` and treat a repeat as already handled.
 
 ```ruby
-payload = request.body.read
-signature = request.headers['X-Qube-Signature']
-
-event = QubeSync.verify_and_build_webhook!(payload, signature)
-```
-
-In python with the [qubesync package](https://github.com/qubeintegrations/qube_sync_py/), you can verify a webhook as follows:
-
-```python
-payload = request.body.decode('utf-8')
-signature = request.headers['X-Qube-Signature']
-
-event = QubeSync.verify_and_build_webhook(payload, signature)
-```
-
-Please let us know if you would like to see official libraries for other languages.
-
-Otherwise, you can verify a webhook using the following steps:
-
-### Step 1. Get the X-Qube-Signature header
-
-To ensure the webhook is coming from QuBe Sync, you can verify the `X-Qube-Signature` header. This header contains a SHA-256 HMAC of the payload using your application's active secret keys. You can manage your webhook secret keys in the _Application_'s settings.
-
-The header is the timestamp and one `v1=` signature per active webhook secret, comma-separated with no spaces
-(two signatures while you are rotating secrets, otherwise one). The scheme is always `v1`:
-
-```
-X-Qube-Signature: t=1790262228,v1=5257a869e7ecebeda32affa62cdca3fa51cad7e98f1da4da5da4f3a1f2a3d5e6
-```
-
-#### Step 2. Extract the timestamp and signatures
-
-<CodeGroup>
-```ruby ruby
-def extract_timestamp_and_signatures(header)
-  parts = header.split(",").map { |part| part.split("=", 2) }
-  timestamp = parts.find { |k, _| k == "t" }&.last.to_i
-  signatures = parts.select { |k, _| k == "v1" }.map(&:last)
-  { timestamp: timestamp, signatures: signatures }
+# app/controllers/qube_webhooks_controller.rb
+class QubeWebhooksController < ActionController::API
+  def create
+    payload = QubeWebhook.verify!(request.raw_post, request.headers["X-QUBE-Signature"])
+    QuickbooksAnswerJob.perform_later(payload)
+    head :ok
+  rescue QubeWebhook::Invalid
+    head :unauthorized
+  end
 end
 ```
 
-```elixir elixir
-def extract_timestamp_and_signatures(header) do
-  parts = header |> String.split(",") |> Enum.map(&String.split(&1, "=", parts: 2))
-  {"t", timestamp} = Enum.find(parts, fn [k, _] -> k == "t" end) |> List.to_tuple()
-  signatures = for ["v1", sig] <- parts, do: sig
-  %{timestamp: String.to_integer(timestamp), signatures: signatures}
+```ruby
+# app/jobs/quickbooks_answer_job.rb
+class QuickbooksAnswerJob < ApplicationJob
+  def perform(answer)
+    request = QuickbooksRequest.find_by(qube_id: answer["id"]) or return
+    request.update!(state: answer["state"])
+    return unless answer["state"] == "response_received"
+
+    data = answer.dig("response_json", "data")
+    case request.purpose
+    when "import_customers"
+      Array(data).each do |attrs|
+        request.account.customers.find_or_initialize_by(qb_list_id: attrs["list_id"])
+          .update!(name: attrs["full_name"], email: attrs["email"])
+      end
+    when "add_customer"
+      request.subject.update!(qb_list_id: data["list_id"])
+    end
+  end
 end
 ```
 
-```javascript javascript
-function extractTimestampAndSignatures(header) {
-  const parts = header.split(",").map((part) => part.split("=", 2));
-  const timestamp = Number(parts.find(([k]) => k === "t")?.[1]);
-  const signatures = parts.filter(([k]) => k === "v1").map(([, v]) => v);
-  return { timestamp, signatures };
-}
+## Verify the signature
+
+Every delivery carries an `X-QUBE-Signature` header: a timestamp and one HMAC-SHA256 signature per active
+webhook secret on your app.
+
 ```
-</CodeGroup>
+X-QUBE-Signature: t=1790470625,v1=5257a869e7ecebeda32affa62cdca3fa51cad7e98f1da4da5da4f3a1f2a3d5e6
+```
 
-#### Step 3. Compare the signatures
+To check it:
 
-Compute the expected signature: the SHA-256 HMAC, hex-encoded, of `"<timestamp>.<raw request body>"` using your
-application's webhook secret. Compare it with each signature in the header using a constant-time comparison. The
-body must be the exact bytes received -- verify before parsing it, and never re-serialize.
+1. Split the header on `,` and each part on the first `=`. Take `t` and every `v1` value.
+2. Compute the hex-encoded HMAC-SHA256 of `"<t>.<raw request body>"` with your webhook secret.
+3. Accept the delivery if it equals any `v1` value (compare in constant time) and `t` is recent.
+
+Use the **raw bytes** you received. Verify before parsing, and never re-serialize the JSON first.
 
 <CodeGroup>
-```ruby ruby
+```ruby Ruby
 require "openssl"
 require "json"
 
-def sign_payload(timestamp, body)
-  OpenSSL::HMAC.hexdigest("sha256", ENV.fetch("QUBE_WEBHOOK_SECRET"), "#{timestamp}.#{body}")
-end
+module QubeWebhook
+  class Invalid < StandardError; end
 
-# max_age is in seconds
-def verify_and_build_webhook!(body, header, max_age: 300)
-  meta = extract_timestamp_and_signatures(header)
-  raise "webhook is too old" if meta[:timestamp] < Time.now.to_i - max_age
+  # max_age is in seconds
+  def self.verify!(body, header, max_age: 300)
+    parts = header.to_s.split(",").map { |part| part.split("=", 2) }
+    timestamp = parts.find { |k, _| k == "t" }&.last.to_i
+    signatures = parts.select { |k, _| k == "v1" }.map(&:last)
+    raise Invalid, "stale webhook" if timestamp < Time.now.to_i - max_age
 
-  expected = sign_payload(meta[:timestamp], body)
-  raise "no matching signature" unless meta[:signatures].any? { |sig| OpenSSL.secure_compare(sig, expected) }
+    expected = OpenSSL::HMAC.hexdigest("SHA256", ENV.fetch("QUBE_WEBHOOK_SECRET"), "#{timestamp}.#{body}")
+    raise Invalid, "bad signature" unless signatures.any? { |sig| OpenSSL.secure_compare(sig, expected) }
 
-  JSON.parse(body)
-end
-
-payload = request.body.read
-event = verify_and_build_webhook!(payload, request.headers["X-Qube-Signature"])
-```
-
-```elixir elixir
-def sign_payload(timestamp, body) do
-  :crypto.mac(:hmac, :sha256, System.fetch_env!("QUBE_WEBHOOK_SECRET"), "#{timestamp}.#{body}")
-  |> Base.encode16(case: :lower)
-end
-
-# max_age is in seconds
-def verify_and_build_webhook!(body, header, max_age \\ 300) do
-  %{timestamp: timestamp, signatures: signatures} = extract_timestamp_and_signatures(header)
-
-  if timestamp < System.system_time(:second) - max_age, do: raise("webhook is too old")
-
-  expected = sign_payload(timestamp, body)
-
-  unless Enum.any?(signatures, &Plug.Crypto.secure_compare(&1, expected)),
-    do: raise("no matching signature")
-
-  Jason.decode!(body)
+    JSON.parse(body)
+  end
 end
 ```
 
-```javascript javascript
+```python Python
+import hashlib, hmac, json, os, time
+
+def verify_webhook(body: bytes, header: str, max_age: int = 300) -> dict:
+    parts = [part.split("=", 1) for part in header.split(",")]
+    timestamp = int(next(v for k, v in parts if k == "t"))
+    signatures = [v for k, v in parts if k == "v1"]
+    if timestamp < time.time() - max_age:
+        raise ValueError("stale webhook")
+
+    secret = os.environ["QUBE_WEBHOOK_SECRET"].encode()
+    expected = hmac.new(secret, f"{timestamp}.".encode() + body, hashlib.sha256).hexdigest()
+    if not any(hmac.compare_digest(sig, expected) for sig in signatures):
+        raise ValueError("bad signature")
+
+    return json.loads(body)
+```
+
+```javascript Node.js
 const crypto = require("crypto");
 
-function signPayload(timestamp, body) {
-  return crypto.createHmac("sha256", process.env.QUBE_WEBHOOK_SECRET).update(`${timestamp}.${body}`).digest("hex");
-}
+// maxAge is in seconds; body is the raw request body (a string or Buffer)
+function verifyWebhook(body, header, maxAge = 300) {
+  const parts = header.split(",").map((part) => part.split("=", 2));
+  const timestamp = Number(parts.find(([k]) => k === "t")?.[1]);
+  const signatures = parts.filter(([k]) => k === "v1").map(([, v]) => v);
+  if (timestamp < Date.now() / 1000 - maxAge) throw new Error("stale webhook");
 
-// maxAge is in seconds
-function verifyAndBuildWebhook(body, header, maxAge = 300) {
-  const { timestamp, signatures } = extractTimestampAndSignatures(header);
-  if (timestamp < Date.now() / 1000 - maxAge) throw new Error("webhook is too old");
-
-  const expected = Buffer.from(signPayload(timestamp, body));
+  const expected = Buffer.from(
+    crypto.createHmac("sha256", process.env.QUBE_WEBHOOK_SECRET).update(`${timestamp}.${body}`).digest("hex")
+  );
   const ok = signatures.some((sig) => {
     const given = Buffer.from(sig);
     return given.length === expected.length && crypto.timingSafeEqual(given, expected);
   });
-  if (!ok) throw new Error("no matching signature");
+  if (!ok) throw new Error("bad signature");
 
   return JSON.parse(body);
 }
 ```
+
+```elixir Elixir
+def verify_webhook(body, header, max_age \\ 300) do
+  parts = header |> String.split(",") |> Enum.map(&String.split(&1, "=", parts: 2))
+  timestamp = Enum.find_value(parts, fn [k, v] -> k == "t" && String.to_integer(v) end)
+  signatures = for ["v1", sig] <- parts, do: sig
+
+  if timestamp < System.system_time(:second) - max_age, do: raise("stale webhook")
+
+  expected =
+    :crypto.mac(:hmac, :sha256, System.fetch_env!("QUBE_WEBHOOK_SECRET"), "#{timestamp}.#{body}")
+    |> Base.encode16(case: :lower)
+
+  unless Enum.any?(signatures, &Plug.Crypto.secure_compare(&1, expected)),
+    do: raise("bad signature")
+
+  Jason.decode!(body)
+end
+```
 </CodeGroup>
 
-#### Prevent replay attacks
+**Why check the timestamp?** It stops someone replaying a captured delivery. Every delivery, retries
+included, is signed afresh, so a healthy receiver never sees an old one. Five minutes is a sensible limit.
 
-Checking the age of the timestamp (in **seconds**) defeats replays of a captured webhook. Five minutes is a reasonable `max_age`: a retried delivery is signed afresh, so a healthy receiver never sees an old timestamp.
+## Rotate your webhook secret
+
+An app can have several webhook secrets, and each delivery is signed with all of them. That header carries
+one `v1=` per secret, so you can rotate without dropping a delivery:
+
+1. Generate a new secret in the dashboard (**My Applications**, then your app).
+2. Deploy it to your app, accepting a match against either secret.
+3. Expire the old secret. An app always keeps at least one.
+
+## Workflow run events
+
+[Workflow runs](/workflows) report to the `webhook_url` you start them with, using the same signature.
+Their events are `workflow_run.awaiting_input`, `workflow_run.completed`, `workflow_run.failed` and
+`workflow_run.cancelled`. The requests a workflow sends don't send webhooks of their own. See
+[Workflow webhooks](/workflows#webhooks).
+
+## In development
+
+QuBe Sync has to reach your endpoint over the internet. Use a tunnel while you develop
+([how](/ngrok)), or open the request's `links.ui` to see the answer in the dashboard.
