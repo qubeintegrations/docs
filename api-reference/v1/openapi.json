@@ -49,7 +49,7 @@
       },
       "post": {
         "summary": "Create a new connection",
-        "description": "Creates and returns a new connection for the authenticated application. Returns an onboarding URL for the user to complete the QuickBooks setup process.",
+        "description": "Creates and returns a new connection for the authenticated application. Returns an onboarding URL for the user to complete the QuickBooks setup process. Only `name`, `redirect_url` and `type` can be set: sending `username`, `password`, `company_file`, `quickbooks_product_name` or `last_connected_at` is refused with `422` naming the field. Set a password with `POST /connections/{connection_id}/password`.",
         "tags": [
           "Connections"
         ],
@@ -125,6 +125,16 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "description": "Invalid fields, such as a `type` that isn't one of the listed values, or a field that can't be set here, such as `last_connected_at`. `errors` names each one. Nothing was saved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrors"
+                }
+              }
+            }
           }
         }
       }
@@ -4139,6 +4149,28 @@
                 "description": "Additional error details"
               }
             }
+          }
+        }
+      },
+      "ValidationErrors": {
+        "type": "object",
+        "description": "A field-by-field list of what was wrong. Nothing was saved.",
+        "properties": {
+          "errors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "example": {
+          "errors": {
+            "last_connected_at": [
+              "is read-only: QuBe Sync sets it from the Web Connector and QuickBooks"
+            ]
           }
         }
       }
