@@ -42,6 +42,7 @@ qube connections list
 qube connections create --simulated --name "Local dev"   # a fake QuickBooks, connected at once
 qube requests list <connection> --page 2   # what is queued / answered, 20 per page
 qube requests show <id>                    # one request, as JSON
+qube requests discard <connection> <id>    # withdraw one the Web Connector hasn't picked up yet
 qube simulator faults <connection> --next 3100           # the next request answers "name already in use"
 qube simulator sync <connection>           # run the fake Web Connector now
 qube workflows push ./chart.json --publish
@@ -59,6 +60,12 @@ as a specific app, `--host`, and `--timeout` (seconds; default 60). Exit codes: 
   `qube requests tail` polls a connection so you can watch it from a terminal. That is a developer convenience,
   not a pattern for your integration: an integration passes a `webhook_url` with every request and is told when
   it is answered (see [Webhooks](/webhooks)).
+</Note>
+
+<Note>
+  `qube requests discard <connection> <id>` withdraws a request the Web Connector hasn't picked up yet: it becomes `discarded`,
+  is never sent to QuickBooks, and a webhook says so if the request has a `webhook_url`. One the Web Connector
+  already has, or one that has already finished, can't be discarded.
 </Note>
 
 ## Sessions and scope
