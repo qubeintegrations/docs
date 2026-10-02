@@ -2,6 +2,7 @@
 title: "Test without QuickBooks"
 description: "Simulated connections answer like QuickBooks Desktop within seconds, and fail on demand, so you can build and test every path of your integration before touching a real company file."
 icon: "flask"
+tag: "Beta"
 ---
 
 Testing a QuickBooks Desktop integration has usually meant a Windows VM, a licensed copy of QuickBooks, and
@@ -10,8 +11,17 @@ duplicate name, QuickBooks closed or a stale `edit_sequence`, are hard to reprod
 
 A **simulated connection** replaces all of that. It's a fake QuickBooks Desktop company file hosted by QuBe
 Sync, driven by the same Web Connector session code as a real connection, so your requests, webhooks and
-workflows behave exactly as they will in production. It answers within seconds, and you can make it fail
+workflows go through the same code they will in production. It answers within seconds, and you can make it fail
 however you like.
+
+<Note>
+  Simulated connections are in beta. The simulator doesn't match real QuickBooks in every case yet, and its
+  answers change as it gets closer: a change that makes it more accurate isn't treated as a breaking change.
+  The simulator's endpoints, its fault names and the `simulated` connection type are stable. A request it
+  doesn't model is answered with status 1030 rather than a guess, and the gaps we know about are listed
+  below. [Test against real QuickBooks](#then-test-against-the-real-thing) before you launch, and if an
+  answer differs from what real QuickBooks says, tell us at [support@qubesync.com](mailto:support@qubesync.com).
+</Note>
 
 ## Create one
 
@@ -38,9 +48,12 @@ Every simulated company starts with the same small, realistic data set, so your 
 
 Customers, vendors, employees, items and transactions such as invoices, bills and payments can be queried,
 added and modified. The simulator enforces QuickBooks' rules along the way: names are unique across lists
-(3100), references must exist (3140), and updates need the current `edit_sequence` (3200). Iterated queries
-page like the real thing. Requests it doesn't model yet, such as reports, are answered with status 1030,
-"not supported by this implementation".
+(3100), references must exist (3140), and updates need the current `edit_sequence` (3200). Values keep
+their spacing as QuickBooks keeps it: a name's double space or a note's line break comes back exactly as
+sent, and a `full_name` filter finds a record by that spelling, or by one with extra spaces, but a
+single-spaced filter does not find a double-spaced name. Iterated queries page like the real thing.
+Requests it doesn't model yet, such as reports, are answered with status 1030, "not supported by this
+implementation".
 
 Reset it to the starting data at any time:
 
@@ -48,9 +61,64 @@ Reset it to the starting data at any time:
 curl -u "$QUBE_API_KEY:" -X POST "https://qubesync.com/api/v2/connections/$CONN_ID/simulator/reset"
 ```
 
+## Transactions and their lines
+
+Transactions keep their lines the way QuickBooks keeps them, so you can build and read line items
+against the simulator:
+
+- **Sales forms** (invoices, estimates, sales orders, sales receipts, credit memos) keep their item and
+  item-group lines. **Purchases** (bills, checks, credit card charges and credits, item receipts, vendor
+  credits) keep their `item_line_add`, `item_group_line_add` and `expense_line_add` lines. Every line gets a
+  `txn_line_id`.
+- An item line with no price starts from the item's: its sales price on a sale, its purchase cost on a
+  purchase. A `quantity` and an `amount` without a price imply one. Otherwise `amount` is `quantity`
+  times the price, with a quantity of 1 when none is given. An expense line carries the `amount` you send.
+- An item-group line expands into one line per item in the group, each item's quantity times the group's.
+- Totals come from the lines: an invoice's `subtotal` and `balance_remaining`, a bill's `amount_due` and
+  `open_amount`, a check's or card charge's `amount`, an item receipt's `total_amount`, and a vendor
+  credit's `credit_amount` and `open_amount`. A bill posts to Accounts Payable and falls due by its
+  terms, or 10 days after its date.
+- Queries return item, group and expense lines only with `include_line_items` (a journal entry's lines
+  come back either way). Lines come back in the order QuickBooks received them.
+- A line that names an item, account, customer or item group that doesn't exist is refused with 3140.
+- **Updating lines** follows QuickBooks' rule: send `txn_line_id` `-1` to add a line, an existing
+  `txn_line_id` to change one, and leave a line out to remove it. Item and group lines count as one list.
+  A purchase's expense lines are a separate list, replaced only when you send `expense_line_mod`.
+  `clear_item_lines` and `clear_expense_lines` empty a list. An update that sends no lines leaves them
+  alone.
+- **Journal entries** keep their debit and credit lines. `journal_line_mod` changes them by `txn_line_id`
+  under the same rule, and `journal_line_type` (`Debit` or `Credit`) moves a line to the other side. A
+  new line needs a type. An entry whose debits and credits don't balance is refused with 3180 when it's
+  created and 3170 when it's updated, with the message "Transaction not in balance." Both codes and
+  full messages match what real QuickBooks answers. An entry created with an entry-level `memo` is saved
+  without it and answered with a status 530 warning (`The field "Memo" is not supported by this
+  implementation.`), as real QuickBooks does; a `memo` on a line is kept.
+- **Lines inside a group** can be updated too: an `invoice_line_group_mod` (or a purchase's
+  `item_group_line_mod`) with its own line updates changes the group's lines by `txn_line_id` under the
+  same rule, and a new group `quantity` scales its lines. Intuit doesn't document how real QuickBooks
+  handles these updates. The simulator copies how a group behaves when it's added, so test group
+  updates against real QuickBooks too.
+
+The simulator doesn't model sales tax (always 0), payments against bills (bills stay open), inventory
+quantities or account balances moving, units of measure, linked transactions such as `link_to_txn_id`,
+price levels, account types (a card charge can name any account), date-driven terms, or QuickBooks
+refusing a transaction with no lines.
+
+Other differences we know of:
+
+- A reference by a `list_id` that doesn't exist gets 3140. Real QuickBooks answers 3120 for an id, and 3140
+  only for a `full_name`.
+- Deleting a record that's in use, such as a customer with invoices, succeeds.
+- Queries for deleted records always find nothing.
+- A payment applied to a `txn_id` that doesn't exist skips that line without an error.
+- Every simulated company allows every feature. A real company file can answer 3250 ("This feature is not
+  enabled or not available in this version of QuickBooks") for bar codes, currencies, inventory sites or units
+  of measure, and decline payroll and sales-tax-return queries.
+
 ## Make it fail
 
-`PUT /connections/{id}/simulator` sets **faults**. Resetting clears them all.
+`PUT /connections/{id}/simulator` sets **faults**. Each `PUT` replaces the whole set, so send every fault
+you want armed at once. Resetting clears them all.
 
 ```bash
 curl -u "$QUBE_API_KEY:" -X PUT "https://qubesync.com/api/v2/connections/$CONN_ID/simulator" \
@@ -60,10 +128,11 @@ curl -u "$QUBE_API_KEY:" -X PUT "https://qubesync.com/api/v2/connections/$CONN_I
 
 | Fault | Values | Behaves like | Lasts |
 | --- | --- | --- | --- |
-| `connection_error` | `qb_closed`, `modal_dialog`, `company_file_mismatch`, `unexpected` | QuickBooks not running, a dialog open, the wrong company file open, or an unexplained failure. Requests go `retryable`. | Until you clear it (`null`) |
+| `connection_error` | `qb_closed`, `modal_dialog`, `company_file_mismatch`, `unexpected` | QuickBooks not running, a dialog open, the wrong company file open, or an unexplained failure. Requests go `retryable`. | Until a `PUT` leaves it out |
 | `next_status` | `{"code": 3100}`, or any QuickBooks status code, with an optional `message` | QuickBooks refusing the next request with that code. | One request |
 | `next_response_error` | `"xml_error"`, or `{"hresult", "message"}` | QuickBooks failing to parse the next request. | One request |
-| `latency_ms` | `0` to `60000` | QuickBooks taking its time over each answer. | Until you change it |
+| `next_lost_response` | `true` | QuickBooks applying the next request, whatever it is, then the Web Connector dying before it answers. The request ends `timed_out`; a workflow that sent it [settles it](/workflows#lost-answers). | One request |
+| `latency_ms` | `0` to `60000` | QuickBooks taking its time over each answer. | Until a `PUT` leaves it out |
 
 `GET /connections/{id}/simulator` shows the current faults and a summary of the company file, and
 `POST /connections/{id}/simulator/sync` runs the fake Web Connector right away, like clicking **Update
@@ -73,16 +142,21 @@ Selected**.
   <Tab title="CLI">
     ```bash
     qube simulator faults <connection> --next 3100      # the next request: name already in use
+    qube simulator faults <connection> --next lost      # the next request: applied, then its answer is lost
     qube simulator faults <connection> --qb closed      # QuickBooks closed until you say otherwise
     qube simulator faults <connection> --qb ok          # QuickBooks is back
     qube simulator faults <connection> --latency 5000   # five seconds per answer
     qube simulator sync <connection>                    # run the Web Connector now
     qube simulator reset <connection>
     ```
+
+    `--next lost` arms `next_lost_response`, and `--next ok` clears whichever next-request fault is armed.
   </Tab>
   <Tab title="Dashboard">
-    A simulated connection's page has a **Simulator** panel: set any fault, run the Web Connector now,
-    or reset the company file, and watch each request get queued and answered live.
+    A simulated connection's page has a **Simulator** panel: choose whether QuickBooks is reachable, what
+    happens to the **Next request** (a lost answer, or 3100, 3120, 3140, 3180, 3200 or malformed XML) and how
+    long QuickBooks thinks (up to 15 seconds). Run the Web Connector now, or reset the company file, and
+    watch each request get queued and answered live. Other codes and latencies are set through the API.
   </Tab>
 </Tabs>
 
@@ -94,7 +168,9 @@ Walk every path before your customers do:
 | --- | --- | --- |
 | Happy path | nothing | Store the returned `list_id` / `txn_id` |
 | Duplicate name | `next_status: {code: 3100}` | Ask the user, or use [`create_customer_safely`](/workflows) |
-| Record changed in QuickBooks | `next_status: {code: 3200}` | Re-query, then retry the update |
+| Record changed in QuickBooks | `next_status: {code: 3200}` | Re-query, then retry the update. (A workflow's update reads the record back, finds it unchanged and sends it again.) |
+| Answer lost | `next_lost_response: true` | Query before resending a create or update. A workflow [settles it](/workflows#lost-answers) itself |
+| Record changed before a workflow's update | A chart of your own with an update state (no template sends one): change the record through the API, then run the update with the `edit_sequence` from before | Answer the [conflict prompt](/workflows#conflicts): `overwrite` or `keep` |
 | Missing reference | `next_status: {code: 3140}` | Create the referenced record, or tell the user |
 | QuickBooks closed | `connection_error: qb_closed` | Show `error.user_message`, not resend; the answer follows once you clear the fault |
 | Wrong company file | `connection_error: company_file_mismatch` | Show `error.user_message` |
