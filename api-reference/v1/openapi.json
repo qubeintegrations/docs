@@ -79,7 +79,7 @@
                       "simulated"
                     ],
                     "default": "standard",
-                    "description": "How QuickBooks is reached. 'simulated' creates a fake QuickBooks answered by QuBe Sync: connected immediately, no Web Connector, meant for development and tests (see the Quickstart)."
+                    "description": "How QuickBooks is reached. 'simulated' creates a fake QuickBooks answered by QuBe Sync: connected immediately, no Web Connector, meant for development and tests (see the Quickstart). Simulated connections are in beta: they don't match real QuickBooks in every case yet."
                   }
                 }
               }
@@ -494,6 +494,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
           }
         }
       }
@@ -633,9 +636,8 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": {
-                    "message": "Queued request not found or has been deleted",
-                    "code": "not_found"
+                  "errors": {
+                    "detail": "Not Found"
                   }
                 }
               }
@@ -714,9 +716,8 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": {
-                    "message": "Queued request not found or has been deleted",
-                    "code": "not_found"
+                  "errors": {
+                    "detail": "Not Found"
                   }
                 }
               }
@@ -899,6 +900,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
           }
         }
       },
@@ -1440,6 +1444,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
           }
         }
       }
@@ -1617,6 +1624,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
           }
         }
       },
@@ -1912,6 +1922,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
           }
         }
       }
@@ -2169,6 +2182,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
           }
         }
       },
@@ -2490,6 +2506,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
           }
         }
       }
@@ -2659,6 +2678,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
           }
         }
       }
@@ -2824,6 +2846,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
           }
         }
       }
@@ -2972,6 +2997,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
           }
         }
       }
@@ -3011,6 +3039,7 @@
           {
             "name": "iterate",
             "in": "query",
+            "description": "Page through every result, one webhook per page (see the `iterate` schema). Ignored with `list_id[]` or `full_name[]`: QuickBooks pages only a filtered query, and a lookup by id gets every match back in one answer.",
             "required": false,
             "schema": {
               "$ref": "#/components/schemas/iterate"
@@ -3052,7 +3081,7 @@
                 "type": "string"
               }
             },
-            "description": "Filter items by name (case-insensitive). Not usable with other filters."
+            "description": "Filter items by name (case-insensitive). Not usable with other filters. With this, `iterate` is ignored: every match comes back in one answer."
           },
           {
             "name": "list_id[]",
@@ -3064,7 +3093,7 @@
                 "type": "string"
               }
             },
-            "description": "Filter items by list ID. Not usable with other filters."
+            "description": "Filter items by list ID. Not usable with other filters. With this, `iterate` is ignored: every match comes back in one answer."
           },
           {
             "name": "from_name",
@@ -3179,6 +3208,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
           }
         }
       }
@@ -3218,6 +3250,7 @@
           {
             "name": "iterate",
             "in": "query",
+            "description": "Page through every result, one webhook per page (see the `iterate` schema). Ignored with `list_id[]` or `full_name[]`: QuickBooks pages only a filtered query, and a lookup by id gets every match back in one answer.",
             "required": false,
             "schema": {
               "$ref": "#/components/schemas/iterate"
@@ -3286,7 +3319,7 @@
                 "type": "string"
               }
             },
-            "description": "Filter by one or more QuickBooks ListID values"
+            "description": "Filter by one or more QuickBooks ListID values. With this, `iterate` is ignored: every match comes back in one answer."
           },
           {
             "name": "full_name[]",
@@ -3298,7 +3331,7 @@
                 "type": "string"
               }
             },
-            "description": "Filter by one or more QuickBooks FullName values"
+            "description": "Filter by one or more QuickBooks FullName values. With this, `iterate` is ignored: every match comes back in one answer."
           },
           {
             "name": "active",
@@ -3368,6 +3401,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
           }
         }
       }
@@ -3549,6 +3585,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
           }
         }
       }
@@ -3814,7 +3853,7 @@
           "type": {
             "type": "string",
             "example": "standard",
-            "description": "How QuickBooks is reached: 'standard' (Web Connector every 5 minutes), 'realtime' (every 10 seconds) or 'simulated' (a fake QuickBooks answered by QuBe Sync itself, for development and tests).",
+            "description": "How QuickBooks is reached: 'standard' (Web Connector every 5 minutes), 'realtime' (every 10 seconds) or 'simulated' (a fake QuickBooks answered by QuBe Sync itself, for development and tests; in beta: it doesn't match real QuickBooks in every case yet).",
             "enum": [
               "standard",
               "realtime",
@@ -3941,7 +3980,7 @@
               "type": "object"
             },
             "nullable": true,
-            "description": "The response payload in JSON format, if request is completed"
+            "description": "The response payload in JSON format, if request is completed: QuickBooks' qbXML answer as JSON, element for element. Each `*Rs` element carries QuickBooks' `@statusCode`, `@statusSeverity` and `@statusMessage`. `Info` is a success. `Warn` means QuickBooks carried the request out but warned about something, and the `*Ret` it answered with is still there: for example `@statusCode` 530, `The field \"Memo\" is not supported by this implementation.`, means the record was saved without that field. `Error` means QuickBooks refused it."
           },
           "webhook_url": {
             "type": "string",
@@ -4075,7 +4114,8 @@
             "type": "string",
             "format": "uri",
             "example": "https://your-webhook-url.com/endpoint",
-            "description": "Optional URL to receive a webhook when the request is completed"
+            "description": "Optional absolute http or https URL to receive a webhook when the request is completed. It may not contain a username or password, and in production it may not point at localhost or a private, loopback or link-local address.",
+            "maxLength": 2048
           }
         }
       },
@@ -4128,29 +4168,79 @@
       "webhook_url": {
         "type": "string",
         "format": "uri",
-        "description": "Optional URL to receive a webhook when the request is completed"
+        "description": "Optional absolute http or https URL to receive a webhook when the request is completed. It may not contain a username or password, and in production it may not point at localhost or a private, loopback or link-local address.",
+        "maxLength": 2048
       },
       "Error": {
-        "type": "object",
+        "description": "What a refused request answers with. The one key is errors, and its shape says what went wrong: a sentence when the endpoint explains the refusal in words (a parameter the operation does not take, a key already taken, a run that has already ended); an object with detail, and a code when there is one, when the request named nothing that exists or may not do what it asked (403, 404, and a CLI session's 401); an object of fields, each a list of messages, when a record failed validation and nothing was saved; a list of {path, message} problems when a submitted document or input fails validation. A request without a usable API key gets a 401 Basic challenge with the plain-text body Unauthorized, not JSON.",
         "properties": {
-          "error": {
-            "type": "object",
-            "properties": {
-              "code": {
-                "type": "string",
-                "example": "invalid_request"
+          "errors": {
+            "oneOf": [
+              {
+                "example": "unknown parameter: \"emial\"",
+                "title": "A sentence",
+                "type": "string"
               },
-              "message": {
-                "type": "string",
-                "example": "The request was invalid"
+              {
+                "properties": {
+                  "code": {
+                    "example": "read_only_session",
+                    "type": "string"
+                  },
+                  "detail": {
+                    "example": "Not Found",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "detail"
+                ],
+                "title": "Detail and code",
+                "type": "object"
               },
-              "details": {
-                "type": "object",
-                "description": "Additional error details"
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "example": {
+                  "redirect_url": [
+                    "must not have a query string"
+                  ]
+                },
+                "title": "Field by field",
+                "type": "object"
+              },
+              {
+                "items": {
+                  "properties": {
+                    "message": {
+                      "example": "is required",
+                      "type": "string"
+                    },
+                    "path": {
+                      "example": "input.customer",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "message"
+                  ],
+                  "type": "object"
+                },
+                "title": "Located problems",
+                "type": "array"
               }
-            }
+            ]
           }
-        }
+        },
+        "required": [
+          "errors"
+        ],
+        "type": "object"
       },
       "ValidationErrors": {
         "type": "object",
@@ -4184,27 +4274,27 @@
               "$ref": "#/components/schemas/Error"
             },
             "example": {
-              "error": {
-                "code": "invalid_request",
-                "message": "The request was invalid"
-              }
+              "errors": "unknown parameter: \"emial\""
             }
           }
         }
       },
       "Unauthorized": {
-        "description": "Authentication required or invalid API key",
-        "content": {
-          "application/json": {
+        "description": "No usable API key. The key is Basic auth, so the answer is the challenge, with the plain-text body Unauthorized rather than JSON.",
+        "headers": {
+          "WWW-Authenticate": {
             "schema": {
-              "$ref": "#/components/schemas/Error"
-            },
-            "example": {
-              "error": {
-                "code": "unauthorized",
-                "message": "Authentication required"
-              }
+              "type": "string",
+              "example": "Basic realm=\"Application\""
             }
+          }
+        },
+        "content": {
+          "text/plain": {
+            "schema": {
+              "type": "string"
+            },
+            "example": "Unauthorized"
           }
         }
       },
@@ -4216,9 +4306,8 @@
               "$ref": "#/components/schemas/Error"
             },
             "example": {
-              "error": {
-                "code": "not_found",
-                "message": "The requested resource was not found"
+              "errors": {
+                "detail": "Not Found"
               }
             }
           }
@@ -4232,9 +4321,25 @@
               "$ref": "#/components/schemas/Error"
             },
             "example": {
-              "error": {
-                "code": "internal_error",
-                "message": "An unexpected error occurred"
+              "errors": {
+                "detail": "Internal Server Error"
+              }
+            }
+          }
+        }
+      },
+      "UnprocessableEntity": {
+        "description": "A field failed validation, field by field, and nothing was queued: such as a `webhook_url` that is not an absolute http or https URL, carries a username or password, or (in production) points at localhost or a private address.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "errors": {
+                "webhook_url": [
+                  "must be an http or https URL"
+                ]
               }
             }
           }
