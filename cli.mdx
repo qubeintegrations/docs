@@ -32,9 +32,12 @@ qube login
 ```
 
 `qube login` shows a short code and opens the dashboard. You confirm the code there, signed in as yourself,
-and choose what the session may reach: **sandbox apps only** by default. The terminal then receives a session
-token, stored in your config directory with owner-only permissions. Nothing is typed into the terminal and
-nothing is pasted into a chat.
+and choose what the session may reach (**sandbox apps only** by default) and whether it may change anything
+(**read and write**, or **read-only**). The terminal then receives a session token, stored in your config
+directory with owner-only permissions. Nothing is typed into the terminal and nothing is pasted into a chat.
+
+`qube login --read-only` asks for a read-only session: the approval page preselects it. See
+[Sessions, scope and access](#sessions-scope-and-access).
 
 `qube status` shows which host, user and app the CLI is pointed at, and when the session expires, without a
 network call. `qube whoami` asks the server to confirm it.
@@ -44,11 +47,22 @@ network call. `qube whoami` asks the server to confirm it.
 ```bash
 qube use "My App Dev"                                     # the app the commands below act as
 qube env --write .env                                     # QUBE_URL, QUBE_API_KEY, QUBE_WEBHOOK_SECRET
-qube connections create --simulated --name "Local dev"    # a fake QuickBooks, connected at once
+qube connections create --simulated --name "Local dev" --use   # a fake QuickBooks, connected at once
 ```
 
 `qube env --write` never prints the values. `qube env --print` prints them as `export` lines, if you want
 that instead.
+
+`--use` makes the new connection the default, so commands that act on a connection don't need its id:
+
+```bash
+qube qb customers list --max-returned 5 --wait    # on "Local dev"
+qube requests list --state error
+qube use --connection Riverbend                   # switch, by id or name; `none` forgets it
+qube requests list --connection <id>              # another connection, this once
+```
+
+`qube connections list` marks the default with `*`. Deleting a connection always needs it named.
 
 ## Commands
 
@@ -84,9 +98,10 @@ that instead.
     ```bash
     qube qb                                                   # every resource and its verbs
     qube qb customers                                         # one resource's operations
-    qube qb customers list --help                             # its flags
+    qube qb customers list --help                             # its flags, their rules, an example
     qube qb customers list <connection> --name-starts-with North --max-returned 5 --wait
     qube qb customers create <connection> --name "Northwind Builders" --bill-address '{"city": "Austin"}'
+    qube qb invoices create --example > invoice.json          # the API's example body, to edit
     qube qb invoices create <connection> --data @invoice.json
     qube qb txn-void execute <connection> --txn-id 1A2B-3C --txn-void-type Invoice
     qube qb items list <connection> --iterator --max-returned 100 --wait    # every page
@@ -99,11 +114,21 @@ that instead.
     of an iterated query, and exits `1` if it failed. It waits up to 10 minutes; use `--wait=30m` for
     longer. Otherwise pass `--webhook-url` to be sent the answer, or look it up later with
     `qube requests show`. `--help --json` prints an operation's full parameters and body schema.
+
+    `--help` comes from the same document. Each flag shows the rules it's part of: which fields
+    exclude each other (`at most one of: --rate | --rate-percent | --price-level-ref`, or
+    `exactly one of` when one is required), which lists combine (an invoice's item and group lines,
+    a journal entry's debit and credit lines), and which keys of an object are required. Help ends
+    with an example built from the operation's request example in the
+    [API reference](/api-reference/introduction), and `--example` prints that body as JSON for you
+    to edit and send with `--data @file`. Tab completion offers each operation's flags, and the
+    values of a flag that has a fixed list.
   </Accordion>
   <Accordion title="The simulator" icon="flask">
     ```bash
     qube simulator show <connection>                  # the fake company file and its faults
     qube simulator faults <connection> --next 3100    # one-shot: xml | 3100 | 3120 | 3140 | 3180 | 3200 | ok
+    qube simulator faults <connection> --next lost    # one-shot: applied, then its answer is lost; --next ok clears it
     qube simulator faults <connection> --qb closed    # sticky: closed | modal | mismatch | unexpected | ok
     qube simulator faults <connection> --latency 5000 # milliseconds QuickBooks "thinks" per answer
     qube simulator sync <connection>                  # run the fake Web Connector now
@@ -117,8 +142,8 @@ that instead.
     qube workflows install create_customer_safely --publish
     qube workflows list
     qube workflows show sync_order
-    qube workflows validate ./chart.json            # check a chart without saving it
-    qube workflows push ./chart.json --publish --notes "Handle vendors too"
+    qube workflows validate ./chart.json            # check a chart without saving it; whether what it calls exists is checked on push
+    qube workflows push ./chart.json --publish --notes "Handle vendors too"   # saved under the chart's top-level "key", which it must have
     qube workflows publish sync_order --notes "Handle vendors too"
     qube workflows versions sync_order
     qube workflows usage sync_order                 # how to call it, as Markdown
@@ -153,6 +178,7 @@ that instead.
 | `--json` | Machine-readable output. |
 | `--app` | Act as a specific app, this once. |
 | `--host` | A different QuBe Sync host, this once. |
+| `--connection` | The connection to act on, this once, when a command doesn't name one. |
 | `--timeout` | Seconds (or `2m`). Default 60. |
 | `--yes` | Answer yes to a confirmation, for scripts. See [Production apps](#production-apps). |
 
@@ -180,11 +206,13 @@ until `--yes` is given, so nothing reaches a production company file by accident
 
 Log in yourself, choosing the default **sandbox** scope, then let your coding agent run `qube`. It can
 write your `.env`, create simulated connections, inject faults, push workflows and call the API, but it
-never sees the session token or your production apps, and you can revoke its access at any moment.
+never sees the session token or your production apps, and you can revoke its access at any moment. For
+an agent that should only look (reading your data, running QuickBooks queries, checking charts), approve
+a **read-only** session instead: the server refuses anything else.
 Combined with the [MCP server](/mcp-server), an agent can explore QuickBooks operations, build requests
 and test them end to end on its own.
 
-## Sessions and scope
+## Sessions, scope and access
 
 A session belongs to you, in one organization.
 
@@ -192,6 +220,11 @@ A session belongs to you, in one organization.
   webhook secrets, and act on their connections. It can't see production apps, or change billing, members
   or your account.
 - Choosing **every app** when you approve the login lifts the first restriction.
+- A **read-only** session can list and show what its scope reaches, run QuickBooks queries, validate
+  charts and download a connection's QWC file. It can't create, change, delete, discard, run or answer
+  anything, and it can't read an app's API key or webhook secret, so `qube env` isn't available to it. The
+  server enforces this. `qube status` and `qube sessions` show each session's access.
 - Sessions expire after 30 days. `qube logout`, `qube sessions revoke <id>`, or **CLI sessions** in the
-  dashboard end one sooner.
-- An app's API key is only ever sent to the host that issued it, so a mistyped `--host` can't leak it.
+  dashboard end one sooner, and the CLI stops working at once: it calls the API with the session's own
+  token, never the app's API key.
+- The token is only ever sent to the host that issued it, so a mistyped `--host` can't leak it.
