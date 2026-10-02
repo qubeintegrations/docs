@@ -122,6 +122,12 @@ curl -u "$QUBE_API_KEY:" -X POST \
   }'
 ```
 
+Some records take lines of more than one kind, each in its own list: an invoice's `invoice_line_add` and
+`invoice_line_group_add`, a journal entry's `journal_debit_line` and `journal_credit_line`. Send as many of
+each as you need in the same request. QuickBooks receives each list whole, item lines before group lines and
+debits before credits, so a group line can't sit between two item lines. A journal entry, estimate, sales
+order, sales receipt, credit memo or purchase order needs at least one line of some kind.
+
 A create's answer is the **new record** in `response_json.data`, with the ids QuickBooks gave it:
 
 ```json response_json (abridged)
@@ -147,6 +153,10 @@ A create's answer is the **new record** in `response_json.data`, with the ids Qu
 
 Store the `list_id` or `txn_id` against your own record. A `list_id` is stable for the life of the company
 file; a `full_name` changes when someone renames the record in QuickBooks.
+
+If QuickBooks saved the record but left something out, such as a field this QuickBooks doesn't support, the
+answer is still a success, with `response_json.warning` saying what. See
+[Warnings](/error_handling#quickbooks-said-yes-with-a-warning).
 
 <Warning>
   Names are unique across QuickBooks' customer, vendor, employee and other-name lists together. Creating a
@@ -184,7 +194,8 @@ test suite, not on your customer's PC. You get `400` and nothing is queued:
 ```
 
 A connection that doesn't exist or belongs to another app answers `404`, and a missing or wrong API key
-answers `401`.
+answers `401`. Every refusal has the one key `errors`; [Error handling](/error_handling#when-qube-sync-refuses-a-request)
+lists the shapes it takes.
 
 ## Ordering, dependencies and retries
 

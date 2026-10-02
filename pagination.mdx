@@ -35,6 +35,16 @@ sequenceDiagram
   Q->>App: page 3, "done"
 ```
 
+<Note>
+  An iterator pages a **filtered** query. A lookup by `list_id` or `full_name` (`txn_id` or `ref_number` on
+  a transaction query) gets every match back in one answer, so leave `iterator` out. QuickBooks refuses an
+  iterator beside an id, so QuBe Sync answers `400` and queues nothing:
+
+  ```json 400 Bad Request
+  { "errors": "iterator pages a filtered query; with list_id every match comes back in one answer, so leave iterator out" }
+  ```
+</Note>
+
 ## Telling pages apart
 
 Every page's webhook has the same `id` (the request you queued) and its own `page_request_id`:
@@ -55,6 +65,15 @@ Every page's webhook has the same `id` (the request you queued) and its own `pag
   `max_sandbox_iterations_reached` instead of `done`. Production apps page through everything.
 </Note>
 
+## If the session ends partway
+
+QuickBooks keeps an iteration only for the Web Connector session that started it. If that session ends
+before the last page (QuickBooks closes, the Web Connector is stopped, or the connection drops), QuickBooks
+can't pick up where it left off. The next page's webhook then has `state` `error`, with `error_type`
+`quickbooks_connection_error` and a `user_message` saying so. Queue the query again to get the rest. It
+starts from the first page, so save records by their `list_id` or `txn_id` and the ones you already have
+are updated rather than duplicated.
+
 ## Pages on demand
 
 Each queued request also has a `links.pages` URL, which returns every page answered so far, oldest first,
@@ -65,6 +84,44 @@ still take each page from its webhook.
 curl -u "$QUBE_API_KEY:" \
   "https://qubesync.com/api/v2/connections/$CONN_ID/queued_requests/$REQUEST_ID/pages"
 ```
+
+## In a workflow
+
+A [workflow](/workflows) pages through a query for you, with no webhook per page. Set `"paginate": true`
+on its request state: the chart handles each page as a `page` event, then gets `success` once every page
+is in. See the `request` state in [Anatomy of a chart](/workflow-authoring#anatomy-of-a-chart).
+
+## Initial import
+
+Bringing a company file's lists into your app the first time can go either way:
+
+- **The plain paginated API** (above): one query per list, one webhook per page. Pages can arrive out of
+  order and twice, so you key on `page_request_id`, and you know a list is done when you've handled its
+  `done` page. Nothing to install. Best for one list, or when you'd rather drive each query yourself.
+- **A workflow that sends each page to your app**: install the shipped `send_lists_to_app` template and start
+  it once. It pages through every customer, vendor and item, 200 at a time, and sends each page to your
+  `webhook_url` as a `workflow_run.notification` (`customers_page`, `vendors_page`, `items_page`) -- one at a
+  time, in order, waiting for your `2xx` before the next. `workflow_run.completed` arrives last, with how
+  many of each were sent, so it means the import is complete. Best when you want the lists in a fixed order,
+  one run to watch, and a single "done".
+
+```bash
+curl -u "$QUBE_API_KEY:" -X POST \
+  https://qubesync.com/api/v2/workflow_templates/send_lists_to_app/install \
+  -H "Content-Type: application/json" -d '{"publish": true}'
+
+curl -u "$QUBE_API_KEY:" -X POST \
+  "https://qubesync.com/api/v2/connections/$CONN_ID/workflow_runs" \
+  -H "Content-Type: application/json" \
+  -d '{"workflow": "send_lists_to_app", "webhook_url": "https://your-app.example/webhooks/qube"}'
+```
+
+A run needs its `webhook_url` -- without one it is refused, `422 webhook_url_required` -- and your endpoint
+should answer within 5 seconds: a page your app can't take is retried for about an hour with the same
+`delivery_id`, and the run waits meanwhile. Copy the template into your own workflow to send other lists,
+different fields, or each page on to a workflow of your own. See
+[Sending your app data](/workflows#sending-your-app-data) and the
+[payload](/webhooks#data-a-workflow-sends-you).
 
 ## Tips
 
