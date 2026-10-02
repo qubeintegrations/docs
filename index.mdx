@@ -1,31 +1,17 @@
 ---
 title: "QuickBooks Desktop, as a JSON API"
 sidebarTitle: "Introduction"
-description: "QuBe Sync connects your app to your customers' QuickBooks Desktop and Enterprise company files. You send JSON. We handle the Web Connector, qbXML, and the long tail of edge cases."
+description: "Don't worry about SOAP, qbXML, and all of its weird edge cases."
 icon: "house"
 ---
 
-Plenty of businesses still keep their books in QuickBooks Desktop or QuickBooks Enterprise, and they
-expect the software they buy to work with it. Integrating the traditional way means running a SOAP
-server for Intuit's Web Connector, writing qbXML by hand, and handling failures that happen on your
-customer's Windows machine, where you can't see them.
+Every QuickBooks integration needs to start with one question: **what happens when things go wrong**? 
 
-QuBe Sync does that part. Your app calls a REST API with JSON. We run the Web Connector sessions,
-translate to and from qbXML, and deliver each answer to your webhook as clean, signed JSON.
+When Intuit's Web Connector loses its connection while posting a transaction, a character pasted from Microsoft Word breaks invoice creation, or QuickBooks simply refused to answer because it has a modal open (yes, [*seriously*](https://quickbooks.intuit.com/learn-support/en-us/help-article/open-programs/fix-common-web-connector-errors-quickbooks-desktop/L9slolvg0_US_en_US)), how does your app respond gracefully?
 
-```mermaid
-flowchart TB
-  app["Your app"]
-  qube["QuBe Sync"]
-  wc["Web Connector<br/>on your customer's PC"]
-  qb[("QuickBooks Desktop")]
-  app -- "① request, in JSON" --> qube
-  wc -- "② any work?" --> qube
-  qube -- "③ qbXML" --> wc
-  wc <-- "④" --> qb
-  wc -- "⑤ QuickBooks' answer" --> qube
-  qube -- "⑥ answer, as signed JSON" --> app
-```
+Abstracting away SOAP servers and qbXML **isn't enough**; you also need to protect your dev and support teams from an onslaught of post-launch edge cases.
+
+QuBe Sync helps with that.
 
 ## What you get
 
@@ -35,12 +21,11 @@ flowchart TB
     Each one is a REST endpoint with a typed JSON body. You never write qbXML or talk SOAP.
   </Card>
   <Card title="Answers pushed to you" icon="bell" href="/webhooks">
-    Each request carries a webhook URL. When QuickBooks answers, QuBe Sync POSTs the result to it,
-    signed, and retries if your endpoint is down.
+    Each request carries a webhook URL. No matter when QuickBooks answers, QuBe Sync POSTs the result to you and retries if your endpoint is down.
   </Card>
   <Card title="Workflows for multi-step jobs" icon="diagram-project" href="/workflows">
     Find or create a customer, ask your app what to do about a duplicate name, then invoice it.
-    QuBe Sync runs the whole sequence server-side.
+    QuBe Sync runs the whole sequence on our side.
   </Card>
   <Card title="Build without QuickBooks" icon="flask" href="/simulator">
     A simulated connection answers like QuickBooks Desktop within seconds and fails on demand, so you
@@ -58,8 +43,7 @@ flowchart TB
 
 ## The hard parts, handled
 
-QuickBooks Desktop can't be called. It calls out, through the Web Connector, on its own schedule.
-Most of the work in a Desktop integration is dealing with what follows from that.
+QuickBooks Desktop/Enterprise integration is a fundamentally asynchronous process, with many points of failure. You can't handle all of them in advance, but 16 years of QBD integration experience built a system that pre-solves and avoids many of them. Even more importantly, it gives you the tools and transparency to quickly solve any unexpected problems that come your way.
 
 <AccordionGroup>
   <Accordion title="The Web Connector protocol" icon="plug-circle-bolt">
@@ -72,6 +56,11 @@ Most of the work in a Desktop integration is dealing with what follows from that
     Requests are built from QuickBooks' own schema, so an invalid field is rejected when you queue
     the request, not minutes later on your customer's PC. Answers are parsed into snake_case JSON with
     real numbers, booleans and lists. The raw qbXML is still there if you want it.
+  </Accordion>
+  <Accordion title="Cleaning up inputs" icon="soap">
+    Don't let surprise inputs from your users ruin your day. Requests are passed through a cleaning process that 
+    not only removes bad characters (like "Smart Quotes" from Microsoft Word, bullet points, and many others), it replaces them with the correctly encoded
+    equivalents.
   </Accordion>
   <Accordion title="QuickBooks isn't running, a dialog is open, or it's the wrong company file" icon="triangle-exclamation">
     Your request stays queued and is retried on the Web Connector's next runs for as long as it
@@ -90,8 +79,11 @@ Most of the work in a Desktop integration is dealing with what follows from that
   </Accordion>
   <Accordion title="Knowing when something is wrong" icon="stethoscope">
     Every request, answer and webhook delivery is visible in the dashboard, and a failed delivery can
-    be resent with one click. Your organization's owners get an email when a webhook can't be
-    delivered after every retry, and when a connection's requests have been waiting a week.
+    be resent with one click. Your organization's points of contact get an email when a webhook can't be
+    delivered, or when a connection's requests have been waiting a week.
+  </Accordion>
+  <Accordion title="Many more..." icon="more">
+      Your integration stays sound as an ever-growing number of edge cases are handled for you with each new version of QuickBooks, QBXML, and the web connector come out. 
   </Accordion>
 </AccordionGroup>
 

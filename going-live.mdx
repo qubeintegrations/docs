@@ -30,7 +30,9 @@ Your code doesn't change between the two. The API key, the webhook secret and th
   <Step title="Promote your workflows">
     Production connections only run **published** workflow versions. Publish in your sandbox app, then
     [promote](/workflow-authoring#from-sandbox-to-production) to production, and fix any company-file
-    values the promotion warns about.
+    values the promotion warns about. Promotion publishes the version in production too: **Publish there as
+    well** is ticked in the **Promote to another app** window. Untick it to land the chart as that app's
+    working copy for a final look, then publish it there when you're happy.
   </Step>
   <Step title="Harden your webhook endpoint">
     [Verify every signature](/webhooks#verify-the-signature), answer `2xx` within 5 seconds and do the work in
@@ -42,12 +44,12 @@ Your code doesn't change between the two. The API key, the webhook secret and th
     list.
   </Step>
   <Step title="Finish your onboarding flow">
-    Set a `redirect_url`, handle `connected`, `cancelled` and `expired`, and show each customer their
+    Set a `redirect_url`, handle `connected`, `cancelled` and `expired`, and optionally show each customer their
     connection's `last_connected_at` so they can tell when their Web Connector has stopped.
     [Connect your customers](/onboarding).
   </Step>
   <Step title="Test against real QuickBooks">
-    Run your whole flow once against a [not-for-resale copy of QuickBooks](/nfr-quickbooks) on a real Web
+    Run your whole flow against a [not-for-resale copy of QuickBooks](/nfr-quickbooks) on a real Web
     Connector, with a sample company file.
   </Step>
 </Steps>
