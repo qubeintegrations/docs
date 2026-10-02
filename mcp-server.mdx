@@ -102,6 +102,15 @@ So an agent writing your webhook handler gets the data shape and the error cases
 built the request. Pass `"include_qbxml": true` to also see the qbXML QuBe Sync will send QuickBooks. That's
 for curiosity and debugging only: your app always sends JSON.
 
+`validate_workflow_chart` runs the same checks as `POST /api/v2/workflows/validate`, except the ones that need
+your app: the server never has your API key, so it can't see your workflows. Pass the chart as `chart`, a JSON
+object or a string holding one, and the keys of the workflows your app already has as `known_workflows`. A
+`workflow` state that calls a key not in that list is a warning rather than an error, and the key is listed in
+`workflows_to_create`: create those in your app before you push this chart, because saving it there checks
+that each one exists and takes the `input` you pass. The result is
+`{valid, errors, warnings, workflows_to_create}`, and each error or warning has a `path` into the chart and a
+`message`. Errors block saving; warnings are likely mistakes worth a look.
+
 ## Pair it with the CLI
 
 The MCP server tells your agent what to send. The [qube CLI](/cli) lets it send it safely: log in yourself
