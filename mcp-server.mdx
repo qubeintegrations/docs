@@ -96,7 +96,8 @@ Calling `create_customer` with a name and email returns the request to send, rea
   operation's own `data` and every QuickBooks status code it can fail with, each with what it means and
   what to do.
 - The text content repeats the same as a ready-to-run `curl` command, plus a short guide to handling each
-  webhook `state`.
+  webhook `state` and the rest of the operation's notes from Intuit's qbXML reference. The tool's
+  description carries only their opening paragraph, since a client loads every tool's description at once.
 
 So an agent writing your webhook handler gets the data shape and the error cases from the same call that
 built the request. Pass `"include_qbxml": true` to also see the qbXML QuBe Sync will send QuickBooks. That's

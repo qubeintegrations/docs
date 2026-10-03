@@ -1,0 +1,44 @@
+---
+title: "Notes from Intuit's qbXML reference"
+description: "Background that Intuit's qbXML reference repeats on several request pages, kept here once."
+---
+
+Intuit's qbXML reference explains some things on every request page they touch: how QuickBooks costs inventory, how taxes work on lines. The [API reference](/api-reference/introduction) links each operation to the sections here instead of repeating them. The text is Intuit's, so it names qbXML elements (`CustomerRef`) where the API takes JSON fields (`customer_ref`).
+
+## Inventory costing
+
+The value of inventory is set when an inventory item is created or bought. QuickBooks uses cost averaging and decreases the value of the inventory asset account at the price when the sale is recorded.
+
+So, lets say a company starts carrying widgets as inventory items. First the inventory item must be created in QuickBooks. If the widgets are already in inventory based on a purchase made that won’t be recorded in QuickBooks, the user or application would add the inventory item description along with the quantity on hand and the value (total purchase price) of the quantity on hand. If the purchase is to be recorded in QuickBooks the inventory item would be created with quantity and value of 0 (zero). Then a bill would be added to QB which would increase the inventory quantity and value.
+
+Lets say we bought 10 widgets for \$100. QuickBooks would then consider each widget to be worth \$10. The next day a customer buys 5 widgets for \$20 each. A sales receipt or invoice is created for the purchase, the quantity of widgets is reduced by 5, to 5 and the value is reduced by \$50 to \$50. The inventory asset account is reduced by \$50 and the undeposited funds or accounts receivable account is increased by \$100. It appears that widgets will be a big seller, so the small business owner goes out and buys 10 more widgets. However, the supplier has also noticed a widget buying trend, so he’s increased the price to \$25 each. So now our quantity is increased from 5 to 15 and the value is increased from \$50 to \$300, so they are considered to be worth \$20 each. After purchasing the widgets another customer decides to buy 10 widgets but the price has been raised to \$50 each. After the sales receipt or invoice is entered, the inventory is reduced to 5 and the value is reduced to \$100. The inventory asset account is reduced by \$200 and the undeposited funds or accounts receivable account is increased by \$500.
+
+From Intuit's reference for [BillAdd](https://developer.intuit.com/app/developer/qbdesktop/docs/api-reference/qbdesktop/billadd), [InvoiceAdd](https://developer.intuit.com/app/developer/qbdesktop/docs/api-reference/qbdesktop/invoiceadd), [ItemInventoryAdd](https://developer.intuit.com/app/developer/qbdesktop/docs/api-reference/qbdesktop/iteminventoryadd), [ItemInventoryMod](https://developer.intuit.com/app/developer/qbdesktop/docs/api-reference/qbdesktop/iteminventorymod), [SalesReceiptAdd](https://developer.intuit.com/app/developer/qbdesktop/docs/api-reference/qbdesktop/salesreceiptadd).
+
+## Line item taxes
+
+The following information refers to invoices specifically, but it also applies to sales receipts. Generally its best to assign a tax item or tax group item to an invoice and allow QuickBooks to apply the same tax to all taxable items on the invoice. However in some situations multiple tax combinations are required, so this method doesn’t work. In this case one must use techniques to apply the taxes in the invoice itself as line items. Using lines to apply taxes isn’t always straight forward.
+
+When applying taxes as line items, only single tax items can be used, tax groups can only be used for the entire invoice. If you have multiple taxes which apply to all taxable items, and one or more other taxes that only apply to some of the items on an invoice its better to use a tax group which applies to the entire invoice for the taxes which applies to all taxable items and then apply the other taxes in the invoice itself. One applies a tax or tax group to an entire invoice by using the ItemSalesTaxRef aggregate.
+
+One can use subtotals to apply a single tax line to multiple items in an invoice, but the tax is only applied automatically for the first tax line after the subtotal line. Any other tax lines which need to be applied to the subtotal line must supply their own amount. If you don’t supply an amount the amount comes out as zero and the tax line is useless. When one does supply an amount, the amount of tax on the subtotal also shows up in the rate column for that tax line. There isn’t any way for the rate to show up as anything other than the amount of the tax.
+
+If you have a complicated tax situation where no single tax applies to all taxable items on the invoice, you must choose a zero percent tax to apply for the entire invoice. It is recommended to name such a tax item “Tax Calculated On Invoice” so that it’s clear that the tax isn’t being applied by QuickBooks on the entire invoice.
+
+From Intuit's reference for [InvoiceAdd](https://developer.intuit.com/app/developer/qbdesktop/docs/api-reference/qbdesktop/invoiceadd), [ItemSalesTaxAdd](https://developer.intuit.com/app/developer/qbdesktop/docs/api-reference/qbdesktop/itemsalestaxadd), [ItemSalesTaxGroupAdd](https://developer.intuit.com/app/developer/qbdesktop/docs/api-reference/qbdesktop/itemsalestaxgroupadd), [SalesReceiptAdd](https://developer.intuit.com/app/developer/qbdesktop/docs/api-reference/qbdesktop/salesreceiptadd).
+
+## Flat discounts
+
+Flat rate discounts are treated VERY differently vs. percentage discounts. A percentage discount only applies to the line right above it, so all of the tax implications for discounts apply ONLY to that line (Note that the story gets more complicated here for group items, subtotal lines, etc). A flat rate discount applies to EVERY line that is recorded above the discount. Thus, the \$10.00 off you see is applied equally to the \$100.00 Nontaxable target and the \$100.00 Taxable target. Thus, the sales tax for the 10.00 discount totals up to -\$5.00.
+
+Therefore, for the desired behavior, the user must fill out the invoice like this:
+
+- Item \$100.00 Non
+- Item \$100.00 Tax
+- Discount \$20.00 Tax
+
+In this scenario, the \$20.00 discount is properly distributed to be half taxed and half not taxed, so the taxable amount for the discount line is only -\$10.00.
+
+The moral of the story: Non-Taxable Discounts are VERY dangerous. You should almost never use them unless discounts in your state are never applied to sales tax.
+
+From Intuit's reference for [ItemDiscountAdd](https://developer.intuit.com/app/developer/qbdesktop/docs/api-reference/qbdesktop/itemdiscountadd), [ItemDiscountMod](https://developer.intuit.com/app/developer/qbdesktop/docs/api-reference/qbdesktop/itemdiscountmod).
