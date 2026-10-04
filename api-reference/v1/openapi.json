@@ -66,7 +66,7 @@
                 "properties": {
                   "name": {
                     "type": "string",
-                    "description": "Optional name for the connection - if you leave this blank, the company name returned by QuickBooks will be used once the first request is processed"
+                    "description": "Optional name for the connection - if you leave this blank, the company name returned by QuickBooks will be used once the first request is processed. A blank name (empty or only whitespace) is stored as null, and surrounding whitespace is trimmed. A simulated connection left blank takes its simulated company's name (Simulated Company) straight away."
                   },
                   "redirect_url": {
                     "$ref": "#/components/schemas/connection_redirect_url"
@@ -375,8 +375,9 @@
                           "webhook_url": "https://example.com/webhooks/qube_sync",
                           "webhook_attempts": [
                             {
-                              "attempted_at": "2023-01-01T12:00:05Z",
-                              "response": "success"
+                              "status": "succeeded",
+                              "sent_at": "2023-01-01T12:00:05Z",
+                              "error": null
                             }
                           ],
                           "links": {
@@ -552,8 +553,9 @@
                         "webhook_url": "https://example.com/webhooks/qube_sync",
                         "webhook_attempts": [
                           {
-                            "attempted_at": "2023-01-01T12:00:05Z",
-                            "response": "success"
+                            "status": "succeeded",
+                            "sent_at": "2023-01-01T12:00:05Z",
+                            "error": null
                           }
                         ],
                         "links": {
@@ -595,8 +597,9 @@
                         "webhook_url": "https://example.com/webhooks/qube_sync",
                         "webhook_attempts": [
                           {
-                            "attempted_at": "2023-01-01T12:00:05Z",
-                            "response": "Failed to deliver webhook: Connection timeout"
+                            "status": "failed",
+                            "sent_at": "2023-01-01T12:00:05Z",
+                            "error": "Failed to deliver webhook: Connection timeout"
                           }
                         ],
                         "webhook_error": "Failed to deliver webhook after 3 attempts",
@@ -3994,22 +3997,42 @@
             "items": {
               "type": "object",
               "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "succeeded",
+                    "failed"
+                  ],
+                  "description": "Whether the webhook endpoint accepted this delivery (a 2xx answer)"
+                },
+                "sent_at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "When this delivery was attempted"
+                },
+                "error": {
+                  "type": "string",
+                  "nullable": true,
+                  "description": "Why the delivery failed (`null` when it succeeded)"
+                },
                 "attempted_at": {
                   "type": "string",
                   "format": "date-time",
-                  "description": "The timestamp when the webhook was attempted"
+                  "description": "Not sent: the time of an attempt is `sent_at`",
+                  "deprecated": true
                 },
                 "response": {
                   "type": "string",
-                  "description": "The response from the webhook endpoint or an error message"
+                  "description": "Not sent: the outcome of an attempt is `status`, and a failure's reason is `error`",
+                  "deprecated": true
                 }
               },
               "required": [
-                "attempted_at",
-                "response"
+                "status",
+                "sent_at"
               ]
             },
-            "description": "List of webhook delivery attempts with timestamps and responses"
+            "description": "Every webhook delivery attempt for this request, newest first"
           },
           "webhook_error": {
             "type": "string",
