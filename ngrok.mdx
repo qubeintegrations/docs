@@ -10,12 +10,12 @@ to be able to reach it. On your laptop, a tunnel gives your local server a publi
 <CodeGroup>
 ```bash Cloudflare Tunnel
 # https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/
-cloudflared tunnel --url http://localhost:3000
+cloudflared tunnel --url http://localhost:3000   # your app's port
 ```
 
 ```bash ngrok
 # https://ngrok.com
-ngrok http 3000
+ngrok http 3000   # your app's port
 ```
 </CodeGroup>
 
@@ -27,7 +27,7 @@ curl -u "$QUBE_API_KEY:" \
 ```
 
 Tips:
-
+- **Set up a permanent tunnel** using [Cloudflare Tunnels](https://developers.cloudflare.com/tunnel/get-started/)
 - **Keep the URL in configuration** (an `APP_HOST` environment variable, say) and build every `webhook_url`
   from it, because a free tunnel's address changes each time it starts.
 - **Verify signatures in development too.** Your sandbox app has its own webhook secret, so the code path is

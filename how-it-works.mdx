@@ -39,7 +39,7 @@ can call it. Intuit's **Web Connector**, installed alongside QuickBooks, calls o
 asks QuBe Sync whether there is work, runs it in QuickBooks, and hands back the answers.
 
 So an API call to QuBe Sync can't return QuickBooks data. It returns a queued request, and the data follows
-by webhook once the Web Connector has been by:
+by webhook once the Web Connector has asked for work:
 
 ```mermaid
 %%{init: {"sequence": {"width": 130, "actorMargin": 40, "mirrorActors": false}}}%%
@@ -66,12 +66,12 @@ sequenceDiagram
 Design for that from the start:
 
 - **Queue from anywhere, act on the webhook.** Do the follow-up work, such as storing the new customer's
-  `list_id`, in your webhook handler, not after the API call.
+  `list_id`, in your webhook handler.
 - **One request at a time, in order.** A connection's requests go to QuickBooks in the order you queued
   them. If a request depends on the answer to another, for example an invoice for a customer you're
-  creating, queue it from the first one's webhook, or let a [workflow](/workflows) do the sequencing.
-- **Minutes, not milliseconds.** A standard connection answers within about five minutes. Where a person
-  is waiting on the result, use a `realtime` connection.
+  creating, queue it from the first one's webhook, or better yet let a [workflow](/workflows) do the sequencing.
+- **Built-in fault-tolerance.** We can't control whether QuickBooks is open on your customer's computer, or ready to process requests, but we *can* gracefully handle every situation. When QuickBooks throws a [connection error](/error_handling#when-quickbooks-is-out-of-reach), show users the `user_message` so they can solve problems themselves without contacting support. The request is automatically retried once the Web Connector resumes functioning.
+- **Do you need realtime integration?** A standard connection polls every five minutes. When a person is waiting on results, use `realtime` connections.
 
 ## The life of a request
 
@@ -105,7 +105,7 @@ stateDiagram-v2
 | `retryable` | The Web Connector couldn't reach QuickBooks (not running, a dialog open, the wrong company file). QuBe Sync tries again on the next runs. | Yes, when the error first appears or changes |
 | `response_received` | QuickBooks answered. Read `response_json.data`. | Yes |
 | `error` | Failed for good, for example QuickBooks refused it (a duplicate name, a stale `edit_sequence`). | Yes |
-| `timed_out` | QuickBooks received it, but the session ended without an answer. It may or may not have been applied. | Yes |
+| `timed_out` | QuickBooks received it, but never responded. It may or may not have been applied. | Yes |
 | `discarded` | Your app withdrew it before the Web Connector took it. It never reached QuickBooks. | Yes |
 
 The last four are final. [Error handling](/error_handling) covers what to do with each.

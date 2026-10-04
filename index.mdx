@@ -1,11 +1,11 @@
 ---
-title: "QuickBooks Desktop, as a JSON API"
+title: "Not just a modern JSON API for QuickBooks Desktop"
 sidebarTitle: "Introduction"
-description: "Don't worry about SOAP, qbXML, and all of its weird edge cases."
+description: "Integration that comes with peace of mind"
 icon: "house"
 ---
 
-Every QuickBooks integration needs to start with one question: **what happens when things go wrong**? 
+Treating financial data with reverence is paramount to keeping your business running smoothly. Every QuickBooks integration needs to start with one question: **what happens when things go wrong**? 
 
 When Intuit's Web Connector loses its connection while posting a transaction, a character pasted from Microsoft Word breaks invoice creation, or QuickBooks simply refused to answer because it has a modal open (yes, [*seriously*](https://quickbooks.intuit.com/learn-support/en-us/help-article/open-programs/fix-common-web-connector-errors-quickbooks-desktop/L9slolvg0_US_en_US)), how does your app respond gracefully?
 
@@ -36,14 +36,14 @@ QuBe Sync helps with that.
     to your app, connected.
   </Card>
   <Card title="Made for AI-assisted development" icon="robot" href="/mcp-server">
-    An MCP server and a CLI let Claude Code, Cursor and other agents explore the API and build your
+    An MCP server and a CLI let Claude Code, Cursor and other agents safely explore the API and build your
     integration without ever holding a secret.
   </Card>
 </CardGroup>
 
 ## The hard parts, handled
 
-QuickBooks Desktop/Enterprise integration is a fundamentally asynchronous process, with many points of failure. You can't handle all of them in advance, but 16 years of QBD integration experience built a system that pre-solves and avoids many of them. Even more importantly, it gives you the tools and transparency to quickly solve any unexpected problems that come your way.
+QuickBooks Desktop/Enterprise integration is a fundamentally asynchronous process, with many points of failure. You can't handle all of them in advance, but 16 years of QBD integration experience built a system that eliminates and avoids many of them. Even more importantly, it gives you the tools and transparency to quickly solve any unexpected problems that come your way.
 
 <AccordionGroup>
   <Accordion title="The Web Connector protocol" icon="plug-circle-bolt">
@@ -58,9 +58,9 @@ QuickBooks Desktop/Enterprise integration is a fundamentally asynchronous proces
     real numbers, booleans and lists. The raw qbXML is still there if you want it.
   </Accordion>
   <Accordion title="Cleaning up inputs" icon="soap">
-    Don't let surprise inputs from your users ruin your day. Requests are passed through a cleaning process that 
+    Don't let surprise inputs from users ruin your day. Requests are passed through a cleaning process that 
     not only removes bad characters (like "Smart Quotes" from Microsoft Word, bullet points, and many others), it replaces them with the correctly encoded
-    equivalents.
+    equivalents so your users aren't complaining to support.
   </Accordion>
   <Accordion title="QuickBooks isn't running, a dialog is open, or it's the wrong company file" icon="triangle-exclamation">
     Your request stays queued and is retried on the Web Connector's next runs for as long as it
@@ -83,7 +83,7 @@ QuickBooks Desktop/Enterprise integration is a fundamentally asynchronous proces
     delivered, or when a connection's requests have been waiting a week.
   </Accordion>
   <Accordion title="Many more..." icon="more">
-      Your integration stays sound as an ever-growing number of edge cases are handled for you with each new version of QuickBooks, QBXML, and the web connector come out. 
+      Your integration stays sound as an ever-growing number of edge cases are handled for you with each new version of QuickBooks, QBXML, and the web connector that come out. 
   </Accordion>
 </AccordionGroup>
 
@@ -91,13 +91,13 @@ QuickBooks Desktop/Enterprise integration is a fundamentally asynchronous proces
 
 | Connection type | The Web Connector checks in | Good for |
 | --- | --- | --- |
-| `standard` | every 5 minutes | Syncing in the background |
-| `realtime` | every 10 seconds | Workflows where a person is waiting |
+| `standard` | within 5 minutes | Syncing in the background |
+| `realtime` | within 10 seconds | Workflows where a person is waiting |
 | `simulated` (beta) | within seconds, no Web Connector needed | Building and testing |
 
 Your customer can also click **Update Selected** in the Web Connector to run a sync immediately.
 
-## Pricing in one paragraph
+## Scales with you
 
 Building is free. Create an account, use your sandbox app and simulated connections, and test
 against your own copy of QuickBooks at no cost. Once you launch, you pay per connection your
