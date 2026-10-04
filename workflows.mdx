@@ -7,80 +7,12 @@ icon: "diagram-project"
 Real jobs rarely fit in one QuickBooks request. Invoicing an order from your store means making sure the
 customer exists, handling the case where a vendor already has their name, making sure every item exists,
 and only then adding the invoice. If the connection drops during any part of that process, you have to 
-recover gracefully and reconcile what mutations were made or not. Without workflows, your app has to save its place after every step, pick it up again from
-each webhook, and decide what comes next.
+recover gracefully and reconcile what mutations were made or not. Naive solutions lead to duplicate transaction records and headaches.
 
-A **workflow** is that job written down once, as a JSON statechart (so your LLM of choice can use our [mcp](/mcp-server) to author your own). QuBe Sync runs it server-side: it sends
-each request, branches on QuickBooks' answer, pauses to ask your app when the chart says a person should
-decide, and sends you one webhook when the job is done.
+**Workflows** let you encapsulate all those decisions in one piece of logic, with all the tools to let your LLM of choice safely help you. Workflows are also composable, so you can build complex systems from small, re-usable pieces (including the templates we provide).
 
-|  | One request at a time | A workflow |
-| --- | --- | --- |
-| A job of five dependent steps | Five requests, five webhooks, your code in between | One run: a webhook for each question it asks, and one when it ends |
-| Branching on QuickBooks' answer | Your code, spread across webhook handlers | In the chart |
-| "Is this the same company?" | Your code tracks what's pending and asks | A `wait` state: QuBe Sync asks, your app answers |
-| QuickBooks' answer never comes back | Your code queries to find out whether it was applied | The run [finds out](#lost-answers) and carries on |
-| Someone changed the record you're updating | Your code re-reads it and retries | The run [asks your app](#conflicts), showing what changed |
-| Where progress is saved | Your database | QuBe Sync, visible on the run's page |
-| Changing the flow | Deploy your app | Publish a new version of the chart |
-
-## What a workflow looks like
-
-This is `create_customer_safely`, one of the shipped templates. It creates a customer, and if QuickBooks
-says the name is taken, it finds out what has it and asks your app what to do:
-
-```mermaid
-stateDiagram-v2
-  [*] --> set_name
-  set_name --> try_create: go and try it
-  try_create --> created: created
-  try_create --> created_renamed: created under<br/>a new name
-  try_create --> find_holder: that name is taken
-  find_holder --> ask_about_customer: a customer has it
-  find_holder --> ask_about_other: another list has it
-  find_holder --> failed: nothing has it
-  ask_about_customer --> used_existing: use_existing
-  ask_about_customer --> try_create: rename
-  ask_about_other --> try_create: rename
-  ask_about_customer --> cancelled: cancel
-  ask_about_other --> cancelled: cancel
-  ask_about_customer --> renames_exhausted: 6th rename
-  ask_about_other --> renames_exhausted: 6th rename
-  classDef ask fill:#fef3c7,stroke:#d97706,color:#78350f
-  classDef good fill:#dcfce7,stroke:#16a34a,color:#14532d
-  classDef bad fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
-  class ask_about_customer, ask_about_other ask
-  class created, created_renamed, used_existing, cancelled good
-  class failed, renames_exhausted bad
-```
-
-`set_name` is a **transform**: it notes the name to try and starts a rename count, then moves on.
-`try_create` and `find_holder` are **request** states: each sends one QuickBooks request and branches on
-the answer. `find_holder` sends a single `entity.query`, which searches the four lists that share one name
-space in QuickBooks (customers, vendors, employees and other names) and says in `type` which list each record
-came from; "another list" is a vendor, an employee or an entry on the Other Names list. Any other QuickBooks
-error, at either request, ends the run `failed`: the chart handles that once, at its root, so it isn't drawn
-here.
-
-`ask_about_customer` and `ask_about_other` (amber) are **wait** states: the run pauses until your app picks
-one of the state's options. `ask_about_customer` offers `use_existing`, `rename` (with the new name) and
-`cancel`. `ask_about_other` offers only `rename` and `cancel`, because a customer can't share a name with a
-vendor. Options are choices your app makes, so they are verbs. `find_holder` and the two questions sit in a
-group, `resolve_conflict`, so their full names, and the question ids your app sees, start with it:
-`resolve_conflict.ask_about_customer`.
-
-The green and red boxes are the chart's endings, named for what happened, and the run's `outcome` says which
-one it reached. Four are successes: `created`, `created_renamed`, `used_existing` and `cancelled`. One is a
-named failure, `renames_exhausted`. `failed` means something needs attention, such as a QuickBooks error the
-chart doesn't handle. A rename goes back to `try_create`, so a second clash is handled exactly like the
-first, and the create that follows ends `created_renamed`. The chart allows five renames. A sixth `rename`
-answer isn't tried: the run ends `failed` with the outcome `renames_exhausted`.
-
-In the dashboard, every workflow is drawn as a canvas like this one, each branch labelled with the
-`description` the chart gives it:
-
-<Frame caption="create_customer_safely in the builder, with its resolve_conflict group and the root's error branch drawn in.">
-  <img src="/images/workflows/builder.png" alt="The workflow builder showing the create_customer_safely chart: set_name, try_create, the resolve_conflict group with find_holder, ask_about_customer and ask_about_other, and the endings created, created_renamed, used_existing, renames_exhausted, cancelled and Failed" />
+<Frame caption="Find or Create Anything: implementing upsert for QuickBooks, including a retry if another person or app editing QuickBooks causes a race condition.">
+  <img src="/images/workflows/builder.png" alt="The find_or_create chart: a find request that ends found when the record is already there or goes on to create, a create request that ends created or loops back to find when the name was taken since the query, and a Failed ending for any other QuickBooks error" />
 </Frame>
 
 ## Templates
@@ -126,12 +58,12 @@ usually in QuickBooks' own words.
   | `sync_order` | `{customer, items, invoice}`. It has no `outcome` key: read the run's `outcome`. |
 </Accordion>
 
-In the dashboard, open **Workflows** and choose **From a template**. Pick the app on a template's card and
-click **Clone**: it creates the workflow as a draft, installs the templates it calls as drafts too (any your
-app doesn't have yet), and opens it in the builder.
+In the dashboard, open **Workflows**. Under **Start from a template**, click **Use template** on a card, pick
+the app and click **Clone**: it creates the workflow as a draft, installs the templates it calls as drafts too
+(any your app doesn't have yet), and opens it in the builder.
 
-<Frame caption="Workflows → From a template. Each card names the templates it also installs.">
-  <img src="/images/workflows/workflows-templates.png" alt="The Start from a template section of the Workflows page: template cards with a description, an app selector and a Clone button, one noting it also installs find_or_create" />
+<Frame caption="Workflows → Start from a template. A card names the templates it also installs.">
+  <img src="/images/workflows/workflows-templates.png" alt="The Start from a template section of the Workflows page: four template cards with a description and Use template, the first opened to its app select (My App Dev) and Clone, and Find or create item noting it also installs find_or_create" />
 </Frame>
 
 ## Run one
@@ -140,13 +72,20 @@ app doesn't have yet), and opens it in the builder.
   <Step title="Install the template">
     ```bash
     curl -u "$QUBE_API_KEY:" -X POST \
-      https://qubesync.com/api/v2/workflow_templates/create_customer_safely/install \
+      https://qubesync.com/api/v2/workflow-templates/create_customer_safely/install \
       -H "Content-Type: application/json" -d '{"publish": true}'
     ```
 
     That installs and publishes it, and any template it calls, in one go. A template cloned in the
-    dashboard is a draft instead: publish it from the builder's **History** (the ones it calls first). A
+    dashboard is a draft instead: publish it with **Publish v1** in the builder (the ones it calls first). A
     sandbox connection can run a draft; a production connection can't.
+
+    If the app already has a workflow at that key, the call is refused with `409` (`key_taken`). Add
+    `"replace": true` to install again over it: the workflow, and each one it calls that the app already
+    has, gets the template's current chart the way `PUT /workflows/{key}` would give it one. Earlier versions
+    are kept, the answer is `200`, and `replaced` lists the keys it changed. With `replace`, a setup script
+    can run the same call every time. To keep the existing workflow instead, install a second copy under
+    another key with `{"as": "new_key"}`.
   </Step>
   <Step title="Start a run">
     The input is the same body `POST /customers` takes, so a workflow is a drop-in for the request it
@@ -154,7 +93,7 @@ app doesn't have yet), and opens it in the builder.
 
     ```bash
     curl -u "$QUBE_API_KEY:" -X POST \
-      "https://qubesync.com/api/v2/connections/$CONN_ID/workflow_runs" \
+      "https://qubesync.com/api/v2/connections/$CONN_ID/workflow-runs" \
       -H "Content-Type: application/json" \
       -d '{
         "workflow": "create_customer_safely",
@@ -190,22 +129,26 @@ app doesn't have yet), and opens it in the builder.
                         "company_name": "Riverbend Electric LLC", "phone": "512-555-0142" }
         },
         "options": [
-          { "id": "use_existing", "label": "Use the existing customer" },
+          { "id": "use_existing", "label": "Use the existing customer",
+            "description": "Carry on with the customer QuickBooks already has. Nothing new is created." },
           { "id": "rename", "label": "Create it with a different name",
+            "description": "Try again under a name you choose.",
             "fields": { "name": { "type": "string", "required": true, "label": "New name" } } },
-          { "id": "cancel", "label": "Cancel" }
+          { "id": "cancel", "label": "Don't create a customer",
+            "description": "Stop here. The run ends as cancelled, with nothing written to QuickBooks." }
         ]
       },
       "links": {
-        "run": "https://qubesync.com/api/v2/connections/4fdde583-…/workflow_runs/fb1951a1-…",
-        "decisions": "https://qubesync.com/api/v2/connections/4fdde583-…/workflow_runs/fb1951a1-…/decisions",
-        "cancel": "https://qubesync.com/api/v2/connections/4fdde583-…/workflow_runs/fb1951a1-…/cancel",
+        "run": "https://qubesync.com/api/v2/connections/4fdde583-…/workflow-runs/fb1951a1-…",
+        "decisions": "https://qubesync.com/api/v2/connections/4fdde583-…/workflow-runs/fb1951a1-…/decisions",
+        "cancel": "https://qubesync.com/api/v2/connections/4fdde583-…/workflow-runs/fb1951a1-…/cancel",
         "ui": "https://qubesync.com/app/workflow_runs/fb1951a1-…"
       }
     }
     ```
 
-    Show `prompt.message` and the options to your user, or decide in code. Then POST the choice, with any
+    Show `prompt.message` and the options (each one's `label`, and its `description` when it has one) to
+    your user, or decide in code. Then POST the choice, with any
     `fields` the option asks for, to `links.decisions`:
 
     ```bash
@@ -218,7 +161,7 @@ app doesn't have yet), and opens it in the builder.
     waiting. A run can wait as long as it needs to. Your user can answer tomorrow.
 
     <Frame caption="The same question on the run's page (links.ui). Answering here is the same as POSTing to links.decisions.">
-      <img src="/images/workflows/run-waiting.png" alt="A run's page waiting for a decision: the message, three answer forms (Use the existing customer; New name with Create it with a different name; Cancel), the Cancel run and Open the workflow buttons, the chart snapshot and the Context dock" />
+      <img src="/images/workflows/run-waiting.png" alt="A run's question, under Your answer is needed: the existing customer's name, company, address, phone, email and balance, and three answers, each saying where it leads (Use the existing customer, which ends used_existing; Create it with a different name, picked, with Riverbend Electric LLC typed as the new name, which continues at try_create; Don't create a customer, which ends cancelled), and a Send answer button" />
     </Frame>
   </Step>
   <Step title="Get the result">
@@ -285,37 +228,39 @@ sequenceDiagram
 ## Follow your runs
 
 Every run has a page in the dashboard, at its `links.ui`. **Workflow runs** in the dashboard's menu lists
-them all, newest first. Filter by workflow, connection, state (`running` includes a run waiting on a
-workflow it called, as the API reports it), outcome (the exact key, such as `created`) and the day it
-started. Runs a workflow starts for another are left out unless you tick **Include child runs**.
-Each connection's page lists that connection's runs too.
+them all, newest first, by day. Its tabs pick a state (**Needs an answer**, **Running**, which includes a run
+waiting on a workflow it called, as the API reports it, **Failed**, **Completed**, **Cancelled**), and runs
+waiting for an answer are pinned above the list, oldest first, with their question and an **Answer** button.
+Filter by workflow, connection, when it started and outcome (the exact key, such as `created`). Runs a
+workflow starts for another are left out unless you tick **Include runs started by other runs**. Each
+connection's page lists that connection's runs too, and the builder's **Runs** tab a workflow's own.
 
-<Frame caption="Workflow runs: every run in your organization, with where each one is waiting and how it ended.">
-  <img src="/images/workflows/runs-index.png" alt="The Workflow runs page with filters for Workflow, Connection, State, Outcome, Started on or after, Started on or before and Include child runs, and a table of runs with their state and outcome" />
+<Frame caption="Workflow runs: the ones waiting for an answer first, then every run with where it is or how it ended.">
+  <img src="/images/workflows/runs-index.png" alt="The Workflow runs page: state tabs with one run needing an answer, filters for workflow, connection, start and outcome, the waiting run pinned with its question and an Answer button, and today's runs with their status, workflow, connection, start time and how long each took" />
 </Frame>
 
-A run's page shows:
+A run's page leads with its status and one sentence: where it is, where it stopped, or how it ended. Under
+that:
 
-- **Waiting for a decision**, while it waits: the question, with a button for each option and a box for
-  each field it asks for. Answering here is the same as your app answering. A conflict adds a table of each
-  field as you sent it, as QuickBooks has it, and as the run read it.
-- **Cancel run**, while it's going, with an optional reason. **Open the workflow** opens the chart in the
-  builder.
-- **Summary**, once it has ended: what it changed in QuickBooks, every request it sent, every decision, what
-  was withdrawn before it was sent, and the workflows it called.
-- **The chart this run is executing**: a snapshot taken when the run started, with the states it went
-  through shaded and the transitions it took drawn in the same blue. Click a step to see only what
-  happened there.
-- **Requests**, per state, each linked to its queued request, and **Context**: the run's input, vars,
-  per-state responses and output.
-- A dock with **Context**, the run's context as of any event you pick, and **Events**, its whole log, which
-  you can filter, copy and **Download**.
+- **Your answer is needed**, while it waits: the question, the record it's about, and its answers, each
+  saying where it leads. The answer you pick shows a box for each field it asks for, and **Send answer**
+  sends it. Answering here is the same as your app answering. A conflict adds a table of each field as you
+  sent it, as QuickBooks has it, and as the run read it.
+- **Why it failed**, when it failed: QuickBooks' error, or the failure ending the chart declared. Under it,
+  **Still in QuickBooks** lists what the run had already changed: a failed run undoes nothing. A completed
+  run lists the same under **Changed in QuickBooks**.
+- **Cancel run**, while it's going, with an optional reason, and **Open the workflow**.
+- **Steps**: what the run did, a row per step, with each request and QuickBooks' answer, each workflow it
+  called and each answer it was given. An error the chart handles shows as **Handled**, not as a failure.
+- **Chart**: the snapshot taken when the run started, with the path it took in blue and, for a failed run,
+  the step it stopped at in red. **Event log**: the whole log, to filter, copy or **Download**, with the
+  run's values as of any event you pick. **Data**: its input, vars, per-state responses and output.
 
-<Frame caption="A finished sync_order run: what it changed in QuickBooks, every request, and the workflows it called.">
-  <img src="/images/workflows/run-completed.png" alt="A completed sync_order run's page: the Summary lists Changed in QuickBooks (customer.create, item_non_inventory.create and invoice.create with their identifiers), Requests with their state paths and statuses, and Workflows it called" />
+<Frame caption="A finished sync_order run: what it changed in QuickBooks, and its steps.">
+  <img src="/images/workflows/run-completed.png" alt="A completed sync_order run's page: Completed after 8.1s; Changed in QuickBooks, listing the customer Bluebonnet Bakery, the item Site survey and the invoice INV-1042 as created, with their ListIDs and TxnID; and the Steps tab with create_customer, ensure_items and add_invoice, each Done with how long it took" />
 </Frame>
 
-From your app, `GET /connections/{id}/workflow_runs?state=awaiting_input` lists the runs waiting on your
+From your app, `GET /connections/{id}/workflow-runs?state=awaiting_input` lists the runs waiting on your
 users. [The API at a glance](#the-api-at-a-glance) has the rest.
 
 ## Webhooks
@@ -365,10 +310,13 @@ one the run asks by itself, when an update meets a record someone else changed a
     "existing": { "type": "customer", "list_id": "8000001F-1790470623", "full_name": "Riverbend Electric", "phone": "512-555-0142" }
   },
   "options": [
-    { "id": "use_existing", "label": "Use the existing customer" },
+    { "id": "use_existing", "label": "Use the existing customer",
+      "description": "Carry on with the customer QuickBooks already has. Nothing new is created." },
     { "id": "rename", "label": "Create it with a different name",
+      "description": "Try again under a name you choose.",
       "fields": { "name": { "type": "string", "required": true, "label": "New name" } } },
-    { "id": "cancel", "label": "Cancel" }
+    { "id": "cancel", "label": "Don't create a customer",
+      "description": "Stop here. The run ends as cancelled, with nothing written to QuickBooks." }
   ]
 }
 ```
@@ -470,7 +418,7 @@ paginated API.
 | `cancelled` | `null` | `null` | `null`; your reason is in `cancel_reason` |
 
 - **`completed`** means the job went as designed. `outcome` says which way, so branch on it. A chart's own
-  `cancelled` ending, when your app chose "Cancel", is a completed run: nothing is wrong.
+  `cancelled` ending, when your app answered `cancel`, is a completed run: nothing is wrong.
 - **`failed`** means something needs attention: a QuickBooks error the chart doesn't handle, a mistake in
   the chart, or a limit reached. A chart can declare named failures, so your app can tell them apart by
   `outcome`. `create_customer_safely` ends `renames_exhausted` with the error `Five renames were tried and
@@ -676,13 +624,13 @@ All under `https://qubesync.com/api/v2/connections/{connection_id}`, with your a
 
 | Call | What it does |
 | --- | --- |
-| `POST /workflow_runs` | Starts a run: `workflow` (the key), `input`, optional `webhook_url`. On a sandbox or simulated connection, `version` picks the chart ([versions](/workflow-authoring#versions-and-publishing)). `201` with the run. Input the workflow doesn't accept is `422`, with the path of each problem, before anything is queued. |
-| `GET /workflow_runs/{run_id}` | The whole run: `state`, `current_state`, `outcome`, `input`, `vars`, `prompt`, `output`, `error`, `summary`, `cancel_reason`, `trace` and `links`. |
-| `GET /workflow_runs` | The 100 most recent runs your app started on the connection, newest first. `?state=` and `?outcome=` (the exact key) filter them. |
-| `POST /workflow_runs/{run_id}/decisions` | Answers the question: `option`, plus `data` with the option's fields. `422` for an option it doesn't offer, a missing field, or a conflict's `params` with a field the update doesn't take (`invalid_data`). `400 not_awaiting_input` when the run isn't waiting, which is safe to ignore on a repeat delivery. |
-| `POST /workflow_runs/{run_id}/cancel` | Stops the run, with an optional `reason`. `409 already_finished` once it has ended. |
-| `GET /workflow_runs/{run_id}/events` | The event log, oldest first, the workflows it calls included. Page with `?after=` (the previous page's `next_after`, or the last `seq` you have) and `?limit=` (up to 500, default 100). |
-| `DELETE /workflow_runs/{run_id}` | Deletes a finished run before retention does. `409 run_not_finished` while it's running or waiting. |
+| `POST /workflow-runs` | Starts a run: `workflow` (the key), `input`, optional `webhook_url`. On a sandbox or simulated connection, `version` picks the chart ([versions](/workflow-authoring#versions-and-publishing)). `201` with the run. Input the workflow doesn't accept is `422`, with the path of each problem, before anything is queued. |
+| `GET /workflow-runs/{run_id}` | The whole run: `state`, `current_state`, `outcome`, `input`, `vars`, `prompt`, `output`, `error`, `summary`, `cancel_reason`, `trace` and `links`. |
+| `GET /workflow-runs` | The 100 most recent runs your app started on the connection, newest first. `?state=` and `?outcome=` (the exact key) filter them. |
+| `POST /workflow-runs/{run_id}/decisions` | Answers the question: `option`, plus `data` with the option's fields. `422` for an option it doesn't offer, a missing field, or a conflict's `params` with a field the update doesn't take (`invalid_data`). `400 not_awaiting_input` when the run isn't waiting, which is safe to ignore on a repeat delivery. |
+| `POST /workflow-runs/{run_id}/cancel` | Stops the run, with an optional `reason`. `409 already_finished` once it has ended. |
+| `GET /workflow-runs/{run_id}/events` | The event log, oldest first, the workflows it calls included. Page with `?after=` (the previous page's `next_after`, or the last `seq` you have) and `?limit=` (up to 500, default 100). |
+| `DELETE /workflow-runs/{run_id}` | Deletes a finished run before retention does. `409 run_not_finished` while it's running or waiting. |
 
 A workflow your run calls has no run id of its own as far as your app is concerned: everything it does is
 part of the run you started.

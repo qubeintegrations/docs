@@ -337,11 +337,13 @@ the query, it looks once more, counting its looks with `$add` so that it looks a
 
 ## Build it in the dashboard
 
-On the **Workflows** page, **New Workflow** starts a blank chart, **From a template** clones a
-[shipped template](/workflows#templates), and **Import a chart** takes JSON you already have. Each opens the
-builder: the chart on a canvas, a palette of steps (**Request**, **Wait for decision**, **Send to the app**,
-**Workflow**, **Transform**, **Branch**, **Group**) and endings, and a toolbar with **Run…**, **JSON**, **History** and
-**How do I use this?**.
+On the **Workflows** page, **New workflow** starts a blank chart, clones a
+[shipped template](/workflows#templates), or takes JSON you already have (**Import a chart**). Each opens the
+builder. Its header says what is live ("v2 is live. You have unpublished changes.") and has **Test run**, the
+publish button, and a **⋯** menu with **Workflow settings**, **JSON** and **Delete workflow…**. Its tabs are the
+**Chart**, the workflow's **Runs**, its **Versions**, and **Use from your app**. The chart is a canvas with a
+palette of steps (**Request**, **Wait for decision**, **Send to the app**, **Workflow**, **Transform**,
+**Branch**, **Group**) and endings.
 
 Click a step to open it. A request step first says **Which request** it sends: one you pick there, or one
 **From a reference** such as `${input.find.operation}`. Then come its parameters, filled in there or taken
@@ -363,8 +365,9 @@ its answers:
 </Frame>
 
 Every edit is checked as it's saved. One that would make the chart invalid isn't saved, and the builder says
-what's wrong and where. Things that are allowed but probably wrong are listed under the gear
-(**Workflow settings**), in **More options** → **Suggestions**. The **JSON** window shows the whole chart to
+what's wrong and where. Things that are allowed but probably wrong show as **N suggestions** in the corner of
+the canvas, which opens them in **Workflow settings** (**More options** → **Suggestions**). The **JSON**
+window shows the whole chart to
 edit as text (**Definition**), replaces it with a template or a pasted chart (**Import**), and has a
 **Prompt for an LLM** for your assistant ([below](#write-one-with-an-ai-assistant)).
 
@@ -415,23 +418,24 @@ reasoning ends up in the `description` fields, where the next person will read i
     itself: how to start it, every question it can ask (with example webhooks and answers), every outcome and
     what's in its output. It describes the published version (the working copy, until there is one); add
     `?version=working`, or a version number, for another. Give it to whatever writes your app's side. In
-    the builder it's **How do I use this?**:
+    the builder it's the **Use from your app** tab:
 
-    <Frame caption="How do I use this?: the usage contract for create_customer_safely, ready to copy as Markdown.">
-      <img src="/images/workflows/usage-drawer.png" alt="The How do I use this? window: Published v1, Copy everything as Markdown, a Start it curl command, and the input table" />
+    <Frame caption="Use from your app: the usage contract for create_customer_safely, ready to copy as Markdown.">
+      <img src="/images/workflows/builder-usage.png" alt="The builder's Use from your app tab: Published v1, Copy everything as Markdown, a Start it curl command, and the input table" />
     </Frame>
   </Step>
 </Steps>
 
 ## Test it
 
-Run it against a [simulated connection](/simulator) from the builder's **Run…** window or the API. On a
-sandbox app, the window can run the working copy, the published version or an older one. Its recent runs
-link to each run's page, where the [summary, requests, context and event log](/workflows#follow-your-runs)
-show every step.
+Run it against a [simulated connection](/simulator) from the builder's **Test run** panel or the API. The
+panel docks beside the chart, so the chart shows the run's path as it goes. On a sandbox app it can run the
+working copy, the published version or an older one. It shows the latest run's status, its steps and, while
+it waits, its question to answer right there; then the start form and the recent runs. Each run's page has its
+[steps, chart, event log and data](/workflows#follow-your-runs).
 
-<Frame caption="Run… starts a run from the builder, answers its questions inline, and lists recent runs.">
-  <img src="/images/workflows/run-drawer.png" alt="The Run this workflow window: Connection select, Run select set to working copy, Input JSON, Webhook URL (optional), Start, and Recent runs with their states and outcomes" />
+<Frame caption="Test run, beside the chart: the run's status, its steps (an error the chart handles is Handled), and its question.">
+  <img src="/images/workflows/builder-test-run.png" width="380" alt="The Test run panel: Waiting for an answer at resolve_conflict.ask_about_customer; the steps set_name Done, try_create Handled, find_holder Done and ask_about_customer Waiting; and the start of the question, Your answer is needed: A customer named Riverbend Electric already exists" />
 </Frame>
 
 Use the simulator's faults to walk the unhappy paths: a 3100 on the create, QuickBooks closed halfway
@@ -453,7 +457,8 @@ immutable snapshots.
 | Production | Always the published version. A workflow that isn't published can't run there (`422 workflow_not_published`). |
 
 Publish with `POST /api/v2/workflows/{key}/publish` (with optional `notes`), with `"publish": true` on the
-`PUT`, or in the builder: **History** opens **Versions**, which shows what would be published against the
+`PUT`, or in the builder: the header's **Publish v1** (or **Review and publish** once a published workflow has
+changes) opens the **Versions** tab, which shows what would be published against the
 last version, takes a note ("What changed?"), and has **Publish v{n}**. It lists every version with its notes
 and author: **Diff against working copy** compares one with what you're editing, and **Restore into working
 copy** brings it back to publish again. **Unpublish**, `POST .../unpublish` or `"publish": false` on the `PUT`
