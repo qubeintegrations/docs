@@ -8,6 +8,14 @@ icon: "terminal"
 environment, and the safest way to let an AI coding agent work against your account: the agent can do
 everything below without ever seeing a secret.
 
+<Note>
+  Some of this page needs v0.3.0 or later of the CLI: `qube connections create ... --use`,
+  `qube use --connection` (the default connection they set), `qube qb RESOURCE create --example`,
+  and `qube workflows install --replace`. Run `qube version` to see what you have, and
+  `brew upgrade qube` to update. On v0.2.0, pass the connection to each command and write request
+  bodies yourself.
+</Note>
+
 ## Install
 
 <CodeGroup>
@@ -50,8 +58,12 @@ qube env --write .env                                     # QUBE_URL, QUBE_API_K
 qube connections create --simulated --name "Local dev" --use   # a fake QuickBooks, connected at once
 ```
 
-`qube env --write` never prints the values. `qube env --print` prints them as `export` lines, if you want
-that instead.
+`qube env --write` names the variables it wrote and prints nothing of their values. `qube env --print`
+prints them in full as `export` lines, if you want to see them.
+
+If the file already exists, `--write` changes only its `QUBE_*` lines: those already there are updated in
+place, keeping any `export` in front, the missing ones are added at the end, and every other line stays
+as it was. If `.env` is a symbolic link, the file it points to is the one updated.
 
 `--use` makes the new connection the default, so commands that act on a connection don't need its id:
 
@@ -115,10 +127,11 @@ qube requests list --connection <id>              # another connection, this onc
     longer. Otherwise pass `--webhook-url` to be sent the answer, or look it up later with
     `qube requests show`. `--help --json` prints an operation's full parameters and body schema.
 
-    `--help` comes from the same document. Each flag shows the rules it's part of: which fields
-    exclude each other (`at most one of: --rate | --rate-percent | --price-level-ref`, or
-    `exactly one of` when one is required), which lists combine (an invoice's item and group lines,
-    a journal entry's debit and credit lines), and which keys of an object are required. Help ends
+    `--help` comes from the same document. Flags that exclude each other are listed together in an
+    `Exactly one of:` block (or `At most one of:` when none is required), with `or:` between the
+    alternatives and the flags that go together grouped under each. Help also shows which lists
+    combine (an invoice's item and group lines, a journal entry's debit and credit lines), and which
+    keys of an object are required. Help ends
     with an example built from the operation's request example in the
     [API reference](/api-reference/introduction), and `--example` prints that body as JSON for you
     to edit and send with `--data @file`. Tab completion offers each operation's flags, and the
@@ -139,7 +152,7 @@ qube requests list --connection <id>              # another connection, this onc
   <Accordion title="Workflows" icon="diagram-project">
     ```bash
     qube workflows templates                        # the shipped templates
-    qube workflows install create_customer_safely --publish
+    qube workflows install create_customer_safely --publish   # --as NEW_KEY installs a second copy
     qube workflows list
     qube workflows show sync_order
     qube workflows validate ./chart.json            # check a chart without saving it; whether what it calls exists is checked on push
@@ -158,6 +171,13 @@ qube requests list --connection <id>              # another connection, this onc
     qube workflows unpublish sync_order
     qube workflows delete sync_order
     ```
+    If the app already has a workflow at that key, the install is refused with `409` (`key_taken`), and so
+    is a second `POST /workflow-templates/{key}/install`. `--replace` (`"replace": true` in the API)
+    installs again over it: the workflow, and each one it calls that the app already has, gets the
+    template's current chart, earlier versions kept, so a setup script can run the same install every
+    time. `--as` (`as` in the API) installs a second copy under another key instead, and
+    `qube workflows push` replaces a workflow with a chart file of your own.
+
     See [Workflows](/workflows).
   </Accordion>
   <Accordion title="Anything else" icon="code">
@@ -177,7 +197,6 @@ qube requests list --connection <id>              # another connection, this onc
 | --- | --- |
 | `--json` | Machine-readable output. |
 | `--app` | Act as a specific app, this once. |
-| `--host` | A different QuBe Sync host, this once. |
 | `--connection` | The connection to act on, this once, when a command doesn't name one. |
 | `--timeout` | Seconds (or `2m`). Default 60. |
 | `--yes` | Answer yes to a confirmation, for scripts. See [Production apps](#production-apps). |
@@ -227,4 +246,4 @@ A session belongs to you, in one organization.
 - Sessions expire after 30 days. `qube logout`, `qube sessions revoke <id>`, or **CLI sessions** in the
   dashboard end one sooner, and the CLI stops working at once: it calls the API with the session's own
   token, never the app's API key.
-- The token is only ever sent to the host that issued it, so a mistyped `--host` can't leak it.
+- The token is only ever sent to `qubesync.com`, the host that issued it.

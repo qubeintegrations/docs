@@ -42,7 +42,7 @@ Every simulated company starts with the same small, realistic data set, so your 
 | --- | --- |
 | Customers | Riverbend Electric, Hillcrest Dental, Marisol Vega |
 | Vendors | Lone Star Supply Co, Capital Freight |
-| Items | Consulting ($150, service), Installation ($95, service), Shipping ($25, non-inventory), Widget ($40, 120 on hand), Gadget ($129, 35 on hand), Rush Fee ($50, other charge) |
+| Items | Consulting (\$150, service), Installation (\$95, service), Shipping (\$25, non-inventory), Widget (\$40, 120 on hand), Gadget (\$129, 35 on hand), Rush Fee (\$50, other charge) |
 | Accounts | Checking, Accounts Receivable, Inventory Asset, Undeposited Funds, Accounts Payable, Sales Tax Payable, Opening Balance Equity, Sales, Cost of Goods Sold, Office Supplies |
 | Other lists | Terms (Net 15, Net 30, Due on receipt), sales tax codes (Tax, Non), payment methods (Check, Cash, Visa), ship methods, customer types, classes |
 
@@ -99,10 +99,57 @@ against the simulator:
   handles these updates. The simulator copies how a group behaves when it's added, so test group
   updates against real QuickBooks too.
 
+## Payments, deposits, voids and custom fields
+
+- **Payments** pay invoices down: an `applied_to_txn_add`'s `payment_amount` lowers the invoice's
+  `balance_remaining` and marks it paid at zero. A `set_credit` applies a credit memo first: its
+  `applied_amount` comes off the invoice's `balance_remaining` and the credit memo's `credit_remaining`.
+  An `invoice.create` can apply credit memos with `set_credit` the same way. What the credit memos have
+  left is the payment's `unused_credits`, and the part of a payment the invoice no longer needs is its
+  `unused_payment`. Each `applied_to_txn_ret` gives the invoice's `balance_remaining` after the payment
+  and lists each credit it applied as a `linked_txn` (`txn_type` `CreditMemo`, `link_type` `AMTTYPE`, a
+  negative `amount`); its own `amount` is the payment's part only. Intuit doesn't document how real
+  QuickBooks lists an applied credit, so don't build on the `linked_txn` shape. The simulator caps a credit at what's available and what the invoice owes, and a
+  payment at what's left after the credits; real QuickBooks may refuse such a payment instead.
+- **Deposits**: a payment received without a `deposit_to_account_ref` goes to Undeposited Funds, as in
+  QuickBooks. `receive_payment_to_deposit.query` lists it until a deposit takes it. A `deposit.create`
+  line with a `payment_txn_id` deposits that payment for its whole amount, and a line with an
+  `account_ref` and `amount` deposits money from that account. `deposit_total` is the sum of the lines.
+  A payment that isn't waiting to be deposited (unknown, deposited already, or received straight into a
+  bank account) is refused with 3120. Deleting a deposit puts its payments back in Undeposited Funds.
+- **Voids**: `txn_void.execute` keeps the transaction and sets its totals and every line's amount to 0,
+  for bills, checks, credit card charges and credits, credit memos, invoices, item receipts, journal
+  entries, sales receipts and vendor credits. The memo gets `VOID: ` in front, as QuickBooks Desktop
+  shows it; Intuit doesn't document that, so don't build on it. An unknown `txn_id`, or one of another
+  type, gets 3120.
+- **Custom fields and private data extensions**: `data_ext_def.create`, `.update`, `.delete` and
+  `.query` keep definitions per company, unique by `owner_id` and `data_ext_name`. Following Intuit's
+  rules, a custom field (`owner_id` `0`) must be `STR255TYPE` and assigned to Customer, Employee,
+  Vendor or Item, and one assigned to Customer also reaches credit memos, estimates, invoices, sales
+  orders and sales receipts. To get one onto sales orders, assign it to Customer, or use a private
+  extension assigned to SalesOrder; the refusal says so. A private extension (a GUID `owner_id`) can be assigned to any list or
+  transaction type, and only a private definition can be deleted. `data_ext.create`, `.update` and
+  `.delete` set and clear a value on a list object or a transaction whose type the definition is
+  assigned to. A query that sends `owner_id` gets the values back as `data_ext_ret`, for those owners
+  only. Pass `owner_id` to `data_ext_def.query` too (0 for custom fields, your GUID for private
+  extensions). Without it QuickBooks answers status 1 "did not find a matching object" even when
+  definitions exist, so an empty answer there doesn't prove a field is missing. The simulator answers the
+  same way, and a custom field's definition comes back as real QuickBooks returns it: `data_ext_id` 0,
+  `data_ext_format_string` "Any text", and `assign_to_object` listing the transactions a Customer field
+  reaches. Refusals of what Intuit rules out (a custom field on a sales order, a value with no definition)
+  use 3180, 3170, 3100 and 3120; Intuit doesn't document those codes, so treat them as approximate.
+  An unknown `txn_id` gets 3120, as real QuickBooks answers it.
+
 The simulator doesn't model sales tax (always 0), payments against bills (bills stay open), inventory
-quantities or account balances moving, units of measure, linked transactions such as `link_to_txn_id`,
-price levels, account types (a card charge can name any account), date-driven terms, or QuickBooks
-refusing a transaction with no lines.
+quantities or account balances moving, units of measure, linked transactions such as `link_to_txn_id`
+(only a payment's `applied_to_txn_ret` lists the credits it applied), price levels, account types (a card charge
+can name any account), date-driven terms, payment discounts, `is_auto_apply` (the payment is received
+unapplied), changing what an update to an invoice or payment applies, sales receipts waiting in
+Undeposited Funds, data extension values' types and required flags, or QuickBooks refusing a
+transaction with no lines. It answers 1030 rather than guess for: voiding a deposit, bill payment,
+statement charge, credit card refund or inventory adjustment, a transaction that's already void, or one
+with payments or credits applied to it; a data extension on a transaction line or on the company; and
+a deposit with cash back.
 
 Other differences we know of:
 
@@ -110,7 +157,8 @@ Other differences we know of:
   only for a `full_name`.
 - Deleting a record that's in use, such as a customer with invoices, succeeds.
 - Queries for deleted records always find nothing.
-- A payment applied to a `txn_id` that doesn't exist skips that line without an error.
+- A payment applied to a `txn_id` that doesn't exist, or a `set_credit` naming a `credit_txn_id`
+  that isn't a credit memo, skips it without an error.
 - Every simulated company allows every feature. A real company file can answer 3250 ("This feature is not
   enabled or not available in this version of QuickBooks") for bar codes, currencies, inventory sites or units
   of measure, and decline payroll and sales-tax-return queries.
