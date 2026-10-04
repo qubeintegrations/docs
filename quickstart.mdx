@@ -1,231 +1,261 @@
 ---
 title: "Quickstart"
-description: "Queue your first QuickBooks request and receive the answer in about five minutes. You don't need QuickBooks installed."
+description: "Connect a QuickBooks company file, send it a request and read the answer, all from the dashboard. Then make the same request from your code."
 icon: "rocket"
 ---
 
-You'll create a **simulated connection**: a fake QuickBooks Desktop company file, hosted by QuBe Sync, that
-answers like the real thing within seconds. Your code doesn't change when you move to your customers' real
-QuickBooks. The simulator is in [beta](/simulator): it doesn't match real QuickBooks in every case yet, so test
-against the real thing before you launch.
+import CreateAccount from "/snippets/quickstart-create-account.mdx";
 
-```mermaid
-%%{init: {"sequence": {"width": 130, "actorMargin": 40, "mirrorActors": false}}}%%
-sequenceDiagram
-  autonumber
-  participant You as Your app
-  participant Q as QuBe Sync
-  participant Sim as Simulated QuickBooks
-  You->>Q: POST /connections
-  Q-->>You: 201, connected
-  You->>Q: GET /customers
-  Q-->>You: 201, "waiting"
-  Q->>Sim: CustomerQueryRq
-  Sim-->>Q: CustomerQueryRs
-  Q->>You: webhook: customers, as JSON
-```
+## Choose a company file
 
-<Steps>
-  <Step title="Create your free account">
-    [Register at qubesync.com](https://qubesync.com/users/register). Your organization starts with two apps:
-    **My App Dev**, a sandbox app to build with, and **My App Prod** for when you launch. Each has its own API
-    key and webhook secret.
-  </Step>
-  <Step title="Get your sandbox app's keys">
-    <Tabs>
-      <Tab title="Dashboard">
-        Open **My Applications**, then **My App Dev**, and copy the API key and webhook secret into your
-        environment:
+Use a **simulated** one if you don't have QuickBooks handy. It's ready in seconds, and your code won't
+change when you connect real QuickBooks later.
 
-        ```bash
-        export QUBE_API_KEY="sk_..."
-        export QUBE_WEBHOOK_SECRET="..."
-        ```
-      </Tab>
-      <Tab title="CLI">
-        The [qube CLI](/cli) writes them into your `.env` without printing them:
+<Tabs>
+  <Tab title="Simulated QuickBooks" icon="flask">
+    <Tip>
+      **About 3 minutes, nothing to install.** QuBe Sync hosts a sample company file that answers like
+      QuickBooks Desktop.
+    </Tip>
 
-        ```bash
-        qube login
-        qube use "My App Dev"
-        qube env --write .env   # QUBE_URL, QUBE_API_KEY, QUBE_WEBHOOK_SECRET
-        ```
-      </Tab>
-    </Tabs>
+    <Steps>
+      <Step title="Create your account">
+        <CreateAccount />
+      </Step>
+      <Step title="Add a simulated connection">
+        A connection is one QuickBooks company file. Open **QB Connections**, click **New Connection**,
+        choose **My App Dev**, set **Type** to **simulated (beta)**, and click **Save Connection**.
 
-    Every call authenticates with HTTP Basic auth: the API key is the username and the password is blank.
-  </Step>
-  <Step title="Create a simulated connection">
-    A connection is one QuickBooks company file. A simulated one is connected the moment it exists.
+        <Frame caption="The name is optional.">
+          <img src="/images/quickstart/new-connection-simulated.png" alt="The New Connection form with App set to My App Dev, Name set to Test company and Type set to simulated (beta)" style={{ maxWidth: "460px" }} />
+        </Frame>
 
-    <CodeGroup>
-    ```bash cURL
-    curl -u "$QUBE_API_KEY:" -X POST https://qubesync.com/api/v2/connections \
-      -H "Content-Type: application/json" \
-      -d '{"name": "Test company", "type": "simulated"}'
-    ```
+        It's connected straight away, to a sample company with customers, items and transactions to
+        query. The simulator is in [beta](/simulator), so test against real QuickBooks before you launch.
 
-    ```javascript Node.js
-    const auth = "Basic " + Buffer.from(`${process.env.QUBE_API_KEY}:`).toString("base64");
+        <Accordion title="Create it with the CLI or the API instead">
+          Both need your API key: see [Do it from your code](#do-it-from-your-code).
 
-    const res = await fetch("https://qubesync.com/api/v2/connections", {
-      method: "POST",
-      headers: { Authorization: auth, "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "Test company", type: "simulated" }),
-    });
-    const { data: connection } = await res.json();
-    ```
+          <CodeGroup>
+          ```bash CLI
+          qube login
+          qube use "My App Dev"
+          qube connections create --simulated --name "Test company"
+          ```
 
-    ```python Python
-    import os, requests
+          ```bash cURL
+          curl -u "$QUBE_API_KEY:" -X POST https://qubesync.com/api/v2/connections \
+            -H "Content-Type: application/json" \
+            -d '{"name": "Test company", "type": "simulated"}'
+          ```
+          </CodeGroup>
+        </Accordion>
+      </Step>
+      <Step title="Send a test request">
+        On the connection's page, click **Create Test Request**. It asks QuickBooks for the first 10
+        customers, and the simulator answers within seconds.
 
-    auth = (os.environ["QUBE_API_KEY"], "")
-    res = requests.post("https://qubesync.com/api/v2/connections", auth=auth,
-                        json={"name": "Test company", "type": "simulated"})
-    connection = res.json()["data"]
-    ```
+        <Frame caption="The request goes from waiting to response_received on its own.">
+          <img src="/images/quickstart/connection-requests.png" alt="Recent Requests on the connection's page: the Create Test Request button and a CustomerQueryRq request in state response_received" />
+        </Frame>
+      </Step>
+      <Step title="Read the answer">
+        Click the request. **Response JSON** shows QuickBooks' answer, the sample company's customers, in
+        the same shape your app will receive it.
 
-    ```ruby Ruby
-    require "net/http"
-    require "json"
+        <Frame caption="Each request keeps its qbXML, its JSON and its webhook attempts.">
+          <img src="/images/quickstart/response-json.png" alt="The request's Response JSON: a data list of customers, each with snake_case fields such as bill_address, company_name, email and full_name" />
+        </Frame>
 
-    uri = URI("https://qubesync.com/api/v2/connections")
-    req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json")
-    req.basic_auth(ENV.fetch("QUBE_API_KEY"), "")
-    req.body = { name: "Test company", type: "simulated" }.to_json
-    res = Net::HTTP.start(uri.host, uri.port, use_ssl: true) { |http| http.request(req) }
-    connection = JSON.parse(res.body).fetch("data")
-    ```
-    </CodeGroup>
+        <Accordion title="Make the next request fail on purpose">
+          Real integrations fail in ways that are hard to reproduce, like a name that's already taken. On
+          the connection's page, under **Faults**, set **Next request** to *answered with 3100 — name
+          already in use*, then click **Create Test Request** again. Its state is `error`, with the same
+          refusal QuickBooks would send.
 
-    ```json Response (abridged)
-    {
-      "data": {
-        "id": "4fdde583-68b1-4c6b-94d1-82abf97afdf5",
-        "name": "Test company",
-        "type": "simulated",
-        "last_connected_at": "2026-09-27T00:57:01Z",
-        "company_file": "C:\\QuBeSync\\Simulator\\test-company.qbw",
-        "links": {
-          "self": "https://qubesync.com/api/v2/connections/4fdde583-68b1-4c6b-94d1-82abf97afdf5",
-          "ui": "https://qubesync.com/app/connections/4fdde583-68b1-4c6b-94d1-82abf97afdf5"
-        }
-      }
-    }
-    ```
+          <Frame>
+            <img src="/images/quickstart/simulator-faults.png" alt="The Simulator section of the connection's page: Run Web Connector now, Reset company file, and the Faults form" />
+          </Frame>
 
-    Keep the `id`: every QuickBooks request is made against a connection.
-  </Step>
-  <Step title="Give QuBe Sync somewhere to deliver answers">
-    Answers arrive as a `POST` to a `webhook_url` you choose. While you develop, expose your local server
-    with a tunnel ([how](/ngrok)), for example:
+          The same fault from the command line:
 
-    ```bash
-    cloudflared tunnel --url http://localhost:3000
-    ```
-  </Step>
-  <Step title="Queue a request">
-    Ask for two customers. The request is **queued**, not answered: QuickBooks Desktop is only reachable
-    when its Web Connector checks in.
+          ```bash
+          qube simulator faults "$CONN_ID" --next 3100
+          ```
 
-    ```bash
-    export CONN_ID="4fdde583-..."   # from the previous step
+          The [simulator guide](/simulator#make-it-fail) lists every fault it can inject.
+        </Accordion>
+      </Step>
+    </Steps>
+  </Tab>
 
-    curl -u "$QUBE_API_KEY:" \
-      "https://qubesync.com/api/v2/connections/$CONN_ID/customers?max_returned=2&webhook_url=https://your-tunnel.example/webhooks/qube"
-    ```
+  <Tab title="Your own QuickBooks Desktop" icon="desktop">
+    <Info>
+      **About 6 minutes.** You need a Windows computer or VM with QuickBooks Desktop (Pro, Premier or
+      Enterprise) and a company file to test with. No copy? [Get a free not-for-resale
+      license](/nfr-quickbooks) and open one of QuickBooks' sample companies.
+    </Info>
 
-    ```json 201 Created (abridged)
-    {
-      "data": {
-        "id": "01a0e05d-8fae-733a-875b-a258ff2c8fe2",
-        "state": "waiting",
-        "request_types": ["CustomerQueryRq"],
-        "webhook_url": "https://your-tunnel.example/webhooks/qube",
-        "webhook_state": "pending",
-        "response_json": null,
-        "links": {
-          "self": "https://qubesync.com/api/v2/connections/4fdde583-.../queued_requests/01a0e05d-...",
-          "ui": "https://qubesync.com/app/queued_requests/01a0e05d-8fae-733a-875b-a258ff2c8fe2"
-        }
-      }
-    }
-    ```
-  </Step>
-  <Step title="Receive the answer">
-    A few seconds later QuBe Sync POSTs the answered request to your `webhook_url`. QuickBooks' reply is in
-    `response_json`, already converted from qbXML:
+    <Steps>
+      <Step title="Create your account">
+        <CreateAccount />
+      </Step>
+      <Step title="Add a connection">
+        A connection is one QuickBooks company file. Open **QB Connections**, click **New Connection**,
+        choose **My App Dev**, leave **Type** as **standard**, and click **Save Connection**.
 
-    ```json Webhook body (abridged)
-    {
-      "id": "01a0e05d-8fae-733a-875b-a258ff2c8fe2",
-      "state": "response_received",
-      "sandbox": true,
-      "response_json": {
-        "status": "success",
-        "data": [
-          {
-            "list_id": "80000020-1790470623",
-            "edit_sequence": "1790470623",
-            "name": "Hillcrest Dental",
-            "full_name": "Hillcrest Dental",
-            "company_name": "Hillcrest Dental Group",
-            "email": "billing@hillcrest.example",
-            "phone": "512-555-0177",
-            "is_active": true,
-            "balance": 0.0,
-            "bill_address": { "addr1": "400 Oak St", "city": "Round Rock", "state": "TX", "postal_code": "78664", "country": "US" }
-          },
-          {
-            "list_id": "80000021-1790470623",
-            "edit_sequence": "1790470623",
-            "name": "Marisol Vega",
-            "full_name": "Marisol Vega",
-            "first_name": "Marisol",
-            "last_name": "Vega",
-            "is_active": true,
-            "balance": 0.0
-          }
-        ]
-      },
-      "error": null
-    }
-    ```
+        <Frame caption="Name it after the company file, so you can tell your connections apart.">
+          <img src="/images/quickstart/new-connection-standard.png" alt="The New Connection form with App set to My App Dev, Name set to Office PC and Type set to standard" style={{ maxWidth: "460px" }} />
+        </Frame>
+      </Step>
+      <Step title="Connect QuickBooks">
+        On the connection's page, click **Copy Onboarding URL** and open it on the computer that runs
+        QuickBooks. It's the page your customers will use: a short checklist, then a `.qwc` file to open in
+        the Web Connector and a password to paste into it.
 
-    No tunnel yet? Open the request's `links.ui` in your browser to watch it get answered in the dashboard.
-  </Step>
-</Steps>
+        <Frame caption="Your customers see the same page, with your app's name.">
+          <img src="/images/quickstart/onboarding.png" alt="The onboarding page: Connect My App Dev to QuickBooks Enterprise / Desktop, starting with a checklist" />
+        </Frame>
 
-That's the whole loop: queue a request, receive the answer. Everything else in QuBe Sync builds on it.
+        When the Web Connector finishes its first update, **Last connected** on the connection's page
+        changes from *Never connected* to the time it checked in.
 
-## Now break something
+        <AccordionGroup>
+          <Accordion title="Set it up without the onboarding page">
+            1. Click **Download QWC File** and open the file on the QuickBooks computer. When QuickBooks
+               asks, choose *Yes, always; allow access even if QuickBooks is not running*.
+            2. Click **Generate Password**. It's copied to your clipboard: paste it into the Web
+               Connector's **Password** column.
+            3. Tick the app in the Web Connector and click **Update Selected**.
 
-Real integrations fail in ways that are hard to reproduce: a name that's already taken, QuickBooks closed
-on your customer's PC. The simulator can do both on demand. Make the next request fail the way QuickBooks
-does when a name is taken:
+            <Frame>
+              <img src="/images/quickstart/connection-real.png" alt="A standard connection's page: Copy Onboarding URL, Last connected Never connected, Download QWC File and Generate Password" />
+            </Frame>
+          </Accordion>
+          <Accordion title="The Web Connector shows an error">
+            Its log says why, usually in the last few lines. [Read the Web Connector logs](/qwc-logs) for
+            where to find it and what the common errors mean.
+          </Accordion>
+        </AccordionGroup>
+      </Step>
+      <Step title="Send a test request">
+        On the connection's page, click **Create Test Request**. It asks QuickBooks for the first 10
+        customers. QuickBooks answers the next time the Web Connector runs: within 5 minutes, or straight
+        away if you click **Update Selected** in the Web Connector.
+
+        <Frame caption="The request waits until the Web Connector checks in, then shows response_received.">
+          <img src="/images/quickstart/connection-requests.png" alt="Recent Requests on the connection's page: the Create Test Request button and a CustomerQueryRq request in state response_received" />
+        </Frame>
+      </Step>
+      <Step title="Read the answer">
+        Click the request. **Response JSON** shows QuickBooks' answer, your company file's customers, in
+        the same shape your app will receive it.
+
+        <Frame caption="Each request keeps its qbXML, its JSON and its webhook attempts.">
+          <img src="/images/quickstart/response-json.png" alt="The request's Response JSON: a data list of customers, each with snake_case fields such as bill_address, company_name, email and full_name" />
+        </Frame>
+      </Step>
+    </Steps>
+  </Tab>
+</Tabs>
+
+## Do it from your code
+
+**Create Test Request** is a shortcut for one API call. To make it yourself, copy two values from the
+dashboard:
+
+- Your **API key**: open **My Applications**, then **My App Dev**, and click the key to copy it.
+- The **connection ID**: click **ID** on the connection's page.
+
+<Frame caption="Each app has its own keys. Keep them out of your code and your logs.">
+  <img src="/images/quickstart/app-keys.png" alt="My App Dev's API key and webhook secret, each shortened, with Expire and Generate buttons" />
+</Frame>
 
 ```bash
-curl -u "$QUBE_API_KEY:" -X PUT "https://qubesync.com/api/v2/connections/$CONN_ID/simulator" \
-  -H "Content-Type: application/json" \
-  -d '{"faults": {"next_status": {"code": 3100}}}'
+export QUBE_API_KEY="sk_..."
+export CONN_ID="4fdde583-..."
+
+curl -u "$QUBE_API_KEY:" \
+  "https://qubesync.com/api/v2/connections/$CONN_ID/customers?max_returned=2"
 ```
 
-Queue any request and its webhook arrives with `state: "error"` and `response_json.error.type: "name_in_use"`.
-The [simulator guide](/simulator) lists every fault it can inject.
+The API key is the username for HTTP Basic auth, and the password is blank. QuBe Sync replies at once
+with `201 Created` and the request in state `waiting`, because QuickBooks Desktop answers only when its
+Web Connector checks in. Open `links.ui` to watch it get answered, like your test request.
+
+```json 201 Created (abridged)
+{
+  "data": {
+    "id": "01a0e05d-8fae-733a-875b-a258ff2c8fe2",
+    "state": "waiting",
+    "request_types": ["CustomerQueryRq"],
+    "links": {
+      "ui": "https://qubesync.com/app/queued_requests/01a0e05d-8fae-733a-875b-a258ff2c8fe2"
+    }
+  }
+}
+```
+
+<Accordion title="The same request in Node.js, Python, Ruby or the CLI">
+  <CodeGroup>
+  ```javascript Node.js
+  const auth = "Basic " + Buffer.from(`${process.env.QUBE_API_KEY}:`).toString("base64");
+  const url = `https://qubesync.com/api/v2/connections/${process.env.CONN_ID}/customers?max_returned=2`;
+
+  const res = await fetch(url, { headers: { Authorization: auth } });
+  const { data: request } = await res.json();
+  console.log(request.state, request.links.ui); // "waiting", and where to watch it
+  ```
+
+  ```python Python
+  import os, requests
+
+  auth = (os.environ["QUBE_API_KEY"], "")
+  url = f"https://qubesync.com/api/v2/connections/{os.environ['CONN_ID']}/customers"
+
+  request = requests.get(url, auth=auth, params={"max_returned": 2}).json()["data"]
+  print(request["state"], request["links"]["ui"])
+  ```
+
+  ```ruby Ruby
+  require "net/http"
+  require "json"
+
+  uri = URI("https://qubesync.com/api/v2/connections/#{ENV.fetch("CONN_ID")}/customers?max_returned=2")
+  req = Net::HTTP::Get.new(uri)
+  req.basic_auth(ENV.fetch("QUBE_API_KEY"), "")
+  res = Net::HTTP.start(uri.host, uri.port, use_ssl: true) { |http| http.request(req) }
+
+  request = JSON.parse(res.body).fetch("data")
+  puts request["state"], request.dig("links", "ui")
+  ```
+
+  ```bash CLI
+  qube login
+  qube use "My App Dev"
+  qube qb customers list "$CONN_ID" --max-returned 2 --wait   # prints QuickBooks' answer
+  ```
+  </CodeGroup>
+</Accordion>
 
 ## Where to next
 
+<Card title="When your app is ready: receive answers in your app" icon="bell" href="/webhooks">
+  Pass a `webhook_url` with each request, and QuBe Sync POSTs QuickBooks' answer to it the moment it
+  arrives. No polling.
+</Card>
+
 <CardGroup cols={2}>
-  <Card title="How it works" icon="gears" href="/how-it-works">
-    The model behind what you just did: apps, connections, requests and the Web Connector.
-  </Card>
-  <Card title="Connect a real customer" icon="plug" href="/onboarding">
-    Send a customer through the hosted onboarding page and start syncing their company file.
-  </Card>
   <Card title="Make requests" icon="code" href="/making-requests">
     Create invoices, update customers and query anything in QuickBooks.
   </Card>
-  <Card title="Get QuickBooks for testing" icon="desktop" href="/nfr-quickbooks">
-    A free not-for-resale copy of QuickBooks, for testing against the real thing.
+  <Card title="Connect your customers" icon="plug" href="/onboarding">
+    Send each customer to the hosted onboarding page from a button in your app.
+  </Card>
+  <Card title="Test without QuickBooks" icon="flask" href="/simulator">
+    What the sample company holds, and every failure the simulator can fake.
+  </Card>
+  <Card title="How it works" icon="gears" href="/how-it-works">
+    Apps, connections, requests and the Web Connector, and how they fit together.
   </Card>
 </CardGroup>
