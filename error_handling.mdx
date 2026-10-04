@@ -115,17 +115,14 @@ lists every one. Each operation in the [API reference](/api-reference/introducti
 Inside a [workflow](/workflows#lost-answers), a request state can also raise an `error` whose `type` is
 `unsettled` or `no_response`, with `code` `null`. Those aren't QuickBooks codes: they're how a run reports
 an answer that never came back and couldn't be settled. A `no_response` also carries `reason`, why the
-answer never came (`timed_out`, `connector_error`, `rejected`, `withdrawn` or `page_expired`), and for an
-add `external_guid`, the GUID it was sent with ([Lost answers](/workflows#lost-answers)). Only `timed_out`
+answer never came (`timed_out`, `connector_error`, `rejected`, `withdrawn` or `page_expired`), and for a
+creation request `external_guid`, the GUID it was sent with ([Lost answers](/workflows#lost-answers)). Only `timed_out`
 and `connector_error` leave the record possibly applied.
 
 <Tip>
   Test these before your customers do. The [simulator](/simulator) can answer the next request with any of
   them: `{"faults": {"next_status": {"code": 3200}}}`.
 </Tip>
-
-A query that matches nothing is **not** an error. It's `response_received` with an empty `data` list, and
-QuickBooks' message alongside.
 
 ## QuickBooks said yes, with a warning
 
@@ -190,7 +187,9 @@ open. Nothing was applied, and only your customer can fix it:
 
 **Show your customer `error.user_message`, and don't resend the request.** QuBe Sync keeps it and tries
 again on the Web Connector's next runs, for as long as it takes. You get a `retryable` webhook when the error
-first appears and another only if it changes. After that, the next webhook is the answer.
+first appears and another only if it changes. After that, the next webhook is the answer. It has the same
+`id` and `page_request_id` as the `retryable` one, and only `state` differs. If you drop duplicate
+deliveries, key on `page_request_id` plus `state`, or the answer looks like a repeat and is lost.
 
 The exception is a later page of an [iterated query](/pagination#if-the-session-ends-partway). QuickBooks
 keeps an iteration only for the session that started it, so that page ends as `error` and the query has to
@@ -217,12 +216,12 @@ If you no longer want a request, for example because your customer cancelled the
 
 ```bash
 curl -u "$QUBE_API_KEY:" -X POST \
-  "https://qubesync.com/api/v2/connections/$CONN_ID/queued_requests/$REQUEST_ID/discard"
+  "https://qubesync.com/api/v2/connections/$CONN_ID/queued-requests/$REQUEST_ID/discard"
 ```
 
 It becomes `discarded`, is never sent, and a `discarded` webhook follows. Only a request the Web Connector
-hasn't picked up yet (`waiting`, or `retryable` between tries) can be discarded. One it already has goes
-ahead (`409`, `in_flight`), and one that has finished stays as it is (`409`, `already_finished`).
+hasn't picked up yet (`waiting`, or `retryable` between tries) can be discarded. A request the Web Connector already has goes
+ahead (`409`, `in_flight`), and a request that has finished stays as it is (`409`, `already_finished`).
 
 Discarding a request a [workflow run](/workflows) sent moves the run on: the state that sent it raises
 `error` with type `no_response` and `reason` `withdrawn`, "the request was withdrawn before it was sent".
@@ -234,16 +233,15 @@ owners.
 
 ## Other endings
 
-- **`timed_out`**: QuickBooks received the request, but the Web Connector session ended before it answered.
+- **`timed_out`**: QuickBooks received the request, but never responded. This might happen if the customer's QB computer crashes or loses connection while processing, and
   QuickBooks may or may not have applied it. A query is safe to queue again. For a create or update,
   query first to see whether it happened. A request a [workflow](/workflows#lost-answers) sent is the
-  exception: the run finds out whether it was applied and carries on, so there's usually nothing for your
+  exception: the run automatically finds out whether it was applied and carries on, so there's usually nothing for your
   app to do. When it can't tell, the state raises `unsettled` or `no_response`, which fails the run unless
   the chart handles it.
 - **`discarded`**: your app [discarded it](#discarding-a-request). QuickBooks never saw it.
 - **`error` with `xml_error`**: QuickBooks couldn't parse the request. Requests built through the API are
-  validated against QuickBooks' schema first, so this is rare, but it can happen with characters QuickBooks
-  can't handle. Sent again as-is, it fails again. A workflow doesn't settle it: the state raises
+  validated against QuickBooks' schema first, so this is rare, but it could happen if you're sending raw custom QBXML. Sent again as-is, it fails again. A workflow doesn't settle it: the state raises
   `no_response` with `reason` `rejected`.
 - **`error` with `unexpected_error`**: QuickBooks failed without saying why. The Web Connector's log
   (**View Log** in the Web Connector) usually has more; turn on [verbose logging](/qwc-logs) if it doesn't.

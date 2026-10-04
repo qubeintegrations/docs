@@ -36,7 +36,8 @@ Your code doesn't change between the two. The API key, the webhook secret and th
   </Step>
   <Step title="Harden your webhook endpoint">
     [Verify every signature](/webhooks#verify-the-signature), answer `2xx` within 5 seconds and do the work in
-    a job, and process each `page_request_id` once. Deliveries can repeat or arrive out of order.
+    a job, and process each `page_request_id` and `state` once. A `retryable` webhook is followed by the answer
+    with the same `page_request_id`. Deliveries can repeat or arrive out of order.
   </Step>
   <Step title="Handle every state">
     Show your customer `error.user_message` for `error` and `retryable`. Don't resend a `retryable`

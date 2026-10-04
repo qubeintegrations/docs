@@ -35,10 +35,12 @@ sequenceDiagram
   Q->>App: page 3, "done"
 ```
 
+The diagram shows the order QuBe Sync sends the pages in. They can reach your endpoint in any order, although using a [Workflow](/workflows) can ensure delivery order.
+
 <Note>
   An iterator pages a **filtered** query. A lookup by `list_id` or `full_name` (`txn_id` or `ref_number` on
   a transaction query) gets every match back in one answer, so leave `iterator` out. QuickBooks refuses an
-  iterator beside an id, so QuBe Sync answers `400` and queues nothing:
+  iterator alongside an id, so QuBe Sync answers `400` and queues nothing:
 
   ```json 400 Bad Request
   { "errors": "iterator pages a filtered query; with list_id every match comes back in one answer, so leave iterator out" }
@@ -57,8 +59,15 @@ Every page's webhook has the same `id` (the request you queued) and its own `pag
 | `iteration_state` | `continue` | `continue` | `done` |
 
 - Process each page as it arrives. You don't need to wait for the last one.
-- Pages can arrive out of order, and a retried delivery can arrive twice. Key on `page_request_id`.
-- The import is complete once you've handled the page whose `iteration_state` is `done`.
+- Pages can arrive out of order (page 4 can land before page 3), and a retried delivery can arrive twice.
+  Key on `page_request_id` plus `state`. A page whose `state` is `retryable` isn't final: the same
+  `page_request_id` arrives again later as `response_received`, `error`, `timed_out` or `discarded`. See
+  [Respond quickly, work later](/webhooks#respond-quickly-work-later).
+- The `done` page (or `max_sandbox_iterations_reached` in a sandbox) is the last one, and its `page`
+  number tells you how many pages there are. The import is complete once you've handled **every page from
+  1 to that number**, not when the `done` page arrives: it can arrive before earlier pages. Keep the set
+  of page numbers you've handled. A handler that stores only the last `iteration_state` it saw can end on
+  `continue`.
 
 <Note>
   In a **sandbox** app, an iteration stops after 4 pages. The last page's `iteration_state` is then
@@ -77,12 +86,11 @@ are updated rather than duplicated.
 ## Pages on demand
 
 Each queued request also has a `links.pages` URL, which returns every page answered so far, oldest first,
-each with its own `iteration_state`. That's handy for a script or a support tool. Your integration should
-still take each page from its webhook.
+each with its own `iteration_state`.
 
 ```bash
 curl -u "$QUBE_API_KEY:" \
-  "https://qubesync.com/api/v2/connections/$CONN_ID/queued_requests/$REQUEST_ID/pages"
+  "https://qubesync.com/api/v2/connections/$CONN_ID/queued-requests/$REQUEST_ID/pages"
 ```
 
 ## In a workflow
@@ -96,22 +104,22 @@ is in. See the `request` state in [Anatomy of a chart](/workflow-authoring#anato
 Bringing a company file's lists into your app the first time can go either way:
 
 - **The plain paginated API** (above): one query per list, one webhook per page. Pages can arrive out of
-  order and twice, so you key on `page_request_id`, and you know a list is done when you've handled its
-  `done` page. Nothing to install. Best for one list, or when you'd rather drive each query yourself.
-- **A workflow that sends each page to your app**: install the shipped `send_lists_to_app` template and start
+  order and twice, so you key on `page_request_id` plus `state`, and you know a list is done when you've
+  handled every page up to the `done` page's `page` number. Nothing to install. Best for one list, or when you'd rather drive each query yourself.
+- **A workflow that sends each page to your app**: Clone the `send_lists_to_app` template and start
   it once. It pages through every customer, vendor and item, 200 at a time, and sends each page to your
   `webhook_url` as a `workflow_run.notification` (`customers_page`, `vendors_page`, `items_page`) -- one at a
   time, in order, waiting for your `2xx` before the next. `workflow_run.completed` arrives last, with how
   many of each were sent, so it means the import is complete. Best when you want the lists in a fixed order,
-  one run to watch, and a single "done".
+  one run to watch, and a single "done". You can edit the workflow to include whichever entities you'd like to import.
 
 ```bash
 curl -u "$QUBE_API_KEY:" -X POST \
-  https://qubesync.com/api/v2/workflow_templates/send_lists_to_app/install \
+  https://qubesync.com/api/v2/workflow-templates/send_lists_to_app/install \
   -H "Content-Type: application/json" -d '{"publish": true}'
 
 curl -u "$QUBE_API_KEY:" -X POST \
-  "https://qubesync.com/api/v2/connections/$CONN_ID/workflow_runs" \
+  "https://qubesync.com/api/v2/connections/$CONN_ID/workflow-runs" \
   -H "Content-Type: application/json" \
   -d '{"workflow": "send_lists_to_app", "webhook_url": "https://your-app.example/webhooks/qube"}'
 ```
@@ -127,5 +135,7 @@ different fields, or each page on to a workflow of your own. See
 
 - **Pick a page size QuickBooks can handle comfortably.** A few hundred records per page keeps each round
   trip quick on a slow machine. Transactions with many lines are heavier than list records.
-- **Import once, then sync changes.** After the first full import, query with `from_modified_date` so
-  each sync only fetches what changed.
+- **Import once, then sync changes.** After the first full import, filter on the modified date so each
+  sync only fetches what changed. A list query (`customers`) takes `from_modified_date` directly; a
+  transaction query (`invoices`) takes `modified_date_range_filter[from_modified_date]`. See
+  [Making requests](/making-requests#query).

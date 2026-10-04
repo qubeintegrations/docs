@@ -1,6 +1,6 @@
 ---
 title: "Webhooks"
-description: "How answers reach your app: what QuBe Sync POSTs to your webhook_url, when, and how to verify it came from us."
+description: "How answers reach your app"
 icon: "bell"
 ---
 
@@ -10,21 +10,13 @@ method. When QuickBooks answers, or the request fails, QuBe Sync POSTs the answe
 [workflow run](#workflow-run-events) takes its `webhook_url` in the body that starts it, and reports on
 the run rather than on each request.
 
-## Where webhooks can go
+## Webhook requirements
 
 - It's an absolute `https://` or `http://` URL, such as `https://app.example.com/webhooks/qube`, of at
   most 2048 characters.
-- It has no username or password in it (`https://user:pass@...`). Verify the
-  [signature](#verify-the-signature) instead.
-- It can't point at `localhost` or a private, loopback or link-local address (`127.0.0.1`, `10.x`,
-  `192.168.x`, `169.254.169.254`, `fd00::`...). QuBe Sync checks the name again before each delivery, so
-  neither can a hostname that resolves to one. While you develop, use a [tunnel](/ngrok).
-- Redirects aren't followed. Give the final URL: if your endpoint answers `301` to move `http` to `https`,
-  or to add a trailing slash, the delivery fails.
+- QuBe Sync needs a publicly available URL (localhost doesn't work) to send to, so use a [tunnel](/ngrok) while you develop.
+- Background the work of processing the webhook data, and respond quickly with a `200`
 
-A `webhook_url` that breaks these rules is refused when you send it, before anything is queued or
-started: `422` with `{"errors": {"webhook_url": ["must be an http or https URL"]}}`
-([Error handling](/error_handling#when-qube-sync-refuses-a-request)).
 
 ```mermaid
 %%{init: {"sequence": {"width": 130, "actorMargin": 40, "mirrorActors": false}}}%%
@@ -42,7 +34,7 @@ sequenceDiagram
 
 ## The payload
 
-This is a real answer to `POST /customers`:
+This is a real webhook answer to creating a customer (`POST /customers`):
 
 ```json
 {
@@ -97,7 +89,14 @@ This is a real answer to `POST /customers`:
 </ResponseField>
 <ResponseField name="page, page_request_id, iteration_state" type="integer, string, string">
   For [paginated](/pagination) answers. Each page has its own `page_request_id`; `iteration_state` is
-  `continue` until the last page, which is `done`. It's `not_applicable` for a single-page answer.
+  `continue` until the last page, which is `done`. Pages can arrive in any order, so count the pages
+  instead of waiting for the `done` one ([how](/pagination#telling-pages-apart)). It's `not_applicable`
+  for a single-page answer. A `retryable` and the final webhook for the same page share its
+  `page_request_id`: tell them apart by `state`.
+  <Tip>
+      To ensure pages arrive in the correct order, you can use a [Workflow](/workflows) that sends a webhook
+      per page and waits for a `200` response before sending the next webhook.
+  </Tip>
 </ResponseField>
 <ResponseField name="timestamp" type="integer">
   Unix seconds when this delivery was signed. It's also the `t=` in the signature header.
@@ -120,7 +119,8 @@ This is a real answer to `POST /customers`:
 | `discarded` | Your app [discarded](/error_handling#when-quickbooks-is-out-of-reach) it before the Web Connector took it. | Nothing: QuickBooks never saw it. |
 
 A `retryable` webhook arrives when the error first appears and again only if it changes. The next webhook
-after that is usually the answer.
+after that is usually the answer. It carries the same `id` and `page_request_id` as the `retryable` one;
+only `state` differs.
 
 ## Respond quickly, work later
 
@@ -135,7 +135,10 @@ Answer with any **2xx** status within **5 seconds**. The body is ignored. Put th
   resolves to a private address, isn't sent or retried: it fails at once with "Webhook not sent: ...",
   and the owners get the email.
 - Deliveries can arrive out of order and, after a retry, more than once. Key your processing on
-  `page_request_id` and treat a repeat as already handled.
+  `page_request_id` **plus `state`**. A `retryable` webhook isn't final: the same request or page can
+  arrive again later with the same `id` and `page_request_id` and a different `state` (`response_received`,
+  `error`, `timed_out` or `discarded`). That's the answer, not a repeat. A retried delivery of the *same*
+  `state` is the duplicate to drop. Keying on `page_request_id` alone drops the answer.
 
 Workflow runs post to the same kind of endpoint, with a different body: theirs has an `event` starting
 `workflow_run.` and no `id` or `page_request_id` ([below](#workflow-run-events)). If one endpoint takes
@@ -163,6 +166,7 @@ end
 class QuickbooksAnswerJob < ApplicationJob
   def perform(answer)
     request = QuickbooksRequest.find_by(qube_id: answer["id"]) or return
+    # A retryable webhook and the answer share an id: tell them apart by state, never by id alone.
     request.update!(state: answer["state"])
     return unless answer["state"] == "response_received"
 
@@ -332,7 +336,7 @@ A workflow can hand your app data while it runs, from a [`notify` state](/workfl
   "workflow": "send_lists_to_app",
   "workflow_id": "018f0000-0000-7000-8000-000000000004",
   "run_id": "018f0000-0000-7000-8000-000000000000",
-  "links": {"run": "https://qubesync.com/api/v2/connections/…/workflow_runs/…", "decisions": "…", "cancel": "…", "ui": "…"},
+  "links": {"run": "https://qubesync.com/api/v2/connections/…/workflow-runs/…", "decisions": "…", "cancel": "…", "ui": "…"},
   "delivery_id": "018f0000-0000-7000-8000-000000000005",
   "seq": 1,
   "name": "customers_page",
