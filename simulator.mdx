@@ -52,8 +52,10 @@ added and modified. The simulator enforces QuickBooks' rules along the way: name
 their spacing as QuickBooks keeps it: a name's double space or a note's line break comes back exactly as
 sent, and a `full_name` filter finds a record by that spelling, or by one with extra spaces, but a
 single-spaced filter does not find a double-spaced name. Iterated queries page like the real thing.
-Requests it doesn't model yet, such as reports, are answered with status 1030, "not supported by this
-implementation".
+The company, host and preferences queries answer from the company file too: its preferences are a new
+file's, with account numbers, class tracking, inventory and estimates on, one currency and sales tax off,
+and they can't be changed. Requests it doesn't model yet, such as reports, are answered with status 1030,
+"not supported by this implementation".
 
 Reset it to the starting data at any time:
 

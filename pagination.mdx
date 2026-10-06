@@ -111,7 +111,7 @@ Bringing a company file's lists into your app the first time can go either way:
   `webhook_url` as a `workflow_run.notification` (`customers_page`, `vendors_page`, `items_page`) -- one at a
   time, in order, waiting for your `2xx` before the next. `workflow_run.completed` arrives last, with how
   many of each were sent, so it means the import is complete. Best when you want the lists in a fixed order,
-  one run to watch, and a single "done". You can edit the workflow to include whichever entities you'd like to import.
+  one run to watch, and a single "done". You can edit the workflow to include whichever entities you'd like to import. For one query of your own -- a filter, a date range, a single customer's transactions -- clone `stream_query` instead and pass the query as its input.
 
 ```bash
 curl -u "$QUBE_API_KEY:" -X POST \
@@ -138,4 +138,6 @@ different fields, or each page on to a workflow of your own. See
 - **Import once, then sync changes.** After the first full import, filter on the modified date so each
   sync only fetches what changed. A list query (`customers`) takes `from_modified_date` directly; a
   transaction query (`invoices`) takes `modified_date_range_filter[from_modified_date]`. See
-  [Making requests](/making-requests#query).
+  [Making requests](/making-requests#query). The `pull_changes` template does this for every kind you name,
+  sending each page to your app as `stream_query` does, and then the records deleted since the same date,
+  which a modified-date filter can't find.

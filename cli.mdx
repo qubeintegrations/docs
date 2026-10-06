@@ -154,22 +154,22 @@ qube requests list --connection <id>              # another connection, this onc
     qube workflows templates                        # the shipped templates
     qube workflows install create_customer_safely --publish   # --as NEW_KEY installs a second copy
     qube workflows list
-    qube workflows show sync_order
+    qube workflows show create_invoice
     qube workflows validate ./chart.json            # check a chart without saving it; whether what it calls exists is checked on push
     qube workflows push ./chart.json --publish --notes "Handle vendors too"   # saved under the chart's top-level "key", which it must have
-    qube workflows publish sync_order --notes "Handle vendors too"
-    qube workflows versions sync_order
-    qube workflows usage sync_order                 # how to call it, as Markdown
+    qube workflows publish create_invoice --notes "Handle vendors too"
+    qube workflows versions create_invoice
+    qube workflows usage create_invoice                 # how to call it, as Markdown
     qube workflows schema                           # the chart JSON Schema
-    qube workflows run sync_order --connection <id> --input @order.json \
+    qube workflows run create_invoice --connection <id> --input @order.json \
       --wait                                        # until it ends or needs a decision; --version published|working|N on sandbox
     qube workflows runs <connection>                # runs on a connection
     qube workflows runs <connection> <run> --events # one run's event log; --after SEQ for the next page
     qube workflows decide <connection> <run> rename --data '{"name": "Riverbend Electric LLC"}'
     qube workflows cancel <connection> <run> --reason "Wrong customer"
     qube workflows delete-run <connection> <run>    # an ended run and its history
-    qube workflows unpublish sync_order
-    qube workflows delete sync_order
+    qube workflows unpublish create_invoice
+    qube workflows delete create_invoice
     ```
     If the app already has a workflow at that key, the install is refused with `409` (`key_taken`), and so
     is a second `POST /workflow-templates/{key}/install`. `--replace` (`"replace": true` in the API)

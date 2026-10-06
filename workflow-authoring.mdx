@@ -82,7 +82,10 @@ stateDiagram-v2
     `input` declares what a run is started with, and a run whose input doesn't match is refused before
     anything is sent. Each input has a `type` (`string`, `number`, `boolean`, `object`, `array` or
     `operation`) and optionally `required`, a `description` and an `example`. Add `"list": true` for a list
-    of them.
+    of them. The example is what the usage contract's start body and the dashboard's Run drawer show, in the
+    input's own JSON type. An operation input needs none: its example is built from the operation. Nor does a
+    list of objects a `workflow` state runs through one at a time: its example is one element of what that
+    workflow takes.
 
     An input of `"type": "operation"` accepts exactly the body that operation's REST endpoint takes. Here,
     `customer` is anything you could `POST /customers`, validated the same way. `only` narrows it to the
@@ -109,18 +112,21 @@ stateDiagram-v2
     `success` QuickBooks warned about carries `response.warning`, its `code` and `message`, such as `530`
     for a field it saved the record without ([Warnings](/error_handling#quickbooks-said-yes-with-a-warning)). If
     QuickBooks never answers, the run [settles it](/workflows#lost-answers) before the state raises
-    anything: `success` as if the answer had arrived, with `response.settled` saying how, or `error` with
+    anything: `success` as if the answer had arrived, with `response.settled` saying how and
+    `response.evidence` on what grounds, or `error` with
     `response.error.type` set to `unsettled` or `no_response`. `"settle": false` skips that: a lost answer
     raises `no_response` at once, with `response.error.reason` saying why and, for an add,
-    `response.error.external_guid`, the GUID it was sent with, so the chart can do the looking itself, as
-    `sync_order` does for its invoice ([Lost answers](/workflows#lost-answers)). An update may
+    `response.error.external_guid`, the GUID it was sent with, so the chart can do the looking itself
+    ([Lost answers](/workflows#lost-answers)). An update may
     leave `edit_sequence` out: the run reads the record first, and `on_conflict` (`ask`, the default,
     `overwrite` or `fail`) says what happens when it changed after that read
     ([Conflicts](/workflows#conflicts)). `qbxml_version` defaults to `16.0`.
 
     **Paging.** With `"paginate": true`, a query goes through every result, `page_size` (1–200, default 100)
-    at a time. Every list and transaction query that QuickBooks can iterate pages this way: `customer.query`,
-    `vendor.query`, `item.query`, `invoice.query` and the rest. It raises `page` for each page (`response.data` that page, `response.page` its number,
+    at a time. Customers, vendors, items and every transaction query page this way; a query QuickBooks
+    doesn't iterate (accounts, classes and the other short lists, the deleted-records queries, the company
+    queries, reports) answers whole and arrives as page 1 with `more` false, so the same chart works over
+    it. It raises `page` for each page (`response.data` that page, `response.page` its number,
     `response.more` whether more follow), and `success` once every page is in (`response.count` records
     over `response.pages` pages). Handle `page` by processing the page and coming back to the query, which
     delivers the next one; a `page` nothing handles is skipped. The pages together can be counted or read
@@ -190,8 +196,8 @@ stateDiagram-v2
     - `{"$find": "${response.data}", "as": "invoice", "where": <condition>}` is the first element for which
       the condition holds, with the element at `each.invoice`, or nothing:
       `{"$find": "${response.data}", "as": "invoice", "where": {"path": "each.invoice.external_guid", "op":
-      "eq", "value": "${vars.guid}"}}` picks out the invoice carrying a GUID, which is how `sync_order`
-      recognises an invoice it added.
+      "eq", "value": "${vars.guid}"}}` picks out the invoice carrying a GUID, which is how a chart that looks
+      for a lost add itself recognises the one it sent.
   </Accordion>
   <Accordion title="Outcomes" icon="flag-checkered">
     `completed` and `failed` always exist. Declare more under `outcomes`, each with an optional
@@ -220,9 +226,9 @@ guide below.
 ## Calling other workflows
 
 A `workflow` state runs another workflow of the same app as one step, with `input` rendered from this run.
-Prefer it to copying another chart's states. `sync_order` is built this way:
+Prefer it to copying another chart's states. `create_invoice` is built this way:
 
-```json sync_order.json (two of its states)
+```json create_invoice.json (two of its states)
 "create_customer": {
   "type": "workflow",
   "workflow": "create_customer_safely",
@@ -254,7 +260,7 @@ Prefer it to copying another chart's states. `sync_order` is built this way:
   `response.data` and the outcome in `response.outcome`. A called workflow's `cancelled` is a success
   like any other, which is why `create_customer` branches on it.
 - It raises `error` when the called workflow fails, with `response.error.message` and `response.outcome`
-  set to `failed` or the named failure. `sync_order` doesn't handle `renames_exhausted`, so its root
+  set to `failed` or the named failure. `create_invoice` doesn't handle `renames_exhausted`, so its root
   `error → failed` ends the order with the called workflow's message.
 - With `each`, it runs the workflow once per element of the list, one at a time, in order, at most 200.
   `input` is rendered per element, with the element at `each.<as>` (`as` defaults to `item`), its position
@@ -307,7 +313,9 @@ isn't allowed on such an input. A templated `operation` can be built from any va
 If it renders to something that isn't an operation, the run fails and says what it got.
 
 That is exactly the shipped `find_or_create` (a `find` and a `create` pair) and `resolve` (a stored `id`, a
-`by_name` query, and optionally `candidates` and `create`). Start from those rather than writing the states
+`by_name` query, and optionally `candidates`), and likewise `upsert` (those plus `create` and `update`
+pairs), `resolve_transaction` (a `query` pair plus the `txn_id`, `ref_number` or `external_guid` the app
+holds) and `stream_query` (one `query` pair to page). Start from those rather than writing the states
 again. A chart for one record type is then a single `workflow` state passing two operations. Here is
 `find_or_create_item`'s, once its `pick` has the add to send: the `item` it was sent, an
 `{"operation": "item_other_charge.create", "params": {...}}` pair for any kind of item, or one it builds
