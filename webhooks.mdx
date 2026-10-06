@@ -357,7 +357,7 @@ A workflow can hand your app data while it runs, from a [`notify` state](/workfl
   #3 to the app after 10 attempts: …". Data over 4 MB is never sent (`too_large`): send fewer records at
   a time, a smaller `page_size`.
 - **A `webhook_url` is required** to start a workflow that has a `notify` state, or calls one that has:
-  without one the start is refused with [`422 webhook_url_required`](/error_handling#when-qube-sync-refuses-a-request).
+  without one the start is refused with `422 webhook_url_required`.
 - `summary.notifications` on the ending counts what was `sent` and what `failed`.
 
 - **Retries** work as above, up to 5 attempts, and every attempt is recorded in the run's event log as

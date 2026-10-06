@@ -201,8 +201,7 @@ test suite, not on your customer's PC. You get `400` and nothing is queued:
 ```
 
 A connection that doesn't exist or belongs to another app answers `404`, and a missing or wrong API key
-answers `401`. Every refusal has the one key `errors`; [Error handling](/error_handling#when-qube-sync-refuses-a-request)
-lists the shapes it takes.
+answers `401`. Every refusal has the one key `errors`.
 
 ## Ordering, dependencies and retries
 
@@ -214,6 +213,76 @@ lists the shapes it takes.
   queuing again.
 - **Don't resend a request that's `retryable`.** QuBe Sync is already retrying it. See
   [Error handling](/error_handling).
+
+## Sending qbXML yourself
+
+When no operation expresses the request you need, you already have the qbXML (from an older integration,
+or from Intuit's own examples), or you want QuickBooks to run several requests together, queue the qbXML
+as it is. The JSON operations above stay the usual path: they check each field by name, and you never
+write XML.
+
+```bash
+curl -u "$QUBE_API_KEY:" -X POST \
+  "https://qubesync.com/api/v2/connections/$CONN_ID/queued-requests?webhook_url=$WEBHOOK_URL" \
+  -H "Content-Type: application/json" \
+  -d '{"request_xml": "<?xml version=\"1.0\" encoding=\"utf-8\"?><?qbxml version=\"16.0\"?><QBXML><QBXMLMsgsRq onError=\"stopOnError\"><CustomerQueryRq requestID=\"1\"><MaxReturned>10</MaxReturned></CustomerQueryRq></QBXMLMsgsRq></QBXML>"}'
+```
+
+`request_xml` is the whole document, and it's checked before anything is queued. The first of these rules
+it breaks answers `422`, with `errors.request_xml` saying which:
+
+1. It has no DOCTYPE. qbXML doesn't use one.
+2. It declares its qbXML version, such as `<?qbxml version="16.0"?>`, and the version is 13.0, 14.0, 15.0
+   or 16.0.
+3. It is valid against that version's qbXML schema.
+4. `<QBXML>` holds only `<QBXMLMsgsRq>`, with at least one request inside it.
+5. In a batch (two or more requests), no request has an `iterator` attribute. Queue an iterator query on
+   its own.
+6. `onError` is `stopOnError` or `continueOnError`. QuickBooks Desktop refuses `rollbackOnError` for the
+   whole envelope.
+
+```json 422 Unprocessable Entity
+{ "errors": { "request_xml": ["CustomerQueryRq has an iterator: queue an iterator query on its own, not in a batch"] } }
+```
+
+The body takes `request_xml` and nothing else, and `webhook_url` goes in the query string as for every
+call. The answer arrives at your `webhook_url` like any other, with QuickBooks' own answer in
+`response_xml`. One request answers exactly as an operation does: `response_json` is the same
+`{status, data}` summary, and a request QuickBooks refuses ends `error`. An iterator query
+(`iterator="Start"` with `MaxReturned`) on its own pages as usual, each page its own webhook. See
+[Pagination](/pagination).
+
+### A batch
+
+Put several requests in one `<QBXMLMsgsRq>` and QuickBooks runs them in order, in one go. `response_json`
+then lists every request's outcome, in the order you sent them:
+
+```json response_json for a batch (abridged)
+{
+  "status": "error",
+  "responses": [
+    { "request": "CustomerAddRq", "request_id": "1", "status": "success",
+      "data": { "list_id": "80000021-1790470623", "full_name": "Lakeside Dental" } },
+    { "request": "ItemServiceAddRq", "request_id": "2", "status": "error",
+      "error": { "code": 3100, "type": "name_in_use", "message": "The name \"Consulting\" of the list element is already in use." } },
+    { "request": "InvoiceAddRq", "request_id": "3", "status": "not_processed" }
+  ]
+}
+```
+
+Each entry has `request` (the request's name), `request_id` (its `requestID`, or `null`) and `status`. A
+request QuickBooks ran or refused is `success` or `error`, with the same `data`, `message`, `warning` or
+`error` as a single request's summary. `not_processed` is a request QuickBooks skipped: with
+`onError="stopOnError"` it stops at the first request that fails and answers each one after it "The
+request has not been processed." (status 3231), so those are `not_processed`. With
+`onError="continueOnError"` it carries on and runs each one. A 3231 that doesn't follow an earlier failure
+is QuickBooks declining that request itself, because the company file's edition or preferences don't
+allow it, so it's an `error`. The top-level `status` is `success` only when every entry is.
+
+A batch QuickBooks answered is `response_received`, whatever its entries say, because some of its requests
+may have gone through: in the example above, the customer was added. Look at the entries to see what
+happened to each request, and don't resend the batch. Queue again only the requests that need it. The
+[API reference](/api-reference/v2/queued-requests/queue-a-qbxml-request) has the full shape.
 
 ## Handling the response
 

@@ -53581,7 +53581,7 @@
                   "type": "integer"
                 },
                 "paginate": {
-                  "description": "Page through a query's results: the state raises `page` once per page (response.data that page's records, response.page its number from 1, response.more whether more follow), then `success` once every page is in (response.data the page set, response.count and response.pages its size). Only on a single `operation` that supports an iterator; `params` may not also set `iterator` or `max_returned`.",
+                  "description": "Page through a query's results: the state raises `page` once per page (response.data that page's records, response.page its number from 1, response.more whether more follow), then `success` once every page is in (response.data the page set, response.count and response.pages its size). Only on a single `operation` that is a query (a create, update, delete or other operation has no results to page through, and one named by reference that renders to such fails the run before it is sent); `params` may not also set `iterator` or `max_returned`. A query QuickBooks does not iterate (the short lists such as account.query, the deleted-records queries, the company, preferences and host queries, the reports) is sent as it is and answers whole, which arrives as page 1 with `more` false, so a chart written for pages works over any query.",
                   "type": "boolean"
                 },
                 "params": {
@@ -59593,7 +59593,9 @@
           "description": {
             "type": "string"
           },
-          "example": {},
+          "example": {
+            "description": "An example value, in the input's own JSON type: a string, a number, an object, or for a list the whole list. It is what the usage contract's start body and the dashboard's Run drawer show. An operation input needs none: its example is built from the operation. Nor does a list of objects a workflow state runs through (each: ${input.<name>}): its example is one element of what that workflow takes."
+          },
           "list": {
             "default": false,
             "description": "A list of what the rest of the declaration describes: with type operation, a list of that operation's bodies. The run input then takes an array, and each element is validated on its own.",
@@ -72442,6 +72444,31 @@
             "type": "object"
           }
         ]
+      },
+      "QuickBooksError": {
+        "description": "QuickBooks refused the request: its own status code and message.",
+        "properties": {
+          "code": {
+            "description": "QuickBooks' own statusCode. The stable thing to branch on.",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "message": {
+            "description": "QuickBooks' own statusMessage.",
+            "type": "string"
+          },
+          "type": {
+            "description": "A stable name for `code`, such as `invalid_object_id` for 3000, when QuBe Sync recognises it. Absent otherwise. What each means and how to handle it: [Error handling](https://docs.qubesync.com/error_handling#quickbooks-said-no).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object"
       },
       "createAccount_response_json": {
         "description": "QuBe Sync's summary of QuickBooks' answer. Only an `Error` severity from QuickBooks is `status: \"error\"` (and makes the request's `state` `error`), so a query that matched nothing is still `success`. A `Warn` severity is a `success` with `warning` beside it.",
@@ -92349,7 +92376,7 @@
         ]
       },
       "WorkflowRunSummary": {
-        "description": "What a finished run did -- a workflow it calls runs as part of it, so what that workflow did is in these lists too, where the call sits in the run's order, under its path (`<calling state> / <state>`). Cancelling never undoes anything in QuickBooks: `side_effects` is what the run had already changed.",
+        "description": "What a finished run did -- a workflow it calls runs as part of it, so what that workflow did is in these lists too, where the call sits in the run's order, under its path (`<calling state> / <state>`). Cancelling never undoes anything in QuickBooks: `side_effects` is what the run had already changed, and `unconfirmed` what it may have.",
         "properties": {
           "calls": {
             "description": "Every workflow the run called, the ones those called included, in order: the calling state's path, the element when that state runs once per item, the workflow it called and how that ended. What each did is in the lists above.",
@@ -92470,9 +92497,19 @@
             "type": "object"
           },
           "requests": {
-            "description": "Every QuickBooks request the run sent, in order. `status` is `success`, `error`, or `in_flight` for one already sent when the run was cancelled (it may still complete). A paginated query is one entry, with `pages`.",
+            "description": "Every QuickBooks request the run sent, in order. `status` is `success`, `error`, or `in_flight` for one already sent when the run was cancelled (it may still complete). A paginated query is one entry, with `pages`. A request whose answer was lost and that was then found applied reads as `success`, with `settled` and the record found: whether the run's own check found it, or a later query of the chart's own answered with the record the add carried (its `external_guid`, or for a list add sent without one, its full name), which `found_by` names. A change whose answer was lost and that nothing settled keeps `error` and has `unconfirmed`.",
             "items": {
               "properties": {
+                "evidence": {
+                  "description": "With `settled`, when the run settled it itself: on what grounds, in a sentence -- what the check looked at, what came back and what that means, such as `of 2 candidates with reference number \"1044\", one carries the GUID sent (txn_id 2-1), so the add was applied`. The same sentence is `response.evidence` in the chart and on the run's `settled` event.",
+                  "example": "of 2 candidates with reference number \"1044\", one carries the GUID sent (txn_id 2-1), so the add was applied",
+                  "type": "string"
+                },
+                "found_by": {
+                  "description": "Only on an add whose answer was lost and that the chart's own lookup found afterwards (`settle: false`): the state whose answer carried the record the add was sent with. The add reads as `success`, with that record's identifiers, and is a side effect.",
+                  "example": "look_for_invoice",
+                  "type": "string"
+                },
                 "identifiers": {
                   "description": "Whichever of `list_id`, `txn_id`, `full_name` and `ref_number` QuickBooks returned for the record.",
                   "properties": {
@@ -92502,6 +92539,30 @@
                   "description": "Only for a paginated query: how many pages it took. `status` is how the last one went.",
                   "type": "integer"
                 },
+                "role": {
+                  "description": "Only for a request the run sent on its own to settle a lost answer or a conflict: `settle` a check, `resend` the request again, `reapply` or `overwrite` an update sent again with the current edit sequence, `prepare` the read before an update. Absent for the state's own request.",
+                  "enum": [
+                    "prepare",
+                    "settle",
+                    "resend",
+                    "reapply",
+                    "overwrite"
+                  ],
+                  "type": "string"
+                },
+                "settled": {
+                  "description": "Only on a state's own request whose answer was lost, or that met a conflict: how the run settled it, as `response.settled` says. `found` is also what an add reads when a later query of the chart's own found it (`found_by`).",
+                  "enum": [
+                    "found",
+                    "already_deleted",
+                    "already_current",
+                    "resent",
+                    "reapplied",
+                    "overwritten",
+                    "kept"
+                  ],
+                  "type": "string"
+                },
                 "state": {
                   "description": "Where it happened, as a path from this run: a state of this workflow, or `<calling state> / <state>` inside a workflow it calls.",
                   "example": "create_customer / try_create",
@@ -92515,6 +92576,10 @@
                   ],
                   "type": "string"
                 },
+                "unconfirmed": {
+                  "description": "Only `true`, on a create, update, delete or execute QuickBooks never answered (its computer lost its connection, or QuickBooks or the Web Connector was closed, while it had the request; nothing reports an error) that the run neither found applied nor sent again. It may or may not have changed QuickBooks; it is listed under `unconfirmed`, not `side_effects`.",
+                  "type": "boolean"
+                },
                 "workflow": {
                   "description": "The key of the workflow whose state that is.",
                   "type": "string"
@@ -92525,9 +92590,13 @@
             "type": "array"
           },
           "side_effects": {
-            "description": "The successful creates, updates, deletes and executes, wherever in the run they happened.",
+            "description": "The successful creates, updates, deletes and executes, wherever in the run they happened: the `requests` entries with `status` `success`. One whose answer was lost and that was found applied afterwards is here too, with `settled`.",
             "items": {
               "properties": {
+                "evidence": {
+                  "description": "With `settled`, when the run settled it itself: on what grounds, in a sentence, as the request's `evidence` says.",
+                  "type": "string"
+                },
                 "identifiers": {
                   "description": "Whichever of `list_id`, `txn_id`, `full_name` and `ref_number` QuickBooks returned for the record.",
                   "properties": {
@@ -92553,6 +92622,16 @@
                 "operation": {
                   "type": "string"
                 },
+                "settled": {
+                  "description": "Only when QuickBooks' answer was lost and the change was found applied afterwards, by the run's own check or the chart's own lookup: how, as the request's `settled` says.",
+                  "enum": [
+                    "found",
+                    "already_deleted",
+                    "already_current",
+                    "kept"
+                  ],
+                  "type": "string"
+                },
                 "state": {
                   "description": "Where it happened, as a path from this run: a state of this workflow, or `<calling state> / <state>` inside a workflow it calls.",
                   "example": "create_customer / try_create",
@@ -92572,6 +92651,31 @@
             "example": "create_customer / resolve_conflict.ask_about_customer",
             "nullable": true,
             "type": "string"
+          },
+          "unconfirmed": {
+            "description": "Only when there is one: the creates, updates, deletes and executes QuickBooks never answered that the run neither found applied nor sent again -- the chart asked your app and it picked another record, say, or the run failed or was cancelled first. Each may or may not have changed QuickBooks, so it is not in `side_effects`: check QuickBooks before sending it again. The `requests` entry is the same, with `unconfirmed`.",
+            "items": {
+              "properties": {
+                "item_index": {
+                  "description": "Only inside an element of a state that runs a workflow once per item: which element (0-based).",
+                  "type": "integer"
+                },
+                "operation": {
+                  "type": "string"
+                },
+                "state": {
+                  "description": "Where it was sent, as a path from this run: a state of this workflow, or `<calling state> / <state>` inside a workflow it calls.",
+                  "example": "add_invoice",
+                  "type": "string"
+                },
+                "workflow": {
+                  "description": "The key of the workflow whose state that is.",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
           }
         },
         "type": "object"
@@ -97986,6 +98090,23 @@
             "type": "object"
           }
         ]
+      },
+      "QuickBooksWarning": {
+        "description": "Present only when QuickBooks answered with a `Warn` severity: it carried the request out but has something to say about it, such as `530` for a field it did not support and left out.",
+        "properties": {
+          "code": {
+            "description": "QuickBooks' own statusCode.",
+            "type": "integer"
+          },
+          "message": {
+            "description": "QuickBooks' own statusMessage.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "type": "object"
       },
       "listCustomDetailReports_response_json": {
         "description": "QuBe Sync's summary of QuickBooks' answer. Only an `Error` severity from QuickBooks is `status: \"error\"` (and makes the request's `state` `error`), so a query that matched nothing is still `success`. A `Warn` severity is a `success` with `warning` beside it.",
@@ -106460,7 +106581,7 @@
             "type": "array"
           },
           "request_xml": {
-            "description": "The qbXML request compiled from the operation and its parameters",
+            "description": "The qbXML sent to QuickBooks: compiled from the operation and its parameters, or as written for `POST /connections/{connection_id}/queued-requests`.",
             "type": "string"
           },
           "response_json": {
@@ -117373,6 +117494,253 @@
           }
         ],
         "summary": "List queued requests",
+        "tags": [
+          "Queued Requests"
+        ]
+      },
+      "post": {
+        "description": "Queues qbXML you wrote, sent to QuickBooks as it is: a request no operation expresses, qbXML you already have, or several requests QuickBooks should run together in one envelope. The JSON operations are the usual path: they check each parameter by name and need no qbXML. The body takes `request_xml` and nothing else, so anything more (v1's `queued_request` wrapper, `request_json`) is refused with `400`.\n\n`request_xml` is checked before anything is queued, and the first rule it breaks answers `422`:\n\n1. It has no DOCTYPE: qbXML doesn't use one.\n2. It declares its qbXML version, such as `<?qbxml version=\"16.0\"?>`, and the version is 13.0, 14.0, 15.0 or 16.0.\n3. It is valid against that version's qbXML schema.\n4. `<QBXML>` holds only `<QBXMLMsgsRq>`, with at least one request inside it.\n5. In a batch (two or more requests), no request has an `iterator` attribute: queue an iterator query on its own.\n6. `onError` is `stopOnError` or `continueOnError`. QuickBooks Desktop refuses `rollbackOnError` for the whole envelope.\n\nPass `webhook_url` and QuBe Sync POSTs the answer to it once QuickBooks has answered, as for any operation, and `response_xml` holds QuickBooks' own answer. One request answers exactly as an operation does: `response_json` is the same `{status, data}` summary, and a request QuickBooks refuses ends `error`. An iterator query (`iterator=\"Start\"` with `MaxReturned`), alone in its envelope, is paged as usual, a webhook per page.\n\nA batch's `response_json` is `{status, responses}`: one entry per request, in the order they were sent, with `request` (the request's name), `request_id` (its `requestID`, or `null`) and `status`. An answered entry is `success` or `error`, with the `data`, `message`, `warning` or `error` one request's summary has. `not_processed` is a request QuickBooks skipped: with `onError=\"stopOnError\"` QuickBooks stops at the first request that fails and answers every request after it \"The request has not been processed.\" (status 3231), so each of those is `not_processed`, while `continueOnError` carries on and runs each one. A 3231 that isn't after an earlier failure is QuickBooks declining that request itself (its edition or preferences don't allow it), so it's an `error`. The top-level `status` is `success` only when every entry is.\n\nA batch QuickBooks answered is `response_received`, whatever its entries say: some of its requests may have been carried out. Read the entries to see which, and don't resend the whole batch.",
+        "operationId": "createQueuedRequest",
+        "parameters": [
+          {
+            "description": "The connection to act on.",
+            "in": "path",
+            "name": "connection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Where QuBe Sync POSTs the answered request (this same document with `response_json` filled in), signed with `X-QUBE-Signature`. Send one with every request: it is how answers are delivered. Optional only so a script can queue and look up `links.self` by hand. It must be an absolute http or https URL. It may not contain a username or password, and in production it may not point at localhost or a private, loopback or link-local address.",
+            "in": "query",
+            "name": "webhook_url",
+            "required": false,
+            "schema": {
+              "format": "uri",
+              "maxLength": 2048,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "request_xml": {
+                    "description": "The whole qbXML document: the `<?qbxml version=\"...\"?>` declaration, then `<QBXML>`, then `<QBXMLMsgsRq>` holding one request. Sent to QuickBooks as it is.",
+                    "example": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<?qbxml version=\"16.0\"?>\n<QBXML>\n  <QBXMLMsgsRq onError=\"stopOnError\">\n    <CustomerQueryRq requestID=\"1\">\n      <MaxReturned>10</MaxReturned>\n    </CustomerQueryRq>\n  </QBXMLMsgsRq>\n</QBXML>",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "request_xml"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/QueuedRequest"
+                        },
+                        {
+                          "properties": {
+                            "response_json": {
+                              "anyOf": [
+                                {
+                                  "properties": {
+                                    "data": {
+                                      "description": "What QuickBooks returned, snake_cased, as an operation's `data` is: a list for a query, the record for an add or update."
+                                    },
+                                    "error": {
+                                      "$ref": "#/components/schemas/QuickBooksError"
+                                    },
+                                    "message": {
+                                      "description": "QuickBooks' own status message, when a success has no data to show (a query that matched nothing, say).",
+                                      "type": "string"
+                                    },
+                                    "status": {
+                                      "enum": [
+                                        "success",
+                                        "error"
+                                      ],
+                                      "type": "string"
+                                    },
+                                    "warning": {
+                                      "$ref": "#/components/schemas/QuickBooksWarning"
+                                    }
+                                  },
+                                  "required": [
+                                    "status"
+                                  ],
+                                  "title": "One request",
+                                  "type": "object"
+                                },
+                                {
+                                  "properties": {
+                                    "responses": {
+                                      "description": "One entry per request, in the order they were sent.",
+                                      "items": {
+                                        "properties": {
+                                          "data": {
+                                            "description": "What QuickBooks returned, snake_cased, as an operation's `data` is: a list for a query, the record for an add or update."
+                                          },
+                                          "error": {
+                                            "$ref": "#/components/schemas/QuickBooksError"
+                                          },
+                                          "message": {
+                                            "description": "QuickBooks' own status message, when a success has no data to show (a query that matched nothing, say).",
+                                            "type": "string"
+                                          },
+                                          "request": {
+                                            "description": "The request's element name, such as `CustomerQueryRq`.",
+                                            "type": "string"
+                                          },
+                                          "request_id": {
+                                            "description": "The request's `requestID`, or `null` when it had none.",
+                                            "type": [
+                                              "string",
+                                              "null"
+                                            ]
+                                          },
+                                          "status": {
+                                            "description": "`success` or `error` for a request QuickBooks ran or refused; `not_processed` for one it skipped (with `stopOnError`, every request after the first that failed).",
+                                            "enum": [
+                                              "success",
+                                              "error",
+                                              "not_processed"
+                                            ],
+                                            "type": "string"
+                                          },
+                                          "warning": {
+                                            "$ref": "#/components/schemas/QuickBooksWarning"
+                                          }
+                                        },
+                                        "required": [
+                                          "request",
+                                          "request_id",
+                                          "status"
+                                        ],
+                                        "type": "object"
+                                      },
+                                      "type": "array"
+                                    },
+                                    "status": {
+                                      "description": "`success` only when every entry is `success`.",
+                                      "enum": [
+                                        "success",
+                                        "error"
+                                      ],
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "status",
+                                    "responses"
+                                  ],
+                                  "title": "A batch",
+                                  "type": "object"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "description": "`null` until answered. One request: the `{status, data}` summary an operation's `response_json` is. A batch: `{status, responses}`, one entry per request."
+                            }
+                          },
+                          "type": "object"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Queued for the connection's Web Connector. Pass `webhook_url` and QuBe Sync POSTs the answer to it once QuickBooks has answered. `links.self` returns this document on demand, with `response_json` filled in.",
+            "headers": {
+              "location": {
+                "description": "The queued request's path, as in `links.self`.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "errors": "unknown parameter: \"request_json\""
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "A parameter this endpoint does not take: anything but `request_xml` and `webhook_url`. Nothing was queued."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "errors": {
+                    "detail": "Sandbox access is paused for this organization because the sandbox period expired and the organization does not currently have both active billing and a recent production connection. Please request an extension if you're still working on your integration or contact support if you have questions."
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "A sandbox app whose organization's sandbox access is paused. Nothing was queued."
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "errors": {
+                    "request_xml": [
+                      "CustomerQueryRq has an iterator: queue an iterator query on its own, not in a batch"
+                    ]
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`request_xml` or `webhook_url` failed validation, field by field, and nothing was queued: a `request_xml` that is missing or breaks one of the rules above, or a `webhook_url` that is not an absolute http or https URL, carries a username or password, is longer than 2048 characters, or (in production) points at localhost or a private address."
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Queue a qbXML request",
         "tags": [
           "Queued Requests"
         ]
@@ -171702,7 +172070,7 @@
             }
           }
         },
-        "description": "qbXML: `InvoiceAddRq`. The `invoice_add` wrapper from qbXML is also accepted.\n\nAdds an invoice: what a customer owes for a sale they didn't pay in full when it was made (a sale paid in full is a sales receipt). `customer_ref` is required. Each line in `invoice_line_add` names an `item_ref` and two of `quantity`, `rate` and `amount`; QuickBooks works out the third. An inventory item on an invoice lowers stock and posts its cost of goods sold. To invoice a sales order, link it with `link_to_txn_id`. The `sync_order` workflow template adds the customer and any missing items first.\n\nIn QuickBooks, invoices and estimates use similar fields, and an estimate can be converted into an invoice after the customer accepts the estimate. However, in the SDK, there is currently no ability to create an invoice directly from an estimate (you can’t link an invoice to an estimate).\n\nIf you Add an invoice that has an inventory item on it, QB will automatically calculate COGS and post it to the COGS account. (The inventory item will need to be setup to post to the COGS account and must have a unit cost in it.) However, notice that such an InvoiceAdd has sales prices, not cost, so the Add isn’t impacting the cost of the item. The cost of the item is only affected by purchases (bills and item receipts) sales and inventory adjustments.\n\nSee also: [Inventory costing](https://docs.qubesync.com/quickbooks-notes#inventory-costing), [Line item taxes](https://docs.qubesync.com/quickbooks-notes#line-item-taxes).\n\nIntuit's reference: [InvoiceAdd](https://developer.intuit.com/app/developer/qbdesktop/docs/api-reference/qbdesktop/invoiceadd).",
+        "description": "qbXML: `InvoiceAddRq`. The `invoice_add` wrapper from qbXML is also accepted.\n\nAdds an invoice: what a customer owes for a sale they didn't pay in full when it was made (a sale paid in full is a sales receipt). `customer_ref` is required. Each line in `invoice_line_add` names an `item_ref` and two of `quantity`, `rate` and `amount`; QuickBooks works out the third. An inventory item on an invoice lowers stock and posts its cost of goods sold. To invoice a sales order, link it with `link_to_txn_id`. The `create_invoice` workflow template adds the customer and any missing items first.\n\nIn QuickBooks, invoices and estimates use similar fields, and an estimate can be converted into an invoice after the customer accepts the estimate. However, in the SDK, there is currently no ability to create an invoice directly from an estimate (you can’t link an invoice to an estimate).\n\nIf you Add an invoice that has an inventory item on it, QB will automatically calculate COGS and post it to the COGS account. (The inventory item will need to be setup to post to the COGS account and must have a unit cost in it.) However, notice that such an InvoiceAdd has sales prices, not cost, so the Add isn’t impacting the cost of the item. The cost of the item is only affected by purchases (bills and item receipts) sales and inventory adjustments.\n\nSee also: [Inventory costing](https://docs.qubesync.com/quickbooks-notes#inventory-costing), [Line item taxes](https://docs.qubesync.com/quickbooks-notes#line-item-taxes).\n\nIntuit's reference: [InvoiceAdd](https://developer.intuit.com/app/developer/qbdesktop/docs/api-reference/qbdesktop/invoiceadd).",
         "operationId": "createInvoice",
         "parameters": [
           {
@@ -252425,7 +252793,7 @@
       "name": "Connections"
     },
     {
-      "description": "Listing the requests queued on a connection, and discarding one the app no longer wants. A `webhook_url` on each request is the integration path (see the Webhooks guide) -- this is for a dashboard, a script, or catching up after downtime.",
+      "description": "Queueing qbXML you wrote yourself, listing the requests queued on a connection, and discarding one the app no longer wants. A `webhook_url` on each request is the integration path (see the Webhooks guide): the listing is for a dashboard, a script, or catching up after downtime.",
       "name": "Queued Requests"
     },
     {
