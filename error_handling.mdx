@@ -10,51 +10,12 @@ a small set of states, each with a clear next step, and gives you a message you 
 
 ```mermaid
 flowchart LR
-  A{"state"} -- "response_received" --> OK["Apply the data"]
-  A -- "error" --> C{"error_type"}
+  A{"state"} -- "error" --> C{"error_type"}
   C -- "business" --> D["Branch on the<br/>QuickBooks code"]
   C -- "other" --> E["Log it; ask support<br/>if it repeats"]
   A -- "retryable" --> F["Show user_message;<br/>don't resend"]
   A -- "timed_out" --> G["Check before<br/>resending a change"]
-  A -- "discarded" --> H["Nothing to do"]
 ```
-
-## When QuBe Sync refuses a request
-
-Before anything reaches QuickBooks, QuBe Sync can refuse the request itself: a wrong API key, a
-connection that isn't yours, a parameter the operation doesn't take, a record that fails validation.
-Those answers are `4xx` with one key, `errors`, whose shape says what went wrong:
-
-| `errors` is | When | Example |
-| --- | --- | --- |
-| A sentence | The endpoint explains a refusal in words: `400` for a parameter the operation doesn't take, `409` when a key is taken or a run has already ended, `422` when a production connection is asked for a working copy or a workflow that sends your app data is started without a `webhook_url` (`webhook_url_required`). | `{"errors": "unknown parameter: \"emial\""}` |
-| `{"detail": "..."}`, with a `code` when there is one | `403` for something the key may not do, `404` for a thing that doesn't exist or isn't yours, and a CLI session's `401`. | `{"errors": {"detail": "Not Found"}}` |
-| An object of fields, each a list of messages | `422` for a record that fails validation, such as a connection with a `redirect_url` that carries a query string, or a request or workflow run whose `webhook_url` QuBe Sync [can't send to](/webhooks#where-webhooks-can-go). Nothing was saved. | `{"errors": {"redirect_url": ["must not have a query string"]}}` |
-| A list of `{"path", "message"}` | A workflow run's input, or a chart, with the path of each problem. | `{"errors": [{"path": "input.customer", "message": "is required"}]}` |
-
-Starting a [workflow](/workflows) that sends your app data (a `notify` state, its own or in a workflow it
-calls) without a `webhook_url` is refused before the run exists: `422`, with a sentence that starts
-`webhook_url_required:` and names what it would send, such as
-`{"errors": "webhook_url_required: this workflow sends data to your app (customers_page at send_customers), so a run of it needs a webhook_url to send it to"}`.
-Start it again with a `webhook_url` ([Sending your app data](/workflows#sending-your-app-data)).
-
-A `webhook_url` QuBe Sync can't send to is refused the same way on every endpoint that takes one:
-`422`, field by field, one message per problem, and nothing is queued or started. It has to be an
-absolute `http` or `https` URL with no username or password, and it can't point at `localhost` or a
-private address ([Where webhooks can go](/webhooks#where-webhooks-can-go)):
-
-```json
-{"errors": {"webhook_url": ["may not point at a private or local address"]}}
-```
-
-The other messages are `must be an http or https URL`, `must include a host name`,
-`may not contain a username or password`, `must have a port between 1 and 65535` and
-`must be at most 2048 characters`.
-
-One exception: a request without a usable API key gets a `401` Basic challenge with the plain-text body
-`Unauthorized`, not JSON. Branch on the status code first, then read `errors` for the message to log or
-show. The [API reference](/api-reference/introduction) documents the shape as `Error` on every refused
-response.
 
 ## The error object
 
