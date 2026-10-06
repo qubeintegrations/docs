@@ -118,6 +118,13 @@ The last four are final. [Error handling](/error_handling) covers what to do wit
 - **While QuickBooks is out of reach**, QuBe Sync spaces out the Web Connector's automatic runs (each wait
   double the last, up to 30 minutes) so it isn't retrying against a closed QuickBooks. A manual
   **Update Selected** is never held back.
+- **Realtime connections in a sandbox app slow down while idle.** After 10 minutes without a request, they
+  check in once a minute; after an hour, every 5 minutes. The session that picks up the next request brings
+  them back to every 10 seconds. To run a request at once, click **Update Selected**.
+- **The Web Connector shows "Update postponed by application"** whenever QuBe Sync has told it to wait.
+  Nothing is wrong: it checks in again on its own.
+- **A deleted connection's Web Connector** is told to check in only once a day until someone removes your
+  app from it. See [When a customer leaves](/onboarding#when-a-customer-leaves).
 - **Simulated** connections answer within a few seconds, with no Web Connector involved.
 
 ## Security

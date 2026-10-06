@@ -4,31 +4,12 @@ description: "Add a “Connect QuickBooks Desktop” button to your app. QuBe Sy
 icon: "plug"
 ---
 
-Connecting QuickBooks Desktop means installing a `.qwc` file in the Web Connector and typing a password on
-the computer that runs QuickBooks. That's easy to get wrong without help, so QuBe Sync hosts a step-by-step
-onboarding page for it. Your app creates the connection and sends your customer to that page, and they
-come back to your `redirect_url` when they're done.
+<Frame caption="The onboarding page your customer sees, with your app's name.">
+  <img src="/images/quickstart/onboarding-ready.png" alt="The onboarding page for My App Dev: the checklist with No selected for a QuickBooks server and all three items checked, beside a green message saying the customer is ready, then two steps, Download QWC File and Generate Password, each with screenshots of the Web Connector" />
+</Frame>
 
-```mermaid
-%%{init: {"sequence": {"width": 130, "actorMargin": 40, "mirrorActors": false}}}%%
-sequenceDiagram
-  autonumber
-  actor C as Customer
-  participant App as Your app
-  participant Q as QuBe Sync
-  participant WC as Web Connector
-  C->>App: Connect QuickBooks
-  App->>Q: POST /connections
-  Q-->>App: links.onboarding
-  App-->>C: redirect
-  C->>Q: checklist, .qwc, password
-  C->>WC: add .qwc, paste password
-  WC->>Q: first check-in
-  Q-->>C: back to redirect_url, state=connected
-```
 
-## Add the button
-
+## Add the "Connect to QuickBooks" button
 <Steps>
   <Step title="Create the connection">
     When your customer clicks the button, create a connection for them. Name it after their company, and
@@ -132,6 +113,14 @@ A connection's `last_connected_at` is the last time its Web Connector checked in
 settings page: if it's hours or days old, the computer running QuickBooks is probably off, the Web Connector
 isn't running, or the company file has moved. Requests keep waiting in the queue in the meantime. If they
 wait a week, QuBe Sync emails your organization's owners.
+
+## When a customer leaves
+
+[Delete the connection](/api-reference/v2/connections/remove-a-connection) and ask your customer to remove
+your app from their Web Connector (select it, then **Remove**). Deleting stops it counting toward your bill.
+
+Until your app is removed, the Web Connector keeps checking in on its own. QuBe Sync answers it as an invalid
+login ("Invalid password for username"), and tells it to check in only once a day.
 
 ## Build your own onboarding
 
