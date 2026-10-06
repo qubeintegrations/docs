@@ -409,7 +409,7 @@
       },
       "post": {
         "summary": "Queue a new request",
-        "description": "Creates a new queued request for processing by the QuickBooks integration. The QuickBooks request itself can be in either XML (`request_xml`) or JSON (`request_json`) format. If a webhook URL is provided, the system will send a POST request to that URL with the result when the request is completed.",
+        "description": "Creates a new queued request for processing by the QuickBooks integration. The QuickBooks request itself can be in either XML (`request_xml`) or JSON (`request_json`) format. If a webhook URL is provided, the system will send a POST request to that URL with the result when the request is completed. Only `request_xml`, `request_json` and `webhook_url` can be set: sending `state`, `webhook_state`, `iteration_state`, `api_version`, `response_json`, `response_xml`, `webhook_error`, `webhook_attempts`, `connection` or `error` is refused with `422` naming the field, and nothing is queued. QuBe Sync sets those as the Web Connector and QuickBooks handle the request.",
         "tags": [
           "Queued Requests"
         ],
