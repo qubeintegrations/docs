@@ -1,6 +1,6 @@
 ---
-title: "Pagination"
-description: "Import thousands of records without tracking iterators. Add iterator=true and each page of the answer arrives as its own webhook."
+title: "Auto-Pagination"
+description: "Import thousands of records with `iterator=true`."
 icon: "layer-group"
 ---
 
@@ -14,7 +14,12 @@ curl -u "$QUBE_API_KEY:" \
 ```
 
 QuBe Sync keeps asking QuickBooks for the next page until there are none left, and sends each page to your
-`webhook_url` as it arrives:
+`webhook_url` as it arrives.
+
+<Tip>
+    Using the `stream_query` [workflow](/workflows) guarantees pages get delivered in the correct order, even when there are
+    weird network latencies, your endpoint goes down, or any other situation that might disrupt the delivery order.
+</Tip>
 
 ```mermaid
 %%{init: {"sequence": {"width": 130, "actorMargin": 40, "mirrorActors": false}}}%%
@@ -35,17 +40,7 @@ sequenceDiagram
   Q->>App: page 3, "done"
 ```
 
-The diagram shows the order QuBe Sync sends the pages in. They can reach your endpoint in any order, although using a [Workflow](/workflows) can ensure delivery order.
-
-<Note>
-  An iterator pages a **filtered** query. A lookup by `list_id` or `full_name` (`txn_id` or `ref_number` on
-  a transaction query) gets every match back in one answer, so leave `iterator` out. QuickBooks refuses an
-  iterator alongside an id, so QuBe Sync answers `400` and queues nothing:
-
-  ```json 400 Bad Request
-  { "errors": "iterator pages a filtered query; with list_id every match comes back in one answer, so leave iterator out" }
-  ```
-</Note>
+The diagram shows the order QuBe Sync sends the pages in. They can reach your endpoint in any order, although using a [Workflow](/workflows) like `stream_query` can ensure delivery order.
 
 ## Telling pages apart
 
@@ -78,7 +73,7 @@ Every page's webhook has the same `id` (the request you queued) and its own `pag
 
 QuickBooks keeps an iteration only for the Web Connector session that started it. If that session ends
 before the last page (QuickBooks closes, the Web Connector is stopped, or the connection drops), QuickBooks
-can't pick up where it left off. The next page's webhook then has `state` `error`, with `error_type`
+can't pick up where it left off. The next page's webhook then has `state` `error`, with `error_type`:
 `quickbooks_connection_error` and a `user_message` saying so. Queue the query again to get the rest. It
 starts from the first page, so save records by their `list_id` or `txn_id` and the ones you already have
 are updated rather than duplicated.
