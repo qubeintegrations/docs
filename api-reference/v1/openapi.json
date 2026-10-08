@@ -3674,7 +3674,7 @@
     "/connections/{connection_id}/qwc": {
       "get": {
         "summary": "Get QWC file for a connection",
-        "description": "Returns a QWC file for the specified connection",
+        "description": "Returns a QWC file for the specified connection. The Web Connector lists it under the app's name followed by the connection's `name` in parentheses, and keeps it apart from other connections of the same app. Adding a newer file for the same connection replaces its entry.",
         "tags": [
           "Connections"
         ],

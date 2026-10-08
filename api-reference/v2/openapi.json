@@ -116818,7 +116818,7 @@
     },
     "/connections/{connection_id}/qwc": {
       "post": {
-        "description": "The QuickBooks Web Connector config file for this connection -- give it to the user to add to their Web Connector (see the Onboarding guide for the usual, hosted alternative).",
+        "description": "The QuickBooks Web Connector config file for this connection -- give it to the user to add to their Web Connector (see the Onboarding guide for the usual, hosted alternative). The Web Connector lists it under the app's name followed by the connection's `name` in parentheses, and keeps it apart from other connections of the same app. Adding a newer file for the same connection replaces its entry.",
         "operationId": "getConnectionQwc",
         "parameters": [
           {
