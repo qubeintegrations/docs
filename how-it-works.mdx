@@ -119,14 +119,28 @@ The last four are final. [Error handling](/error_handling) covers what to do wit
 ## Speed and scheduling
 
 - **Standard** connections are checked every 5 minutes, and **realtime** connections every 10 seconds.
-  Choose with `type` when you create the connection.
+  Choose with `type` when you create the connection. Every connection's Web Connector is set to run every
+  10 seconds; QuBe Sync tells a standard connection's to wait, so it picks up requests every 5 minutes. That's
+  why its **Last Result** often reads "Update postponed by application". It's normal. Leave **Auto-Run**
+  ticked and don't edit the schedule (**Every Min**) in the Web Connector: QuBe Sync controls it.
+- **You can switch a connection between standard and realtime** from its page in the dashboard. An upgrade
+  is billed as realtime from then on. A downgrade is scheduled for the end of the billing period and stays
+  billed as realtime until then. To slow a realtime connection right away without changing its bill, use
+  **Slow polling to every 5 minutes** there.
 - **Update Selected** in the Web Connector runs a sync immediately, whatever the schedule.
 - **While QuickBooks is out of reach**, QuBe Sync spaces out the Web Connector's automatic runs (each wait
   double the last, up to 30 minutes) so it isn't retrying against a closed QuickBooks. A manual
   **Update Selected** is never held back.
+- **To see when a connection will next pick up requests**, read `next_check_in_expected_at` on the
+  connection (`GET /connections/{connection_id}` in v2), or the **Speed** card on its dashboard page.
+  `backing_off` is `true` while QuBe Sync is spacing the tries out because QuickBooks can't be reached. A
+  time more than a minute in the past means the check-in is late: a long session is still running, or the
+  Web Connector isn't running on the QuickBooks computer.
 - **Realtime connections in a sandbox app slow down while idle.** After 10 minutes without a request, they
   check in once a minute; after an hour, every 5 minutes. The session that picks up the next request brings
-  them back to every 10 seconds. To run a request at once, click **Update Selected**.
+  them back to every 10 seconds. To run a request at once, click **Update Selected**. The connection's page
+  says when this is why its next check-in is minutes away, and so does `next_check_in_reason`
+  (`sandbox_idle`) on the connection.
 - **The Web Connector shows "Update postponed by application"** whenever QuBe Sync has told it to wait.
   Nothing is wrong: it checks in again on its own.
 - **A deleted connection's Web Connector** is told to check in only once a day until someone removes your
