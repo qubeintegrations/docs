@@ -1,0 +1,197 @@
+/**
+ * A request as the docs show it everywhere the point is the call, not running it: the method and path
+ * in a header with a button that copies the curl command you'd run, then the query parameters and the
+ * JSON body in labelled sections.
+ *
+ *   <Request method="POST" path="/api/v2/connections/{connection_id}/invoices"
+ *            query={{ webhook_url: "https://your-app.example/webhooks/qube" }}
+ *            body={{ customer_ref: { full_name: "Riverbend Electric" } }} />
+ *
+ * `body` is an object, formatted for you, or a string shown as written (for a body with a `{...}`
+ * placeholder). With `file`, the curl command sends that file (`-d @file`) instead of the body shown.
+ * A `{name}` in `path` becomes `$NAME` in the curl command, `{connection_id}` becoming `$CONN_ID`.
+ * `label` is an optional caption above the request line. `auth={false}` is for a call that takes no API
+ * key, such as the MCP server's. Styles are in /style.css.
+ */
+export const Request = ({ method = "GET", path, query, body, file, label, auth = true }) => {
+  const [copied, setCopied] = useState(false);
+
+  // BEGIN shared: plain JS with no JSX. scripts/agent-blocks.mjs runs this text to write the plain-text
+  // version of each request that agents read, so the card, its copied curl and those blocks always agree.
+  // (It lives inside the component because Mintlify keeps only the exported component of a snippet.)
+  const WIDTH = 80;
+  const BASE = "https://qubesync.com";
+
+  // JSON the way the docs write it: a value stays on one line when it fits in 80 columns, else it
+  // breaks. `col` is the indent of the line it starts on and `lead` what's already on that line.
+  const inline = (v) => {
+    if (Array.isArray(v)) return "[" + v.map(inline).join(", ") + "]";
+    if (v !== null && typeof v === "object") {
+      return "{" + Object.entries(v).map(([k, x]) => JSON.stringify(k) + ": " + inline(x)).join(", ") + "}";
+    }
+    return JSON.stringify(v);
+  };
+
+  const fmt = (v, col, lead, force) => {
+    const flat = inline(v);
+    if (!force && lead + flat.length + 1 <= WIDTH) return flat;
+    const pad = " ".repeat(col + 2);
+    if (Array.isArray(v) && v.length) {
+      const rows = v.map((x, i) => pad + fmt(x, col + 2, pad.length) + (i < v.length - 1 ? "," : ""));
+      return ["[", ...rows, " ".repeat(col) + "]"].join("\n");
+    }
+    if (v !== null && typeof v === "object" && Object.keys(v).length) {
+      const entries = Object.entries(v);
+      const rows = entries.map(([k, x], i) => {
+        const key = pad + JSON.stringify(k) + ": ";
+        return key + fmt(x, col + 2, key.length) + (i < entries.length - 1 ? "," : "");
+      });
+      return ["{", ...rows, " ".repeat(col) + "}"].join("\n");
+    }
+    return flat;
+  };
+
+  // A body of one key stays on one line when it fits; any other opens up.
+  const formatJson = (v, col, lead) =>
+    fmt(v, col, lead, !(v !== null && typeof v === "object" && !Array.isArray(v) && Object.keys(v).length === 1));
+
+  // A string body is shown as written, less the indent it was typed with inside the MDX.
+  const dedent = (text) => {
+    const [first, ...rest] = text.split("\n");
+    const indents = rest.filter((l) => l.trim()).map((l) => l.match(/^ */)[0].length);
+    const cut = indents.length ? Math.min(...indents) : 0;
+    return [first, ...rest.map((l) => l.slice(Math.min(cut, l.match(/^ */)[0].length)))].join("\n");
+  };
+
+  // Everything a request is shown as: its query, its body as written, the curl command that sends it
+  // and the same request as plain HTTP.
+  const requestParts = ({ method = "GET", path, query, body, file, auth = true }) => {
+    const params = Object.entries(query || {});
+    const queryString = params.map(([k, v]) => k + "=" + v).join("&");
+    const hasBody = body !== undefined && body !== null;
+    const shown = !hasBody ? "" : typeof body === "string" ? dedent(body) : formatJson(body, 0, 0);
+
+    const env = (name) => "$" + (name === "connection_id" ? "CONN_ID" : name.toUpperCase());
+    const url = BASE + path.replace(/\{(\w+)\}/g, (_, name) => env(name));
+    const getWithParams = method === "GET" && params.length > 1;
+    const lines = auth ? ['-u "$QUBE_API_KEY:"'] : [];
+    if (getWithParams) lines.push("-G");
+    if (method !== "GET") lines.push("-X " + method);
+    lines.push('"' + (params.length && !getWithParams ? url + "?" + queryString : url) + '"');
+    if (getWithParams) params.forEach(([k, v]) => lines.push('--data-urlencode "' + k + "=" + v + '"'));
+    if (hasBody) {
+      lines.push('-H "Content-Type: application/json"');
+      const text = typeof body === "string" ? dedent(body) : formatJson(body, 2, 2 + 4);
+      lines.push(file ? "-d @" + file : "-d '" + text + "'");
+    }
+    const curl = "curl " + lines.join(" \\\n  ");
+    const http = method + " " + path + (queryString ? "?" + queryString : "") + (hasBody ? "\n\n" + shown : "");
+
+    return { params, queryString, hasBody, shown, curl, http };
+  };
+  // END shared
+
+  const { params, hasBody, shown, curl } = requestParts({ method, path, query, body, file, auth });
+
+  const copy = () => {
+    const text = curl;
+    const done = () => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, () => {});
+      return;
+    }
+    const area = document.createElement("textarea");
+    area.value = text;
+    document.body.appendChild(area);
+    area.select();
+    document.execCommand("copy");
+    document.body.removeChild(area);
+    done();
+  };
+
+  // A path or URL that has to wrap breaks at its slashes.
+  const breakable = (text) =>
+    text.split("/").flatMap((piece, i, all) => (i < all.length - 1 ? [piece, "/", <wbr key={i} />] : [piece]));
+
+  // The /api/v2 every path starts with recedes and {param} stands out, as :id does in the hero.
+  const prefix = path.startsWith("/api/v2") ? "/api/v2" : "";
+  const pathParts = path
+    .slice(prefix.length)
+    .split(/(\{\w+\})/)
+    .map((part, i) =>
+      /^\{\w+\}$/.test(part) ? (
+        <span key={i} className="qube-request-param">{part}</span>
+      ) : (
+        breakable(part)
+      )
+    );
+
+  const valueClass = (v) =>
+    typeof v === "number" ? "qube-request-number" : typeof v === "boolean" ? "qube-request-literal" : "qube-request-string";
+
+  const json = (text) => {
+    const out = [];
+    const re = /("(?:\\.|[^"\\])*")(\s*:)?|\b(true|false|null)\b|(-?\d+(?:\.\d+)?)|(\{\.\.\.\})/g;
+    let last = 0;
+    let m;
+    while ((m = re.exec(text))) {
+      if (m.index > last) out.push(text.slice(last, m.index));
+      const cls = m[1] ? (m[2] ? "qube-request-key" : "qube-request-string") : m[3] ? "qube-request-literal" : m[4] ? "qube-request-number" : "qube-request-literal";
+      out.push(<span key={m.index} className={cls}>{m[1] ? m[1] : m[0]}</span>);
+      if (m[2]) out.push(m[2]);
+      last = m.index + m[0].length;
+    }
+    if (last < text.length) out.push(text.slice(last));
+    return out;
+  };
+
+  return (
+    <div className="qube-request not-prose">
+      <div className="qube-request-head">
+        {label ? <span className="qube-request-label">{label}</span> : null}
+        <div className="qube-request-line">
+          <span className="qube-request-method">{method}</span>
+          <span className="qube-request-path">
+            {prefix ? <span className="qube-request-prefix">{breakable(prefix)}</span> : null}
+            {pathParts}
+          </span>
+          <button type="button" className="qube-request-copy" onClick={copy} aria-live="polite">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              {copied ? (
+                <polyline points="5 13 9 17 19 7" />
+              ) : (
+                <g>
+                  <rect x="9" y="9" width="11" height="11" rx="2" />
+                  <path d="M5 15V6a2 2 0 0 1 2-2h9" />
+                </g>
+              )}
+            </svg>
+            {copied ? "Copied" : "Copy as curl"}
+          </button>
+        </div>
+      </div>
+      {params.length ? (
+        <div className="qube-request-section">
+          <div className="qube-request-eyebrow">Query</div>
+          <dl className="qube-request-params">
+            {params.map(([k, v]) => [
+              <dt key={k + "-key"} className="qube-request-key">{k}</dt>,
+              <dd key={k + "-value"} className={valueClass(v)}>{breakable(String(v))}</dd>,
+            ])}
+          </dl>
+        </div>
+      ) : null}
+      {hasBody ? (
+        <div className="qube-request-section">
+          <div className="qube-request-eyebrow">Body</div>
+          <pre className="qube-request-code">
+            <code>{json(shown)}</code>
+          </pre>
+        </div>
+      ) : null}
+    </div>
+  );
+};

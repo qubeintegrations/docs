@@ -1,0 +1,195 @@
+/* A badge holds one identifier, such as a webhook's `state`: keep it on one line. */
+[data-badge="true"] {
+  white-space: nowrap;
+}
+
+/* Inline code in a badge keeps its monospace font and dark text, but not its own gray pill. */
+[data-badge="true"] code {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+}
+
+/* Highlighted lines in a code block take the theme's light green (--primary-light) for their fill and
+   edge. Wrap the block in <div className="highlight-info"> for the blue of an info badge, which reads as
+   "look here" without the red and green of a diff. */
+.highlight-info {
+  --primary-light: 37 99 235;
+}
+
+/* <Request> (snippets/request.jsx): a request as method and path in a header with a copy-as-curl button,
+   then its query and body in labelled sections. It sits like a code block and takes the same palette in
+   light and dark. */
+.qube-request {
+  --qr-bg: #fff;
+  --qr-line: rgb(238 242 240);
+  --qr-muted: #6b7280;
+  --qr-ink: #1f2937;
+  --qr-key: #1d4ed8;
+  --qr-string: #15803d;
+  --qr-number: #c2410c;
+  --qr-literal: #7e22ce;
+  --qr-btn-line: #e5e7eb;
+  --qr-btn-ink: #374151;
+  --qr-hover: rgba(0, 0, 0, 0.04);
+  --qr-mono: paperMono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  margin: 1rem 0;
+  overflow: hidden;
+  border: 1px solid var(--qr-line);
+  border-radius: 1rem;
+  background: var(--qr-bg);
+}
+
+.dark .qube-request {
+  --qr-bg: rgb(17 19 22);
+  --qr-line: rgba(255, 255, 255, 0.1);
+  --qr-muted: #9ca3af;
+  --qr-ink: #e5e7eb;
+  --qr-key: #93c5fd;
+  --qr-string: #86efac;
+  --qr-number: #fdba74;
+  --qr-literal: #d8b4fe;
+  --qr-btn-line: rgba(255, 255, 255, 0.14);
+  --qr-btn-ink: #d1d5db;
+  --qr-hover: rgba(255, 255, 255, 0.06);
+}
+
+.qube-request-head {
+  padding: 0.625rem 0.625rem 0.625rem 1rem;
+}
+
+.qube-request-label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--qr-muted);
+}
+
+/* The method, path and button in one row; the row wraps on a narrow screen. */
+.qube-request-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 1.65;
+}
+
+.qube-request-method,
+.qube-request-path,
+.qube-request-params,
+.qube-request-code {
+  font-family: var(--qr-mono);
+}
+
+/* A fixed width, so paths start in the same place whichever method a request has. */
+.qube-request-method {
+  flex: none;
+  min-width: 6ch;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--qr-key);
+}
+
+.qube-request-path {
+  flex: 1 1 12rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--qr-ink);
+}
+
+.qube-request-prefix {
+  color: var(--qr-muted);
+}
+
+.qube-request-copy {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.375rem;
+  margin-left: auto;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--qr-btn-line);
+  border-radius: 0.5rem;
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--qr-btn-ink);
+  cursor: pointer;
+}
+
+.qube-request-copy:hover {
+  background: var(--qr-hover);
+}
+
+.qube-request-copy:focus-visible {
+  outline: 2px solid var(--qr-key);
+  outline-offset: 2px;
+}
+
+.qube-request-section {
+  padding: 0.75rem 1rem 0.875rem;
+  border-top: 1px solid var(--qr-line);
+}
+
+.qube-request-eyebrow {
+  margin-bottom: 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--qr-muted);
+}
+
+.qube-request-params {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.1875rem 1.25rem;
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.65;
+}
+
+.qube-request-params dt,
+.qube-request-params dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.qube-request-code {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+  background: transparent;
+  font-size: 0.8125rem;
+  line-height: 1.65;
+  color: var(--qr-ink);
+}
+
+.qube-request-code code {
+  display: block;
+  background: none;
+  padding: 0;
+  white-space: pre;
+}
+
+.qube-request-param,
+.qube-request-literal {
+  color: var(--qr-literal);
+}
+
+.qube-request-key {
+  color: var(--qr-key);
+}
+
+.qube-request-string {
+  color: var(--qr-string);
+}
+
+.qube-request-number {
+  color: var(--qr-number);
+}
