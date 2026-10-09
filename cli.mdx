@@ -153,7 +153,7 @@ qube requests list --connection <id>              # another connection, this onc
     ```bash
     qube workflows templates                        # the shipped templates
     qube workflows install create_customer_safely --publish   # --as NEW_KEY installs a second copy
-    qube workflows list
+    qube workflows list                             # TEMPLATE: the template each came from, and whether it changed since
     qube workflows show create_invoice
     qube workflows validate ./chart.json            # check a chart without saving it; whether what it calls exists is checked on push
     qube workflows push ./chart.json --publish --notes "Handle vendors too"   # saved under the chart's top-level "key", which it must have
@@ -177,6 +177,11 @@ qube requests list --connection <id>              # another connection, this onc
     template's current chart, earlier versions kept, so a setup script can run the same install every
     time. `--as` (`as` in the API) installs a second copy under another key instead, and
     `qube workflows push` replaces a workflow with a chart file of your own.
+
+    A template can change after you install it. `qube workflows list` then says `update available` in
+    its TEMPLATE column (`update available (edited)` when you've changed the workflow too), and prints
+    the `install --replace` command that takes the current version. For an edited workflow that command
+    replaces your edits.
 
     See [Workflows](/workflows).
   </Accordion>

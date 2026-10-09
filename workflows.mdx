@@ -71,6 +71,22 @@ answer.
       `"replace": true` to replace the workflow and all its dependencies. To install a second copy instead, just use
       another key with `{"as": "new_key"}`.
     </Accordion>
+
+    <Accordion title="When a template changes" icon="code-compare">
+      Installing copies the template's chart into your app, so when we fix or extend a template, your workflow keeps
+      the chart it has until you install it again. `GET /api/v2/workflows` says when there's something to take: each
+      workflow's `template` names the template it came from, and `template.status` is `update_available` once that
+      template has changed. Install it again with `"replace": true`, plus `"publish": true` to make it live (and
+      `"as"` with your workflow's key, if you installed it under another one). From the CLI, that's
+      `qube workflows install KEY --replace --publish`.
+
+      `update_available_customized` means you've edited the workflow since you installed it, so replacing it
+      discards your edits: compare it with `GET /api/v2/workflow-templates/{key}` first. Each workflow a template
+      installs alongside it reports its own `template`.
+
+      In the dashboard, the Workflows page marks such a workflow **Template updated**, and its page offers
+      **Update to the current template**.
+    </Accordion>
   </Step>
   <Step title="Start a run">
     The input is the same body `POST /customers` takes, so a workflow is a drop-in for the request it
@@ -332,7 +348,7 @@ such as `{"operation": "customer.query", "params": {"full_name": ["Riverbend Ele
     | `upsert` | Finds a list record as `resolve` does (`id`, `by_name`, optional `candidates`) and sends your `update` to it with its ListID filled in; the engine reads the edit sequence first and asks before overwriting a record someone changed since. Nothing has the name: sends your `create` add instead, looking once more if the name was taken in between. | `resolve / ask`: `use` (with `list_id`), `none` (then the add goes out) or `cancel`. And the [conflict prompt](#conflicts) when the record changed after it was read | `updated`, `created`, `cancelled`; fails as `name_taken` when the update renames it to a name in use |
     | `push_records` | Runs `upsert` once per entry of `records` -- at most 200, each the `id`, `by_name`, `candidates`, `create` and `update` that `upsert` takes, records of different lists mixed -- one at a time, in order, in one run. A record QuickBooks refuses, or one that isn't a valid `upsert` input, is listed in `errors` and the next one goes. For a webhook per record, run `upsert` once per record instead. | Through `upsert`, for each record that asks | `completed` |
     | `resolve_transaction` | Finds a transaction by the `txn_id` your app stored, then by its `ref_number`, then by the filters your `query` carries (a customer, a date range), picking out the one carrying the `external_guid` your app kept from the add. One transaction with the number and no GUID to check is it; anything less sure is offered to your app. Without line items: read it whole by `txn_id` when you need them. | `ask`: `use` (with `txn_id`), `none` (ends `not_found`) or `cancel` | `found`, `picked`, `not_found`, `cancelled` |
-    | `void_transaction` | Finds a transaction of `kind` (invoice, bill, check and the other voidable types) as `resolve_transaction` does, then voids it, or deletes it when `action` is `delete`. Nothing is voided until the transaction is identified. | Through `resolve_transaction` | `voided`, `deleted`, `not_found`, `cancelled` |
+    | `void_transaction` | Finds a transaction of `kind` as `resolve_transaction` does, then voids it, or deletes it when `action` is `delete`. QuickBooks voids sixteen types (invoice, bill, check, journal_entry and the others `kind` lists) and deletes those and nine more (sales_order, estimate, purchase_order, receive_payment, time_tracking and four others), so a delete takes kinds a void does not; asking to void one of those nine fails at once, before anything is sent, and says to pass `action` `delete`. Nothing is voided or deleted until the transaction is identified. | Through `resolve_transaction` | `voided`, `deleted`, `not_found`, `cancelled` |
     | `record_payment` | Finds an invoice as `resolve_transaction` does and records a `payment` (a `receive_payment.create` body: how it was paid) for the invoice's own customer, applied to that invoice; the amount defaults to what the invoice still owes. An invoice already paid in full is reported, not paid again. | Through `resolve_transaction` | `applied`, `already_paid`, `not_found`, `cancelled` |
     | `create_customer_safely` | Creates a customer from `customer`, the body `POST /customers` takes. On a name clash, finds what has the name and asks. Allows five renames. | `ask_about_customer`: `use_existing`, `rename` (with `name`), `cancel`. `ask_about_other`: `rename`, `cancel` | `created`, `created_renamed`, `used_existing`, `cancelled`; fails as `renames_exhausted` |
     | `find_or_create_customer` | Finds a customer by full name, or creates it from `customer`. `find_or_create`, written out for one type. | No | `found`, `created` |
@@ -427,6 +443,10 @@ Every event has `event`, `timestamp`, `app_id`, `sandbox`, `connection_id`, `wor
 - **Repeats**: deliveries can repeat and arrive out of order. A run ends only once, so key endings on
   `run_id`. Each delivery is built when it's sent, from the run as it is then: a retried
   `workflow_run.awaiting_input` that arrives after the question was answered has no `prompt`.
+- **Before the `201`**: a run that ends as it starts, such as a chart that fails before it sends anything,
+  comes back from `POST /workflow-runs` already `failed` or `completed`, and its webhook can reach you
+  before that response does. Store the run's id from the response, and retry an event whose `run_id` you
+  haven't stored yet instead of dropping it.
 
 <Accordion title="Handle them in a job" description="WorkflowRunEventJob, in Ruby" icon="code">
   If one endpoint takes both request and run webhooks, [route on `event`](/webhooks#handle-it-in-a-job)
@@ -435,8 +455,12 @@ Every event has `event`, `timestamp`, `app_id`, `sandbox`, `connection_id`, `wor
   ```ruby
   # app/jobs/workflow_run_event_job.rb
   class WorkflowRunEventJob < ApplicationJob
+    class UnknownRun < StandardError; end
+    # An ending can arrive before the 201 that gave you the run's id.
+    retry_on UnknownRun, wait: 5.seconds, attempts: 5
+
     def perform(event)
-      run = OrderSync.find_by(qube_run_id: event["run_id"]) or return # where you stored the run's id
+      run = OrderSync.find_by(qube_run_id: event["run_id"]) or raise UnknownRun # where you stored the run's id
       return if run.finished? # a repeat, or a question retried after the end
 
       case event["event"]
@@ -848,6 +872,8 @@ part of the run you started.
   prefixed with the calling state (`create_customer / resolve_conflict.ask_about_customer`), and
   `prompt.from` names the `workflow` and `state` that asked, plus `item_index` and `item_count` when it runs
   once per item. Answer at the run's own `links.decisions`.
+- **An installed template is a copy.** A change we make to a template reaches your workflow only when you install
+  it again with `"replace": true`. `template.status` on `GET /workflows` tells you when there's one to take.
 - **Production runs the published version.** On a production connection, a run always uses the workflow's
   published version. Sandbox and simulated connections run your latest edits by default, so you can test
   before publishing. The workflows a run calls follow suit: their working copies for a working-copy run,

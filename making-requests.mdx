@@ -148,6 +148,12 @@ Date fields take `YYYY-MM-DD`. Datetime fields take ISO 8601, such as `2026-09-0
 optional offset such as `+00:00`. A trailing `Z` is accepted and sent to QuickBooks as `+00:00`. A value in
 any other shape is refused with `400` when you queue the request.
 
+A filter that takes several values, such as `ref_number`, `list_id` or `txn_id`, is an array. Repeat the key
+(`ref_number=1001&ref_number=1002`) or use brackets (`ref_number[]=1001&ref_number[]=1002`); either asks for
+every value you list. A comma doesn't separate values: `ref_number=1001,1002` looks for the one number
+`1001,1002`. A filter that takes a single value, such as `max_returned`, can't be repeated, and the request
+is refused with `400`.
+
 ## Create
 
 The body is the record's fields. Refer to associations by `full_name` or `list_id`:
@@ -364,6 +370,10 @@ curl -u "$QUBE_API_KEY:" \
 ```json 422 Unprocessable Entity
 { "errors": { "request_xml": ["CustomerQueryRq has an iterator: queue an iterator query on its own, not in a batch"] } }
 ```
+
+Write every amount with its two decimals: `<TotalAmount>40.00</TotalAmount>`, not `40`. The schema allows
+`40`, so it passes these checks, but QuickBooks refuses it with `3040` when it runs the request. Quantities
+and rates can be whole numbers. The operations write amounts this way for you.
 
 The body takes `request_xml`, and `webhook_url` still goes in the query string. The answer arrives at your `webhook_url` like any other, with QuickBooks' own answer in
 `response_xml`. One request answers exactly as an operation does: `response_json` is the same

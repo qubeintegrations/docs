@@ -538,8 +538,10 @@ and `response.settled` set to `kept`, so a chart that only needed the record to 
 **Leave `edit_sequence` out.** An update in a workflow doesn't need one: the run reads the record first and
 fills it in. That read is the `as_read` the diff is judged against, and it's what lets the run tell their
 changes from yours. Pass your own `edit_sequence` and there's no baseline, so every field that differs from
-QuickBooks counts as a conflict. If the read finds the record gone, the state raises `error` 3120
-(`object_not_found`), "nothing to update: the record no longer exists".
+QuickBooks counts as a conflict. If the read finds nothing, the state raises `error` 3120
+(`object_not_found`), such as "nothing to update: no item_non_inventory has this id; the record was deleted,
+or it is another type of record". The read goes by the update's own type, so an inventory item's `list_id`
+sent to `item_non_inventory.update` finds nothing too: update a record with the operation for its type.
 
 ## Build it in the dashboard
 

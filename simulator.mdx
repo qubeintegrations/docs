@@ -76,7 +76,8 @@ Every simulated company starts with the same small, realistic data set, so your 
 
 Customers, vendors, employees, items and transactions such as invoices, bills and payments can be queried,
 added and modified. The simulator enforces QuickBooks' rules along the way: names are unique across lists
-(3100), references must exist (3140), and updates need the current `edit_sequence` (3200). Values keep
+(3100), references must exist (3140), an amount needs its two decimals (`40.00`, not `40`; 3040), and
+updates need the current `edit_sequence` (3200). Values keep
 their spacing as QuickBooks keeps it: a name's double space or a note's line break comes back exactly as
 sent, and a `full_name` filter finds a record by that spelling, or by one with extra spaces, but a
 single-spaced filter does not find a double-spaced name. Iterated queries page like the real thing.
@@ -155,17 +156,21 @@ against the simulator:
   negative `amount`); its own `amount` is the payment's part only. Intuit doesn't document how real
   QuickBooks lists an applied credit, so don't build on the `linked_txn` shape. The simulator caps a credit at what's available and what the invoice owes, and a
   payment at what's left after the credits; real QuickBooks may refuse such a payment instead.
+- **A payment of credits alone** (`total_amount` `0.00`, every `applied_to_txn_add` a `set_credit` with no
+  `payment_amount`) applies the credits but creates no payment, as in real QuickBooks. Its answer has no
+  `txn_id` of its own: `applied_to_txn_ret` lists only each invoice's `txn_id` and `txn_type`. Read the
+  invoice or credit memo again to see what was applied, and don't store an id for that payment.
 - **Deposits**: a payment received without a `deposit_to_account_ref` goes to Undeposited Funds, as in
   QuickBooks. `receive_payment_to_deposit.query` lists it until a deposit takes it. A `deposit.create`
   line with a `payment_txn_id` deposits that payment for its whole amount, and a line with an
   `account_ref` and `amount` deposits money from that account. `deposit_total` is the sum of the lines.
   A payment that isn't waiting to be deposited (unknown, deposited already, or received straight into a
   bank account) is refused with 3120. Deleting a deposit puts its payments back in Undeposited Funds.
-- **Voids**: `txn_void.execute` keeps the transaction and sets its totals and every line's amount to 0,
-  for bills, checks, credit card charges and credits, credit memos, invoices, item receipts, journal
-  entries, sales receipts and vendor credits. The memo gets `VOID: ` in front, as QuickBooks Desktop
-  shows it; Intuit doesn't document that, so don't build on it. An unknown `txn_id`, or one of another
-  type, gets 3120.
+- **Voids**: `txn_void.execute` keeps the transaction and sets its totals and every line's amount and
+  quantity to 0, for bills, checks, credit card charges and credits, credit memos, invoices, item receipts,
+  journal entries, sales receipts and vendor credits. The memo gets `VOID: ` in front. Real QuickBooks does
+  both for an invoice; for the other types it's the simulator's reading. An unknown `txn_id`, or one of
+  another type, gets 3120.
 - **Custom fields and private data extensions**: `data_ext_def.create`, `.update`, `.delete` and
   `.query` keep definitions per company, unique by `owner_id` and `data_ext_name`. Following Intuit's
   rules, a custom field (`owner_id` `0`) must be `STR255TYPE` and assigned to Customer, Employee,
