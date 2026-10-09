@@ -1,28 +1,38 @@
 ---
 title: "Error handling"
-description: "What can go wrong between your app and your customer's QuickBooks, how QuBe Sync tells you, and what to do about each case."
+description: "The most important part of every QuickBooks integration"
 icon: "triangle-exclamation"
 ---
+
+import { Request } from "/snippets/request.jsx";
 
 A QuickBooks Desktop integration fails in more places than most APIs: QuickBooks' own rules, a PC that's
 switched off, a dialog left open, a Web Connector that stopped running. QuBe Sync sorts every failure into
 a small set of states, each with a clear next step, and gives you a message you can show your customer.
 
-```mermaid
-flowchart LR
-  A{"state"} -- "error" --> C{"error_type"}
-  C -- "business" --> D["Branch on the<br/>QuickBooks code"]
-  C -- "other" --> E["Log it; ask support<br/>if it repeats"]
-  A -- "retryable" --> F["Show user_message;<br/>don't resend"]
-  A -- "timed_out" --> G["Check before<br/>resending a change"]
-```
+## Every way a request can end
+
+Find the webhook you got. The last column says who fixes it, what to do, and where to read more.
+
+| Your webhook | What happened | Who fixes it, and how |
+| --- | --- | --- |
+| <Badge color="green">`response_received`</Badge><br />with a `warning` | QuickBooks saved it, but warned you: e.g. a field it didn't save. | **Your app.** Store the id; don't resend. Check `warning.code`. [With a warning](#quickbooks-said-yes-with-a-warning) |
+| <Badge color="red">`error`</Badge><br />`quickbooks_business_error` | QuickBooks refused it on its own terms: a name in use, a stale `edit_sequence`. | **Your app.** Branch on `error_code`; show `user_message`. [QuickBooks said no](#quickbooks-said-no) |
+| <Badge color="red">`error`</Badge><br />`xml_error` | QuickBooks couldn't parse the request. | **Your app.** Fix the request: sent again as-is, it fails again. [Other endings](#other-endings) |
+| <Badge color="red">`error`</Badge><br />`unexpected_error` | QuickBooks failed without saying why. | **Support.** Read the Web Connector's log; ask support if it repeats. [Other endings](#other-endings) |
+| <Badge color="orange">`retryable`</Badge> | QuickBooks wasn't running, the wrong company file was open, or a dialog was. | **Your customer.** Show them `user_message`, and don't resend. [Out of reach](#when-quickbooks-is-out-of-reach) |
+| <Badge color="purple">`timed_out`</Badge> | The answer was lost: the connection dropped, or QuickBooks/the Web Connector was closed, mid-request. | **Check first.** Queue a query again; query before resending a change. [The answer is lost](#when-the-answer-is-lost) |
+| <Badge color="gray">`discarded`</Badge> | Your app discarded it before the Web Connector took it. | **Nobody.** QuickBooks never saw it. [Discarding](#discarding-a-request) |
+| No webhook received,<br />requests stuck `waiting` | The Web Connector stopped checking in. | **Your customer.** Compare `last_connected_at` with now. [Stops checking in](#when-the-web-connector-stops-checking-in) |
 
 ## The error object
 
-When `state` is `error` or `retryable`, the webhook's `error` says what happened. Here QuickBooks refused a
+When `state` is <Badge color="red">`error`</Badge> or <Badge color="orange">`retryable`</Badge>, the webhook's `error` says what happened. Here QuickBooks refused a
 new customer because the name is taken:
 
-```json
+<div className="highlight-info">
+
+```json {3-10}
 {
   "state": "error",
   "error": {
@@ -40,45 +50,41 @@ new customer because the name is taken:
 }
 ```
 
+</div>
+
 | Field | What it's for |
 | --- | --- |
-| `error_type` | Where it failed: `quickbooks_business_error`, `quickbooks_connection_error`, `xml_error` or `unexpected_error`. |
+| `error_type` | Where it failed: [`quickbooks_business_error`](#quickbooks-said-no), [`quickbooks_connection_error`](#when-quickbooks-is-out-of-reach), [`xml_error`](#other-endings) or [`unexpected_error`](#other-endings). |
 | `error_code` | QuickBooks' status code, for a business error. The stable thing to branch on. |
 | `user_message` | Plain language for your end user: what went wrong and what to do. |
 | `message` | The raw message from QuickBooks or the Web Connector. |
-| `debug_message` | For you. It names the field that caused it, when QuickBooks says. |
+| `debug_message` | QB error messages are cryptic and lack enough information to act on, so QuBe Sync analyzes your request and augments them when it can. |
 | `hresult` | The Web Connector's error code, for a connection or XML error. |
 
 ## QuickBooks said no
 
 A **business error** means the connection worked and the request was well-formed, but QuickBooks refused
-it on its own terms. `state` is `error`, `error.error_type` is `quickbooks_business_error`, and
-`response_json.error` carries QuickBooks' code with a stable name:
+it on its own terms. `state` is <Badge color="red">`error`</Badge>, `error.error_type` is `quickbooks_business_error`, and
+`response_json.error` carries QuickBooks' code with a stable name. **Branch on the code, not the message
+text.**
 
 | Code | `type` | Meaning | Usual fix |
 | --- | --- | --- | --- |
-| 3100 | `name_in_use` | The name is already used by a customer, vendor, employee or other name. | Use the existing record, or pick another name. [`create_customer_safely`](/workflows#templates) asks your app which. |
+| 3100 | `name_in_use` | The name is already used by a customer, vendor, employee or other name. | Use the existing record, or pick another name. [`create_customer_safely`](/workflows#pick-a-template) asks your app which. |
 | 3120 | `object_not_found` | No record has that `list_id` or `txn_id`. | Re-sync the record; it may have been deleted in QuickBooks. |
 | 3140 | `invalid_reference` | A reference (a `customer_ref`, `item_ref`...) names a record the company file doesn't have. | Create the referenced record first, or look it up by name. |
 | 3170 | `cannot_modify` | QuickBooks refused to save a change to an existing record. | Read `message` for why, such as a closed accounting period. |
 | 3175 | `in_use` | The record is in use, so it can't be changed right now. | Try again later; someone may be editing it in QuickBooks. |
 | 3180 | `cannot_save` | QuickBooks refused to save a new record. | The text after "QuickBooks error message:" says why. |
-| 3200 | `stale_edit_sequence` | The record changed in QuickBooks after you read it. | Query it again and retry with the fresh `edit_sequence`. In a [workflow](/workflows#conflicts), the run re-reads it and, if the changes overlap, asks your app with the diff, unless the state's `on_conflict` says otherwise. |
+| 3200 | `stale_edit_sequence` | The record changed in QuickBooks after you read it. | Query it again and retry with the fresh `edit_sequence`. |
 | 3210 | `invalid_value` | A field's value isn't one QuickBooks accepts. | `message` names the field and value. |
 | 3250 | `feature_not_enabled` | The feature is off in this company file, or this edition lacks it. | Ask the customer to turn it on, or skip the feature. |
 | 3260 | `insufficient_permission` | QuickBooks didn't grant permission for this action. | The customer changes your app's access in QuickBooks' Integrated Applications preferences. |
 
-Branch on the **code**, not the message text. Intuit's
+Intuit's
 [status code reference](https://developer.intuit.com/app/developer/qbdesktop/docs/develop/exploring-the-quickbooks-desktop-sdk/status-codes-in-response-messages)
 lists every one. Each operation in the [API reference](/api-reference/introduction) and each
 [MCP tool](/mcp-server) names the codes that operation can raise.
-
-Inside a [workflow](/workflows#lost-answers), a request state can also raise an `error` whose `type` is
-`unsettled` or `no_response`, with `code` `null`. Those aren't QuickBooks codes: they're how a run reports
-an answer that never came back and couldn't be settled. A `no_response` also carries `reason`, why the
-answer never came (`timed_out`, `connector_error`, `rejected`, `withdrawn` or `page_expired`), and for a
-creation request `external_guid`, the GUID it was sent with ([Lost answers](/workflows#lost-answers)). Only `timed_out`
-and `connector_error` leave the record possibly applied.
 
 <Tip>
   Test these before your customers do. The [simulator](/simulator) can answer the next request with any of
@@ -88,13 +94,15 @@ and `connector_error` leave the record possibly applied.
 ## QuickBooks said yes, with a warning
 
 Sometimes QuickBooks does what you asked but has something to say about it, and answers with a `Warn`
-severity instead of `Info`. That's still a success: `state` is `response_received`, `response_json.status` is
+severity instead of `Info`. That's still a success: `state` is <Badge color="green">`response_received`</Badge>, `response_json.status` is
 `success`, and `data` is what QuickBooks saved. `response_json.warning` has QuickBooks' code and message.
 
 This is a real answer to `POST /journal-entries` with an entry-level `memo`. QuickBooks saved the entry
 without the memo:
 
-```json response_json (abridged)
+<div className="highlight-info">
+
+```json response_json (abridged) {13-16}
 {
   "status": "success",
   "data": {
@@ -114,108 +122,159 @@ without the memo:
 }
 ```
 
+</div>
+
 | Code | Meaning | What to do |
 | --- | --- | --- |
 | 530 | A field you sent isn't supported by this QuickBooks, so the record was saved without it. `message` names the field. | Store the record's id as usual, and don't resend: the record already exists. Leave the field out next time, or keep its value somewhere QuickBooks does save it, such as a line's `memo`. |
 | 500 | A lookup by an exact `full_name` or `list_id` found nothing, so `data` is empty. | Nothing went wrong: the record doesn't exist. |
 
 `warning` is never set on a plain success or on an error. When every field you send matters, check for it
-after a create or update, and branch on `code`, not the message text. In a [workflow](/workflows), a request
-state's `response.warning` is the same, so a transition can test `response.warning.code`. The
-[simulator](/simulator) answers a journal entry with an entry-level `memo` the same way, so you can try it in
-a sandbox.
+after a create or update, and branch on `code`, not the message text. The [simulator](/simulator) answers a
+journal entry with an entry-level `memo` the same way, so you can try it in a sandbox.
 
 ## When QuickBooks is out of reach
 
-A `retryable` webhook means the Web Connector ran on your customer's computer but couldn't get the request
-into QuickBooks. QuickBooks wasn't running, no company file (or the wrong one) was open, or a dialog was
-open. Nothing was applied, and only your customer can fix it:
+<Warning>
+  **Show your customer `error.user_message`, and don't resend the request.** QuBe Sync keeps it and tries
+  again on the Web Connector's next runs, for as long as it takes.
+</Warning>
 
-```json
-{
-  "state": "retryable",
-  "error": {
-    "error_type": "quickbooks_connection_error",
-    "hresult": "0x80040408",
-    "message": "QBWC1039: The Web Connector could not start QuickBooks. Make sure QuickBooks is installed and running on this computer.",
-    "user_message": "QuickBooks is either not running or not installed on the same computer as the Web Connector. Please ensure QuickBooks is installed and running.",
-    "error_code": null,
-    "debug_message": null
-  },
-  "response_json": null
-}
-```
+A <Badge color="orange">`retryable`</Badge> webhook means the Web Connector ran on your customer's computer but couldn't get the request
+into QuickBooks: QuickBooks wasn't running, no company file (or the wrong one) was open, or a dialog was
+open. Nothing was applied, and only your customer can fix it.
 
-**Show your customer `error.user_message`, and don't resend the request.** QuBe Sync keeps it and tries
-again on the Web Connector's next runs, for as long as it takes. You get a `retryable` webhook when the error
-first appears and another only if it changes. After that, the next webhook is the answer. It has the same
-`id` and `page_request_id` as the `retryable` one, and only `state` differs. If you drop duplicate
-deliveries, key on `page_request_id` plus `state`, or the answer looks like a repeat and is lost.
+<Steps>
+  <Step title="The Web Connector can't reach QuickBooks">
+    You get one <Badge color="orange">`retryable`</Badge> webhook. Another comes only if the error changes.
+  </Step>
+  <Step title="Its runs back off">
+    While QuickBooks stays out of reach, QuBe Sync spaces out the Web Connector's automatic runs: 5, 10, 20,
+    then 30 minutes apart. The Web Connector shows "Update postponed by application".
+  </Step>
+  <Step title="Your customer fixes it">
+    They don't have to wait: clicking **Update Selected** tries right away. If that first click also says
+    "Update postponed by application", they click it again.
+  </Step>
+  <Step title="The answer arrives">
+    The next webhook is the answer. It has the same `id` and `page_request_id` as the <Badge color="orange">`retryable`</Badge> one, and
+    only `state` differs. If you drop duplicate deliveries, key on `page_request_id` plus `state`, or the
+    answer looks like a repeat and is lost.
+  </Step>
+</Steps>
 
-The exception is a later page of an [iterated query](/pagination#if-the-session-ends-partway). QuickBooks
-keeps an iteration only for the session that started it, so that page ends as `error` and the query has to
-be queued again.
+- **Later requests wait.** Requests on a connection go to QuickBooks in the order they were queued, so
+  everything queued after a <Badge color="orange">`retryable`</Badge> request waits behind it.
+- **A week of waiting emails your owners.** If a connection's requests wait a week without reaching
+  QuickBooks, QuBe Sync emails your organization's owners.
+- **One exception: a later page of an [iterated query](/pagination#if-the-session-ends-partway).**
+  QuickBooks keeps an iteration only for the session that started it, so that page ends as <Badge color="red">`error`</Badge> and the
+  query has to be queued again.
 
-```mermaid
-flowchart TB
-  run["Web Connector runs"] -- "QuickBooks closed" --> r["retryable<br/>(one webhook)"]
-  r -- "waits 5, 10, 20,<br/>then 30 min" --> run
-  r -. "customer fixes it and<br/>clicks Update Selected" .-> ok["response_received"]
-```
-
-While QuickBooks stays out of reach, QuBe Sync spaces out the Web Connector's automatic runs: each wait is
-double the last, up to 30 minutes apart, and the Web Connector shows "Update postponed by application". Your
-customer doesn't have to wait once they've fixed the problem. Clicking **Update Selected** tries right
-away. If that first click also says "Update postponed by application", they click it again.
-
-Requests on a connection go to QuickBooks in the order they were queued, so everything queued after a
-`retryable` request waits behind it.
+<Accordion title="The retryable webhook" description="quickbooks_connection_error, hresult 0x80040408, QBWC1039" icon="code">
+  ```json
+  {
+    "state": "retryable",
+    "error": {
+      "error_type": "quickbooks_connection_error",
+      "hresult": "0x80040408",
+      "message": "QBWC1039: The Web Connector could not start QuickBooks. Make sure QuickBooks is installed and running on this computer.",
+      "user_message": "QuickBooks is either not running or not installed on the same computer as the Web Connector. Please ensure QuickBooks is installed and running.",
+      "error_code": null,
+      "debug_message": null
+    },
+    "response_json": null
+  }
+  ```
+</Accordion>
 
 ### Discarding a request
 
-If you no longer want a request, for example because your customer cancelled the order, discard it:
+If you no longer want a request, for example because your customer cancelled the order, discard it. It
+becomes <Badge color="gray">`discarded`</Badge>, is never sent, and a <Badge color="gray">`discarded`</Badge> webhook follows.
+
+<Request method="POST" path="/api/v2/connections/{connection_id}/queued-requests/{request_id}/discard" />
+
+{/* agent-block:start */}
+<Visibility for="agents">
+
+```http
+POST /api/v2/connections/{connection_id}/queued-requests/{request_id}/discard
+```
 
 ```bash
-curl -u "$QUBE_API_KEY:" -X POST \
+curl -u "$QUBE_API_KEY:" \
+  -X POST \
   "https://qubesync.com/api/v2/connections/$CONN_ID/queued-requests/$REQUEST_ID/discard"
 ```
 
-It becomes `discarded`, is never sent, and a `discarded` webhook follows. Only a request the Web Connector
-hasn't picked up yet (`waiting`, or `retryable` between tries) can be discarded. A request the Web Connector already has goes
-ahead (`409`, `in_flight`), and a request that has finished stays as it is (`409`, `already_finished`).
+</Visibility>
+{/* agent-block:end */}
 
-Discarding a request a [workflow run](/workflows) sent moves the run on: the state that sent it raises
-`error` with type `no_response` and `reason` `withdrawn`, "the request was withdrawn before it was sent".
-Such a request can't be
-deleted on its own: it goes when the run does.
+- **Can be discarded**: a request the Web Connector hasn't picked up yet, `waiting` or <Badge color="orange">`retryable`</Badge> between
+  tries.
+- **Goes ahead**: one the Web Connector already has (`409`, `in_flight`).
+- **Stays as it is**: one that has finished (`409`, `already_finished`).
 
-If a connection's requests wait a week without reaching QuickBooks, QuBe Sync emails your organization's
-owners.
+## When the answer is lost
+
+<Badge color="purple">`timed_out`</Badge> means QuickBooks received the request but its answer never came back: the customer's computer
+lost its connection, or QuickBooks/the Web Connector was closed, while the request was being processed.
+QuickBooks may or may not have applied it.
+
+- **A query**: queue it again. Asking twice is safe.
+- **A create or update**: query first to see whether it happened, and resend only if it didn't.
+
+<Info>
+  A [workflow](/workflows#lost-answers) does this check for you and carries on as if the answer had
+  arrived. See [In a workflow](#in-a-workflow).
+</Info>
 
 ## Other endings
 
-- **`timed_out`**: QuickBooks received the request, but never responded. This might happen if the customer's QB computer crashes or loses connection while processing, and
-  QuickBooks may or may not have applied it. A query is safe to queue again. For a create or update,
-  query first to see whether it happened. A request a [workflow](/workflows#lost-answers) sent is the
-  exception: the run automatically finds out whether it was applied and carries on, so there's usually nothing for your
-  app to do. When it can't tell, the state raises `unsettled` or `no_response`, which fails the run unless
-  the chart handles it.
-- **`discarded`**: your app [discarded it](#discarding-a-request). QuickBooks never saw it.
-- **`error` with `xml_error`**: QuickBooks couldn't parse the request. Requests built through the API are
-  validated against QuickBooks' schema first, so this is rare, but it could happen if you're sending raw custom QBXML. Sent again as-is, it fails again. A workflow doesn't settle it: the state raises
-  `no_response` with `reason` `rejected`.
-- **`error` with `unexpected_error`**: QuickBooks failed without saying why. The Web Connector's log
+- <Badge color="gray">`discarded`</Badge>: your app [discarded it](#discarding-a-request). QuickBooks never saw it.
+- <Badge color="red">`error`</Badge> with `xml_error`: QuickBooks couldn't parse the request. Requests built through the API are
+  validated against QuickBooks' schema first, so this is rare, but it could happen if you're sending raw
+  custom QBXML. Sent again as-is, it fails again.
+- <Badge color="red">`error`</Badge> with `unexpected_error`: QuickBooks failed without saying why. The Web Connector's log
   (**View Log** in the Web Connector) usually has more; turn on [verbose logging](/qwc-logs) if it doesn't.
   [support@qubesync.com](mailto:support@qubesync.com) can help.
 
-## Problems on your customer's PC
+## When the Web Connector stops checking in
 
 Some problems stop the Web Connector before it ever reaches QuBe Sync: a wrong password, a log file it
-can't write, a damaged `.qwc` file. Those never arrive as an error. The Web Connector just stops checking
-in, and requests wait in `waiting`.
+can't write, a damaged `.qwc` file. **Those never arrive as a webhook.** The Web Connector just stops
+checking in, and requests wait in `waiting`.
 
-If a connection's requests stop being answered, compare its `last_connected_at` with the current time, then
-ask your customer to open the Web Connector and read the status next to your app. It shows these problems as
-`QBWC` codes (QBWC1039, QBWC1085...). Intuit keeps the fixes in
-[Fix common Web Connector errors in QuickBooks Desktop](https://quickbooks.intuit.com/learn-support/en-us/help-article/open-programs/fix-common-web-connector-errors-quickbooks-desktop/L9slolvg0_US_en_US).
-For anything that page doesn't cover, [verbose logs](/qwc-logs) show what the Web Connector was doing.
+<Steps>
+  <Step title="Check when it last connected">
+    Compare the connection's `last_connected_at` with the current time.
+  </Step>
+  <Step title="Read the Web Connector's status">
+    Ask your customer to open the Web Connector and read the status next to your app. It shows these
+    problems as `QBWC` codes (QBWC1039, QBWC1085...).
+  </Step>
+  <Step title="Look up the fix">
+    Intuit keeps the fixes in
+    [Fix common Web Connector errors in QuickBooks Desktop](https://quickbooks.intuit.com/learn-support/en-us/help-article/open-programs/fix-common-web-connector-errors-quickbooks-desktop/L9slolvg0_US_en_US).
+    For anything that page doesn't cover, [verbose logs](/qwc-logs) show what the Web Connector was doing.
+  </Step>
+</Steps>
+
+## In a workflow
+
+A [workflow run](/workflows) meets the same endings, but its chart hears them, not your app:
+
+| On its own | In a workflow |
+| --- | --- |
+| QuickBooks said no | The state raises `error`, with QuickBooks' code in `response.error.code`. A 3200 on an update is handled as a [conflict](/workflows#conflicts) instead: the run re-reads the record and, if the changes overlap, asks your app with the diff, unless the state's `on_conflict` says otherwise. |
+| A warning | The state's `success` carries `response.warning`, so a transition can test `response.warning.code`. |
+| <Badge color="purple">`timed_out`</Badge> | The run [settles it](/workflows#lost-answers): it finds out whether QuickBooks applied the request and carries on. When it can't tell, the state raises `unsettled` or `no_response`, which fails the run unless the chart handles it. |
+| Discarded by your app | The state that sent it raises `error` with type `no_response` and `reason` `withdrawn`, "the request was withdrawn before it was sent". Such a request can't be deleted on its own: it goes when the run does. |
+| `xml_error` | Not settled: the state raises `no_response` with `reason` `rejected`. |
+
+`unsettled` and `no_response` have `code` `null`: they aren't QuickBooks codes, but how a run reports an
+answer that never came back and couldn't be settled. A `no_response` also carries `reason`, why the answer
+never came (`timed_out`, `connector_error`, `rejected`, `withdrawn` or `page_expired`), and for a creation
+request `external_guid`, the GUID it was sent with. Only `timed_out` and `connector_error` leave the record
+possibly applied. [Settling lost answers](/workflow-authoring#settling-lost-answers) has the details.

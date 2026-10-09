@@ -4,33 +4,11 @@ description: "Receive webhooks from QuBe Sync when QuickBooks responds to your r
 icon: "bell"
 ---
 
-Any time a QuickBooks request is processed, QuBe Sync POSTs the result to the `webhook_url` you specified in the request. A
-[workflow run](#workflow-run-events) takes its `webhook_url` in the body that starts it, and reports on
-the run rather than on each request.
+Any time a QuickBooks request is processed, QuBe Sync POSTs the result to the `webhook_url` you specified in the request.
+Create a customer with `POST /customers`, and this is what your endpoint receives: QuickBooks' answer, as
+clean JSON, in `response_json.data`.
 
-```mermaid
-%%{init: {"sequence": {"width": 130, "actorMargin": 40, "mirrorActors": false}}}%%
-sequenceDiagram
-  participant Q as QuBe Sync
-  participant App as Your endpoint
-  participant Job as Your job queue
-  Q->>App: signed POST
-  App->>App: verify signature
-  App->>Job: enqueue payload
-  App-->>Q: 200 within 5 s
-  Job->>Job: apply the answer
-  Note over Q,App: no 2xx? retried with backoff,<br/>up to 5 attempts
-```
-
-## Receiving webhooks in development
-
-QuBe Sync needs a publicly available URL (localhost doesn't work) to send to, so [use a tunnel](/ngrok) while you develop. You can also open the request’s `links.ui` to see the answer in the dashboard.
-
-## The payload
-
-This is a real webhook answer to creating a customer (`POST /customers`):
-
-```json
+```json Webhook for POST /customers {11-27}
 {
   "id": "01a0e05d-8fdc-7531-9bcf-dbd53e26500c",
   "timestamp": 1790470625,
@@ -63,76 +41,51 @@ This is a real webhook answer to creating a customer (`POST /customers`):
 }
 ```
 
-<ResponseField name="id" type="string">
-  The request you queued, as returned by the `201`. For a multi-page answer, every page carries the first
-  page's `id`.
-</ResponseField>
-<ResponseField name="state" type="string">
-  Why you're being told: `response_received`, `error`, `retryable`, `timed_out` or `discarded`. See below.
-</ResponseField>
-<ResponseField name="response_json" type="object | null">
-  QuickBooks' answer as JSON. Either `{"status": "success", "data": ...}` or
-  `{"status": "error", "error": {"code", "type", "message"}}`. A query's `data` is always a list; a create
-  or update's `data` is the record. A success also has `warning`, `{"code", "message"}`, when QuickBooks
-  did what you asked but warned about something, such as a field it didn't save. See
-  [Warnings](/error_handling#quickbooks-said-yes-with-a-warning).
-</ResponseField>
-<ResponseField name="error" type="object | null">
-  Set when `state` is `error` or `retryable`: `error_type`, `error_code`, `message`, `user_message` (safe
-  to show your customer), `hresult` and `debug_message`. See [Error handling](/error_handling).
-</ResponseField>
-<ResponseField name="page, page_request_id, iteration_state" type="integer, string, string">
-  For [paginated](/pagination) answers. Each page has its own `page_request_id`; `iteration_state` is
-  `continue` until the last page, which is `done`. Pages can arrive in any order, so count the pages
-  instead of waiting for the `done` one ([how](/pagination#telling-pages-apart)). It's `not_applicable`
-  for a single-page answer. A `retryable` and the final webhook for the same page share its
-  `page_request_id`: tell them apart by `state`.
-  <Tip>
-      To ensure pages arrive in the correct order, you can use a [Workflow](/workflows) that sends a webhook
-      per page and waits for a `200` response before sending the next webhook.
-  </Tip>
-</ResponseField>
-<ResponseField name="timestamp" type="integer">
-  Unix seconds when this delivery was signed. It's also the `t=` in the signature header.
-</ResponseField>
-<ResponseField name="app_id, app_name, sandbox" type="string, string, boolean">
-  The app the request belongs to. Handy when one endpoint serves both your sandbox and production apps.
-</ResponseField>
-<ResponseField name="response_xml" type="string | null">
-  The raw qbXML QuickBooks sent back, if you ever need it.
-</ResponseField>
+Every field is described under [Payload fields](#payload-fields). [Workflow runs](#workflow-runs) send
+their own webhooks, about the run rather than each request.
 
-## What `state` tells you
+## Four jobs for your endpoint
+
+<CardGroup cols={2}>
+  <Card title="1. Verify the signature" icon="shield-check" href="#securing-your-endpoints">
+    Check `X-QUBE-Signature` against the raw body before you parse it.
+  </Card>
+  <Card title="2. Answer 2xx within 5 seconds" icon="stopwatch" href="#when-a-delivery-fails">
+    Anything else is retried, up to 5 attempts.
+  </Card>
+  <Card title="3. Work in a background job" icon="layer-group" href="#handle-it-in-a-job">
+    Enqueue the payload and return. Process the result in the job.
+  </Card>
+  <Card title="4. Make it idempotent" icon="clone" href="#what-to-do-with-each-state">
+    Key on `page_request_id` plus `state` in case network issues cause deliveries to repeat or arrive out of order.
+  </Card>
+</CardGroup>
+
+## What to do with each `state`
+
+`state` says why you're being told. Route on it first.
 
 | `state` | What happened | What to do |
 | --- | --- | --- |
-| `response_received` | QuickBooks answered. | Apply `response_json.data`. |
-| `error` | It failed for good. Usually QuickBooks refused it (a duplicate name, a stale `edit_sequence`). | Branch on `response_json.error.code`; show your customer `error.user_message`. |
-| `retryable` | The Web Connector couldn't get it into QuickBooks: QuickBooks wasn't running, a dialog was open, or the wrong company file was. Nothing was applied. | **Don't resend.** QuBe Sync keeps trying. Show your customer `error.user_message` so they can fix it. |
-| `timed_out` | QuickBooks received it, but the session ended without an answer. | Queries are safe to queue again. For a create or update, check whether it was applied first. A workflow's requests send no webhook, and the run [settles](/workflows#lost-answers) a lost answer itself. |
-| `discarded` | Your app [discarded](/error_handling#when-quickbooks-is-out-of-reach) it before the Web Connector took it. | Nothing: QuickBooks never saw it. |
+| <Badge color="green">`response_received`</Badge> | QuickBooks answered. | **Apply it.** Use `response_json.data`. |
+| <Badge color="red">`error`</Badge> | It failed for good. Usually QuickBooks refused it (a duplicate name, a stale `edit_sequence`). | **Show the error.** Branch on `response_json.error.code`; show your customer `error.user_message`. |
+| <Badge color="orange">`retryable`</Badge> | The Web Connector couldn't get it into QuickBooks: QuickBooks wasn't running, a dialog was open, or the wrong company file was. Nothing was applied. | **Wait. Don't resend.** QuBe Sync keeps trying. Show your customer `error.user_message` so they can fix it. |
+| <Badge color="purple">`timed_out`</Badge> | QuickBooks received it, but the session ended without an answer. | **Check, then resend.** Queries are safe to queue again. For a create or update, check whether it was applied first: a [workflow](/workflows#lost-answers) does this for you. |
+| <Badge color="gray">`discarded`</Badge> | Your app [discarded](/error_handling#when-quickbooks-is-out-of-reach) it before the Web Connector took it. | **Nothing.** QuickBooks never saw it. |
 
-A `retryable` webhook arrives when the error first appears and again only if it changes. The next webhook
-after that is usually the answer. It carries the same `id` and `page_request_id` as the `retryable` one;
-only `state` differs.
+<Note>
+  A <Badge color="orange">`retryable`</Badge> webhook arrives when the error first appears, and again only if it changes. It isn't
+  final: the next webhook for that page is usually the answer, with the same `id` and `page_request_id`
+  and a different `state`. That's why you key on `page_request_id` plus `state`, never on the id alone.
+</Note>
 
-## Respond quickly, work later
+## Handle it in a job
 
-Answer with any **2xx** status within **5 seconds**. The body is ignored. Put your processing work in a background job:
+Verify the signature, enqueue the payload, answer `200`. [Workflow run](#workflow-runs) webhooks carry an
+`event` and request webhooks don't, so one endpoint can route both.
 
-- Anything else counts as a failed delivery: a 3xx (redirects aren't followed), 4xx or 5xx, a timeout,
-  or a refused connection. QuBe Sync retries with backoff, up to 5 attempts in all. After the last one the
-  request's `webhook_state` becomes `failed`, your organization's owners get an email, and the dashboard
-  offers **Resend webhook**. A workflow run's deliveries are retried the same way, but
-  [end differently](#workflow-run-events).
-- A delivery to an address webhooks [may not go to](#where-webhooks-can-go), such as a hostname that now
-  resolves to a private address, isn't sent or retried: it fails at once with "Webhook not sent: ...",
-  and the owners get the email.
-- Deliveries can arrive out of order and more than once, so key your processing on
-  `page_request_id` **plus** `state`.
-- Workflow webhooks have a different body with an `event`, and no `id` or `page_request_id` ([below](#workflow-run-events)). 
-
-```ruby
+<CodeGroup>
+```ruby qube_webhooks_controller.rb
 # app/controllers/qube_webhooks_controller.rb
 class QubeWebhooksController < ActionController::API
   def create
@@ -149,7 +102,7 @@ class QubeWebhooksController < ActionController::API
 end
 ```
 
-```ruby
+```ruby quickbooks_answer_job.rb
 # app/jobs/quickbooks_answer_job.rb
 class QuickbooksAnswerJob < ApplicationJob
   def perform(answer)
@@ -171,12 +124,58 @@ class QuickbooksAnswerJob < ApplicationJob
   end
 end
 ```
+</CodeGroup>
+
+## Payload fields
+
+The four fields you act on, from the example at the top of this page. The rest are below them.
+
+<ResponseField name="id" type="string">
+  The request you queued, as returned by the `201`. For a multi-page answer, every page carries the first
+  page's `id`.
+</ResponseField>
+<ResponseField name="state" type="string">
+  Why you're being told: <Badge color="green">`response_received`</Badge>, <Badge color="red">`error`</Badge>, <Badge color="orange">`retryable`</Badge>, <Badge color="purple">`timed_out`</Badge> or <Badge color="gray">`discarded`</Badge>. See
+  [What to do with each `state`](#what-to-do-with-each-state).
+</ResponseField>
+<ResponseField name="response_json" type="object | null">
+  QuickBooks' answer as JSON. Either `{"status": "success", "data": ...}` or
+  `{"status": "error", "error": {"code", "type", "message"}}`. A query's `data` is always a list; a create
+  or update's `data` is the record. A success also has `warning`, `{"code", "message"}`, when QuickBooks
+  did what you asked but warned about something, such as a field it didn't save. See
+  [Warnings](/error_handling#quickbooks-said-yes-with-a-warning).
+</ResponseField>
+<ResponseField name="error" type="object | null">
+  Set when `state` is <Badge color="red">`error`</Badge> or <Badge color="orange">`retryable`</Badge>: `error_type`, `error_code`, `message`, `user_message` (safe
+  to show your customer), `hresult` and `debug_message`. See [Error handling](/error_handling).
+</ResponseField>
+
+<Accordion title="Paging, app and delivery fields" description="page, page_request_id, iteration_state, app_id, app_name, sandbox, timestamp, response_xml" icon="list">
+  <ResponseField name="page, page_request_id, iteration_state" type="integer, string, string">
+    For [paginated](/pagination) answers. Each page has its own `page_request_id`; `iteration_state` is
+    `continue` until the last page, which is `done`. Pages can arrive in any order, so count the pages
+    instead of waiting for the `done` one ([how](/pagination#telling-pages-apart)). It's `not_applicable`
+    for a single-page answer. A <Badge color="orange">`retryable`</Badge> and the final webhook for the same page share its
+    `page_request_id`: tell them apart by `state`.
+    <Tip>
+      Need the pages in order? A [workflow](/workflows#sending-your-app-data) sends them one at a time and
+      waits for your `2xx` before sending the next.
+    </Tip>
+  </ResponseField>
+  <ResponseField name="app_id, app_name, sandbox" type="string, string, boolean">
+    The app the request belongs to. Handy when one endpoint serves both your sandbox and production apps.
+  </ResponseField>
+  <ResponseField name="timestamp" type="integer">
+    Unix seconds when this delivery was signed. It's also the `t=` in the signature header.
+  </ResponseField>
+  <ResponseField name="response_xml" type="string | null">
+    The raw qbXML QuickBooks sent back, if you ever need it.
+  </ResponseField>
+</Accordion>
 
 ## Securing your endpoints
 
 To protect yourself from timing attacks, JSON parsing vulnerabilities, etc., it's best practice to verify the webhooks you're receiving are genuinely from QuBe Sync.
-
-### Step 1. Get the X-Qube-Signature header
 
 Every delivery carries an `X-QUBE-Signature` header: a timestamp and one HMAC-SHA256 signature per active
 webhook secret on your app. You can manage your webhook secrets in the _Application_'s settings.
@@ -190,13 +189,22 @@ v1=signature1,
 v1=signature2
 ```
 
-### Step 2. Extract the timestamp and signatures
+<Steps>
+  <Step title="Read the header">
+    Split it on `,` and each part on the first `=`. Take `t` and every `v1` value.
+  </Step>
+  <Step title="Compute the signature">
+    The hex-encoded HMAC-SHA256 of `"<t>.<raw request body>"`, with your webhook secret as the key.
+  </Step>
+  <Step title="Compare">
+    Accept the delivery if your signature equals any `v1` value (compare in constant time) and `t` is
+    recent. Five minutes is a sensible limit.
+  </Step>
+</Steps>
 
-1. Split the header on `,` and each part on the first `=`. Take `t` and every `v1` value.
-2. Compute the hex-encoded HMAC-SHA256 of `"<t>.<raw request body>"` with your webhook secret.
-3. Accept the delivery if it equals any `v1` value (compare in constant time) and `t` is recent.
-
-Use the **raw bytes** you received. Verify before parsing, and never re-serialize the JSON first.
+<Warning>
+  Use the **raw bytes** you received. Verify before parsing, and never re-serialize the JSON first.
+</Warning>
 
 <CodeGroup>
 ```ruby Ruby
@@ -283,9 +291,9 @@ end
 </CodeGroup>
 
 **Why check the timestamp?** It stops someone replaying a captured delivery. Every delivery, retries
-included, is signed afresh, so a healthy receiver never sees an old one. Five minutes is a sensible limit.
+included, is signed afresh, so a healthy receiver never sees an old one.
 
-## Rotate your webhook secret
+### Rotate your webhook secret
 
 An app can have several webhook secrets, and each delivery is signed with all of them. That header carries
 one `v1=` per secret, so you can rotate without dropping a delivery:
@@ -294,97 +302,29 @@ one `v1=` per secret, so you can rotate without dropping a delivery:
 2. Set the new secret in your production environment.
 3. Expire the old secret. An app always keeps at least one.
 
-## Workflow run events
+## When a delivery fails
 
-[Workflow runs](/workflows) report to the `webhook_url` you start them with, using the same signature.
-Their events are `workflow_run.awaiting_input`, `workflow_run.notification`, `workflow_run.completed`,
-`workflow_run.failed` and `workflow_run.cancelled`. `workflow_run.awaiting_input` carries a `prompt`, and `prompt.kind` says what it
-is: `decision` for a question the chart asks, `conflict` when the run asks about a record someone changed
-before an update landed. The QuickBooks requests a workflow sends don't send webhooks of their own. A run started
-without a `webhook_url` sends none.
+- **Retried, up to 5 attempts in all.** Anything but a `2xx` within 5 seconds is a failed delivery: a 3xx
+  (redirects aren't followed), 4xx or 5xx, a timeout, or a refused connection. QuBe Sync retries with
+  backoff.
+- **Then marked failed.** After the last attempt the request's `webhook_state` becomes `failed`, your
+  organization's owners get an email, and the dashboard offers **Resend webhook**.
+- **Some addresses fail at once.** A delivery to an address webhooks
+  [may not go to](#receiving-webhooks-in-development), such as a hostname that now resolves to a private
+  address, isn't sent or retried: it fails at once with "Webhook not sent: ...", and the owners get the
+  email.
 
-Every event has `event`, `timestamp`, `app_id`, `sandbox`, `connection_id`, `workflow`, `workflow_id`,
-`run_id` and `links`. The three endings add `outcome`, `output`, `error` and `summary`, and a cancelled run
-adds `cancel_reason`. A run's `error` is a sentence, not the error object a request's webhook carries. See
-[Workflow webhooks](/workflows#webhooks) for examples.
+## Receiving webhooks in development
 
-### Data a workflow sends you
+QuBe Sync needs a publicly available URL (localhost doesn't work) to send to, so [use a tunnel](/ngrok) while you develop. You can also open the request’s `links.ui` to see the answer in the dashboard.
 
-A workflow can hand your app data while it runs, from a [`notify` state](/workflows#sending-your-app-data)
-("Send to the app" in the builder): each page of a customer query in order, for example. Each one is a
-`workflow_run.notification` with the usual fields plus:
+## Workflow runs
 
-| Field | |
-| --- | --- |
-| `delivery_id` | The notification's id, **the same on every retry of it**. Deduplicate on it: delivery is at least once. |
-| `seq` | 1, 2, 3… for the run, in the order its notifications were sent, workflows it calls included. |
-| `name` | What to route on, such as `customers_page`: the state's `name`. |
-| `state` | Where it was sent from, as a path from the run (`sync_page / send_customer` inside a workflow it calls). |
-| `from` | `null`, or the workflow the run called that sent it: `{"workflow", "state"}`, with `item_index` and `item_count` inside a state that runs once per item. Never a run id: `run_id` is always the run you started. |
-| `data` | What the state sends: any JSON, at most 4 MB. |
+A [workflow run](/workflows) sends webhooks about the run itself: when it needs a decision, when it sends
+your app data, and when it ends. The QuickBooks requests it makes don't send any. Run webhooks go to the
+`webhook_url` the run was started with, are signed the same way and need the same quick `2xx`, but the
+body is different: it has an `event`, such as `workflow_run.completed`, and a `run_id` instead of a
+request's `id`.
 
-```json
-{
-  "event": "workflow_run.notification",
-  "timestamp": 1758000000,
-  "app_id": "018f0000-0000-7000-8000-000000000003",
-  "sandbox": false,
-  "connection_id": "018f0000-0000-7000-8000-000000000001",
-  "workflow": "send_lists_to_app",
-  "workflow_id": "018f0000-0000-7000-8000-000000000004",
-  "run_id": "018f0000-0000-7000-8000-000000000000",
-  "links": {"run": "https://qubesync.com/api/v2/connections/…/workflow-runs/…", "decisions": "…", "cancel": "…", "ui": "…"},
-  "delivery_id": "018f0000-0000-7000-8000-000000000005",
-  "seq": 1,
-  "name": "customers_page",
-  "state": "send_customers",
-  "from": null,
-  "data": {"page": 1, "more": true, "customers": [{"list_id": "80000001-1738310400", "full_name": "Acme Co"}]}
-}
-```
-
-- **Order.** The run **waits for your `2xx`** before it goes on, so notifications arrive one at a time,
-  in `seq` order, and every one before the run's ending webhook: `workflow_run.completed` means everything
-  was sent. A slow endpoint slows the run; it never piles deliveries up.
-- **Retries** last longer than a run's other webhooks: 10 attempts over about an hour (15 s, 30 s, 1, 2,
-  4, 8, then 15 minutes apart), each with the same `delivery_id`, recorded in the run's log
-  (`notification_queued`, then `notification_delivered` or `notification_failed`). If none succeeds,
-  your organization's owners get an email and the state raises an error (`not_delivered`) that the
-  workflow can handle -- otherwise the run fails, its `error` reading "could not deliver customers_page
-  #3 to the app after 10 attempts: …". Data over 4 MB is never sent (`too_large`): send fewer records at
-  a time, a smaller `page_size`.
-- **A `webhook_url` is required** to start a workflow that has a `notify` state, or calls one that has:
-  without one the start is refused with `422 webhook_url_required`.
-- `summary.notifications` on the ending counts what was `sent` and what `failed`.
-
-- **Retries** work as above, up to 5 attempts, and every attempt is recorded in the run's event log as
-  `webhook_sent`. When they all fail, your organization's owners get an email, as for a request's
-  webhook. There's no **Resend** for a run, though: read it with `GET links.run` instead.
-- **Repeats**: a run ends once, so key endings on `run_id`. Each delivery is built when it's sent, from the
-  run as it is then, so a retried `workflow_run.awaiting_input` that arrives after the question was
-  answered has no `prompt`.
-
-```ruby
-# app/jobs/workflow_run_event_job.rb
-class WorkflowRunEventJob < ApplicationJob
-  def perform(event)
-    run = OrderSync.find_by(qube_run_id: event["run_id"]) or return # where you stored the run's id
-    return if run.finished? # a repeat, or a question retried after the end
-
-    case event["event"]
-    when "workflow_run.notification"
-      # Already handled if this delivery_id was seen: a retry repeats it.
-      return if run.deliveries.exists?(delivery_id: event["delivery_id"])
-
-      ImportPage.call(run, event["name"], event["data"]) # e.g. customers_page
-      run.deliveries.create!(delivery_id: event["delivery_id"])
-    when "workflow_run.awaiting_input"
-      run.update!(status: "waiting", question: event["prompt"]) if event["prompt"]
-    when "workflow_run.completed"
-      run.update!(status: "done", outcome: event["outcome"], output: event["output"])
-    when "workflow_run.failed", "workflow_run.cancelled"
-      run.update!(status: "stopped", outcome: event["outcome"], error: event["error"] || event["cancel_reason"])
-    end
-  end
-end
-```
+[Workflows → What your app receives](/workflows#what-your-app-receives) has the events, their payloads and
+the `WorkflowRunEventJob` the controller above hands them to.

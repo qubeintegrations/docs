@@ -202,7 +202,7 @@
       },
       "delete": {
         "summary": "Delete a connection",
-        "description": "Deletes a connection by ID. This will also delete all associated queued requests.",
+        "description": "Deletes a connection by ID. This will also delete all associated queued requests. The Web Connector on the QuickBooks computer keeps the app until someone removes it there. QuBe Sync answers its check-ins as an invalid login and tells it to check in only once a day.",
         "tags": [
           "Connections"
         ],

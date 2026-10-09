@@ -4,6 +4,8 @@ description: "Connect a QuickBooks company file, send it a request and read the 
 icon: "rocket"
 ---
 
+import { Request } from "/snippets/request.jsx";
+
 import CreateAccount from "/snippets/quickstart-create-account.mdx";
 
 ## Choose a company file
@@ -23,8 +25,7 @@ change when you connect real QuickBooks later.
         <CreateAccount />
       </Step>
       <Step title="Add a simulated connection">
-        A connection is one QuickBooks company file. Open **QB Connections**, click **New Connection**,
-        choose **My App Dev**, set **Type** to **simulated (beta)**, and click **Save Connection**.
+        Open QB Connections -> New Connection
 
         <Frame caption="The name is optional.">
           <img src="/images/quickstart/new-connection-simulated.png" alt="The New Connection form with App set to My App Dev, Name set to Test company and Type set to simulated (beta)" style={{ maxWidth: "592px" }} />
@@ -36,19 +37,43 @@ change when you connect real QuickBooks later.
         <Accordion title="Create it with the CLI or the API instead">
           Both need your API key: see [Do it from your code](#do-it-from-your-code).
 
-          <CodeGroup>
           ```bash CLI
           qube login
           qube use "My App Dev"
           qube connections create --simulated --name "Test company"
           ```
 
-          ```bash cURL
-          curl -u "$QUBE_API_KEY:" -X POST https://qubesync.com/api/v2/connections \
-            -H "Content-Type: application/json" \
-            -d '{"name": "Test company", "type": "simulated"}'
+          <Request
+            method="POST"
+            path="/api/v2/connections"
+            body={{ name: "Test company", type: "simulated" }}
+          />
+
+          {/* agent-block:start */}
+          <Visibility for="agents">
+
+          ```http
+          POST /api/v2/connections
+
+          {
+            "name": "Test company",
+            "type": "simulated"
+          }
           ```
-          </CodeGroup>
+
+          ```bash
+          curl -u "$QUBE_API_KEY:" \
+            -X POST \
+            "https://qubesync.com/api/v2/connections" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "name": "Test company",
+              "type": "simulated"
+            }'
+          ```
+
+          </Visibility>
+          {/* agent-block:end */}
         </Accordion>
       </Step>
       <Step title="Send a test request">
@@ -70,7 +95,7 @@ change when you connect real QuickBooks later.
         <Accordion title="Make the next request fail on purpose">
           Real integrations fail in ways that are hard to reproduce, like a name that's already taken. On
           the connection's page, under **Faults**, set **Next request** to *answered with 3100 — name
-          already in use*, then click **Create Test Request** again. Its state is `error`, with the same
+          already in use*, then click **Create Test Request** again. Its state is <Badge color="red">`error`</Badge>, with the same
           refusal QuickBooks would send.
 
           <Frame>
@@ -101,8 +126,7 @@ change when you connect real QuickBooks later.
         <CreateAccount />
       </Step>
       <Step title="Add a connection">
-        A connection is one QuickBooks company file. Open **QB Connections**, click **New Connection**,
-        choose **My App Dev**, leave **Type** as **standard**, and click **Save Connection**.
+        Open QB Connections -> New Connection
 
         <Frame caption="Name it after the company file, so you can tell your connections apart.">
           <img src="/images/quickstart/new-connection-standard.png" alt="The New Connection form with App set to My App Dev, Name set to Office PC and Type set to standard" style={{ maxWidth: "592px" }} />
@@ -174,10 +198,24 @@ dashboard:
 ```bash
 export QUBE_API_KEY="sk_..."
 export CONN_ID="4fdde583-..."
+```
 
+<Request path="/api/v2/connections/{connection_id}/customers" query={{ max_returned: 2 }} />
+
+{/* agent-block:start */}
+<Visibility for="agents">
+
+```http
+GET /api/v2/connections/{connection_id}/customers?max_returned=2
+```
+
+```bash
 curl -u "$QUBE_API_KEY:" \
   "https://qubesync.com/api/v2/connections/$CONN_ID/customers?max_returned=2"
 ```
+
+</Visibility>
+{/* agent-block:end */}
 
 The API key is the username for HTTP Basic auth, and the password is blank. QuBe Sync replies at once
 with `201 Created` and the request in state `waiting`, because QuickBooks Desktop answers only when its

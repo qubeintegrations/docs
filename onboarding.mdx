@@ -4,6 +4,8 @@ description: "Add a “Connect QuickBooks Desktop” button to your app. QuBe Sy
 icon: "plug"
 ---
 
+import { Request } from "/snippets/request.jsx";
+
 <Frame caption="The onboarding page your customer sees, with your app's name.">
   <img src="/images/quickstart/onboarding-ready.png" alt="The onboarding page for My App Dev: the checklist with No selected for a QuickBooks server and all three items checked, beside a green message saying the customer is ready, then two steps, Download QWC File and Generate Password, each with screenshots of the Web Connector" />
 </Frame>
@@ -15,11 +17,40 @@ icon: "plug"
     When your customer clicks the button, create a connection for them. Name it after their company, and
     pass the URL they should come back to.
 
-    ```bash
-    curl -u "$QUBE_API_KEY:" -X POST https://qubesync.com/api/v2/connections \
-      -H "Content-Type: application/json" \
-      -d '{"name": "Riverbend Electric", "redirect_url": "https://your-app.example/quickbooks/callback"}'
+    <Request
+      method="POST"
+      path="/api/v2/connections"
+      body={{
+        name: "Riverbend Electric",
+        redirect_url: "https://your-app.example/quickbooks/callback",
+      }}
+    />
+
+    {/* agent-block:start */}
+    <Visibility for="agents">
+
+    ```http
+    POST /api/v2/connections
+
+    {
+      "name": "Riverbend Electric",
+      "redirect_url": "https://your-app.example/quickbooks/callback"
+    }
     ```
+
+    ```bash
+    curl -u "$QUBE_API_KEY:" \
+      -X POST \
+      "https://qubesync.com/api/v2/connections" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "name": "Riverbend Electric",
+        "redirect_url": "https://your-app.example/quickbooks/callback"
+      }'
+    ```
+
+    </Visibility>
+    {/* agent-block:end */}
 
     Store the connection's `id` against the customer's account. You'll use it for every request.
   </Step>
@@ -37,9 +68,7 @@ icon: "plug"
     | `expired` | The onboarding link was more than 48 hours old. | [Regenerate the link](/api-reference/v2/connections/regenerate-the-onboarding-url) and send them again. |
 
     <Note>
-      QuBe Sync appends `?connection_id=…&state=…` to your `redirect_url`, so it can't have a query string of
-      its own: the API refuses one with `422`. To bring your own context back, put it in the path
-      (`/quickbooks/callback/42`) or look the account up by `connection_id`.
+      Don't include query parameters in your `redirect_url`, because QuBe Sync appends <span style="text-wrap: nowrap;">`?connection_id=…&state=…`</span>. To bring your own context back, look the account up by `connection_id` or put it in the path (`/quickbooks/callback/42`).
     </Note>
   </Step>
 </Steps>
@@ -87,40 +116,25 @@ app.get("/quickbooks/callback", (req, res) => {
 ```
 </CodeGroup>
 
-## What your customer sees
-
-The onboarding page names your app ("Connect My App to QuickBooks Enterprise / Desktop") and walks them through:
-
-1. **A checklist**: they're on the computer that runs QuickBooks, QuickBooks is open in single-user mode as
-   the admin, and the right company file is open.
-2. **Download the QWC file** and open it, which adds your app to their Web Connector.
-3. **Generate a password** and paste it into the Web Connector.
-4. **Connected.** As soon as the Web Connector checks in, the page confirms it and returns them to your app.
-
-While you're building, you can skip all of this with a [simulated connection](/simulator).
-
-## Standard or realtime?
+## Choosing standard or realtime?
 
 Pass `type` when you create the connection:
 
-- `standard` (the default): the Web Connector checks in every 5 minutes. Right for background syncing.
-- `realtime`: every 10 seconds. Right when a person is waiting on the result, such as an invoice created
-  from a checkout page. Realtime connections are billed at a higher rate; see [pricing](https://qubesync.com/#pricing).
+- `standard` (the default): the Web Connector checks in every 5 minutes. Best for background syncing.
+- `realtime`: every 10 seconds. When a person is waiting on the result, or might need to resolve conflicts in the moment. Realtime connections are billed at a higher rate; see [pricing](https://qubesync.com/#pricing).
 
 ## Keep an eye on the connection
 
-A connection's `last_connected_at` is the last time its Web Connector checked in. Show it in your app's
-settings page: if it's hours or days old, the computer running QuickBooks is probably off, the Web Connector
+A connection's `last_connected_at` is the last time its Web Connector checked in. Displaying it to your user can help them self-diagnose why they're still waiting on a request. If it's hours or days old, the computer running QuickBooks is probably off, the Web Connector
 isn't running, or the company file has moved. Requests keep waiting in the queue in the meantime. If they
 wait a week, QuBe Sync emails your organization's owners.
 
 ## When a customer leaves
 
 [Delete the connection](/api-reference/v2/connections/remove-a-connection) and ask your customer to remove
-your app from their Web Connector (select it, then **Remove**). Deleting stops it counting toward your bill.
+your app from their Web Connector (select it, then **Remove**).
 
-Until your app is removed, the Web Connector keeps checking in on its own. QuBe Sync answers it as an invalid
-login ("Invalid password for username"), and tells it to check in only once a day.
+Until your app is removed, the Web Connector keeps checking in on its own. 
 
 ## Build your own onboarding
 

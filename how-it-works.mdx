@@ -87,26 +87,32 @@ stateDiagram-v2
   retryable --> ticketed: next session
   waiting --> discarded: you discard it
   retryable --> discarded: you discard it
-  classDef ask fill:#fef3c7,stroke:#d97706,color:#78350f
+  classDef ask fill:#ffedd5,stroke:#ea580c,color:#7c2d12
+  classDef lost fill:#f3e8ff,stroke:#9333ea,color:#581c87
+  classDef active fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+  classDef plain fill:#ffffff,stroke:#94a3b8,color:#1e293b
   classDef good fill:#dcfce7,stroke:#16a34a,color:#14532d
   classDef quiet fill:#f1f5f9,stroke:#64748b,color:#1e293b
   classDef bad fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
   class retryable ask
   class response_received good
-  class timed_out, discarded quiet
+  class timed_out lost
+  class discarded quiet
+  class ticketed, sent active
+  class waiting plain
   class error bad
 ```
 
 | State | Meaning | Webhook? |
 | --- | --- | --- |
 | `waiting` | Queued; the Web Connector hasn't picked it up yet. | |
-| `ticketed` | A Web Connector session has taken it. | |
-| `sent` | Handed to QuickBooks; waiting for its answer. | |
-| `retryable` | The Web Connector couldn't reach QuickBooks (not running, a dialog open, the wrong company file). QuBe Sync tries again on the next runs. | Yes, when the error first appears or changes |
-| `response_received` | QuickBooks answered. Read `response_json.data`. | Yes |
-| `error` | Failed for good, for example QuickBooks refused it (a duplicate name, a stale `edit_sequence`). | Yes |
-| `timed_out` | QuickBooks received it, but never responded. It may or may not have been applied. | Yes |
-| `discarded` | Your app withdrew it before the Web Connector took it. It never reached QuickBooks. | Yes |
+| <Badge color="blue">`ticketed`</Badge> | A Web Connector session has taken it. | |
+| <Badge color="blue">`sent`</Badge> | Handed to QuickBooks; waiting for its answer. | |
+| <Badge color="orange">`retryable`</Badge> | The Web Connector couldn't reach QuickBooks (not running, a dialog open, the wrong company file). QuBe Sync tries again on the next runs. | Yes, when the error first appears or changes |
+| <Badge color="green">`response_received`</Badge> | QuickBooks answered. Read `response_json.data`. | Yes |
+| <Badge color="red">`error`</Badge> | Failed for good, for example QuickBooks refused it (a duplicate name, a stale `edit_sequence`). | Yes |
+| <Badge color="purple">`timed_out`</Badge> | QuickBooks received it, but never responded. It may or may not have been applied. | Yes |
+| <Badge color="gray">`discarded`</Badge> | Your app withdrew it before the Web Connector took it. It never reached QuickBooks. | Yes |
 
 The last four are final. [Error handling](/error_handling) covers what to do with each.
 
@@ -132,7 +138,7 @@ The last four are final. [Error handling](/error_handling) covers what to do wit
 - **API keys belong to one app.** They reach that app's connections, requests and workflows, and nothing
   else. Keys start with `sk_`, and you can create and expire them in the dashboard.
 - **Webhooks are signed** with your app's webhook secret (HMAC-SHA256 over a timestamp and the body), so
-  you can reject anything that didn't come from QuBe Sync. [Verify signatures](/webhooks#verify-the-signature).
+  you can reject anything that didn't come from QuBe Sync. [Verify signatures](/webhooks#securing-your-endpoints).
 - **Sandbox and production are separate apps**, with separate keys, secrets and connections.
 - **QuBe Sync never needs your customer's QuickBooks login.** The Web Connector authenticates to QuBe Sync
   with a per-connection username and password, and QuickBooks itself is only ever reached from their PC.

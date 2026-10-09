@@ -5,6 +5,8 @@ icon: "flask"
 tag: "Beta"
 ---
 
+import { Request } from "/snippets/request.jsx";
+
 Testing a QuickBooks Desktop integration has usually meant a Windows VM, a licensed copy of QuickBooks, and
 waiting minutes for the Web Connector on every change. Worse, the failures that matter most, such as a
 duplicate name, QuickBooks closed or a stale `edit_sequence`, are hard to reproduce on purpose.
@@ -25,11 +27,37 @@ however you like.
 
 ## Create one
 
-```bash
-curl -u "$QUBE_API_KEY:" -X POST https://qubesync.com/api/v2/connections \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Test company", "type": "simulated"}'
+<Request
+  method="POST"
+  path="/api/v2/connections"
+  body={{ name: "Test company", type: "simulated" }}
+/>
+
+{/* agent-block:start */}
+<Visibility for="agents">
+
+```http
+POST /api/v2/connections
+
+{
+  "name": "Test company",
+  "type": "simulated"
+}
 ```
+
+```bash
+curl -u "$QUBE_API_KEY:" \
+  -X POST \
+  "https://qubesync.com/api/v2/connections" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Test company",
+    "type": "simulated"
+  }'
+```
+
+</Visibility>
+{/* agent-block:end */}
 
 It's connected as soon as it exists. There's nothing to install and no onboarding. From the CLI:
 `qube connections create --simulated --name "Test company"`. Simulated connections are never billed.
@@ -59,9 +87,23 @@ and they can't be changed. Requests it doesn't model yet, such as reports, are a
 
 Reset it to the starting data at any time:
 
-```bash
-curl -u "$QUBE_API_KEY:" -X POST "https://qubesync.com/api/v2/connections/$CONN_ID/simulator/reset"
+<Request method="POST" path="/api/v2/connections/{connection_id}/simulator/reset" />
+
+{/* agent-block:start */}
+<Visibility for="agents">
+
+```http
+POST /api/v2/connections/{connection_id}/simulator/reset
 ```
+
+```bash
+curl -u "$QUBE_API_KEY:" \
+  -X POST \
+  "https://qubesync.com/api/v2/connections/$CONN_ID/simulator/reset"
+```
+
+</Visibility>
+{/* agent-block:end */}
 
 ## Transactions and their lines
 
@@ -170,18 +212,38 @@ Other differences we know of:
 `PUT /connections/{id}/simulator` sets **faults**. Each `PUT` replaces the whole set, so send every fault
 you want armed at once. Resetting clears them all.
 
+<Request
+  method="PUT"
+  path="/api/v2/connections/{connection_id}/simulator"
+  body={{ faults: { connection_error: "modal_dialog" } }}
+/>
+
+{/* agent-block:start */}
+<Visibility for="agents">
+
+```http
+PUT /api/v2/connections/{connection_id}/simulator
+
+{"faults": {"connection_error": "modal_dialog"}}
+```
+
 ```bash
-curl -u "$QUBE_API_KEY:" -X PUT "https://qubesync.com/api/v2/connections/$CONN_ID/simulator" \
+curl -u "$QUBE_API_KEY:" \
+  -X PUT \
+  "https://qubesync.com/api/v2/connections/$CONN_ID/simulator" \
   -H "Content-Type: application/json" \
   -d '{"faults": {"connection_error": "modal_dialog"}}'
 ```
 
+</Visibility>
+{/* agent-block:end */}
+
 | Fault | Values | Behaves like | Lasts |
 | --- | --- | --- | --- |
-| `connection_error` | `qb_closed`, `modal_dialog`, `company_file_mismatch`, `unexpected` | QuickBooks not running, a dialog open, the wrong company file open, or an unexplained failure. Requests go `retryable`. | Until a `PUT` leaves it out |
+| `connection_error` | `qb_closed`, `modal_dialog`, `company_file_mismatch`, `unexpected` | QuickBooks not running, a dialog open, the wrong company file open, or an unexplained failure. Requests go <Badge color="orange">`retryable`</Badge>. | Until a `PUT` leaves it out |
 | `next_status` | `{"code": 3100}`, or any QuickBooks status code, with an optional `message` | QuickBooks refusing the next request with that code. | One request |
 | `next_response_error` | `"xml_error"`, or `{"hresult", "message"}` | QuickBooks failing to parse the next request. | One request |
-| `next_lost_response` | `true` | QuickBooks applying the next request, whatever it is, then the Web Connector dying before it answers. The request ends `timed_out`; a workflow that sent it [settles it](/workflows#lost-answers). | One request |
+| `next_lost_response` | `true` | QuickBooks applying the next request, whatever it is, then the Web Connector dying before it answers. The request ends <Badge color="purple">`timed_out`</Badge>; a workflow that sent it [settles it](/workflows#lost-answers). | One request |
 | `latency_ms` | `0` to `60000` | QuickBooks taking its time over each answer. | Until a `PUT` leaves it out |
 
 `GET /connections/{id}/simulator` shows the current faults and a summary of the company file, and
@@ -220,7 +282,7 @@ Walk every path before your customers do:
 | Duplicate name | `next_status: {code: 3100}` | Ask the user, or use [`create_customer_safely`](/workflows) |
 | Record changed in QuickBooks | `next_status: {code: 3200}` | Re-query, then retry the update. (A workflow's update reads the record back, finds it unchanged and sends it again.) |
 | Answer lost | `next_lost_response: true` | Query before resending a create or update. A workflow [settles it](/workflows#lost-answers) itself |
-| Record changed before a workflow's update | A chart of your own with an update state (no template sends one): change the record through the API, then run the update with the `edit_sequence` from before | Answer the [conflict prompt](/workflows#conflicts): `overwrite` or `keep` |
+| Record changed before a workflow's update | A chart of your own with an update state: change the record through the API, then run the update with the `edit_sequence` from before | Answer the [conflict prompt](/workflows#conflicts): `overwrite` or `keep` |
 | Missing reference | `next_status: {code: 3140}` | Create the referenced record, or tell the user |
 | QuickBooks closed | `connection_error: qb_closed` | Show `error.user_message`, not resend; the answer follows once you clear the fault |
 | Wrong company file | `connection_error: company_file_mismatch` | Show `error.user_message` |

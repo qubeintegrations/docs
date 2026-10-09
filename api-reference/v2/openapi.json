@@ -29,6 +29,21 @@
         },
         "description": "Nothing by that id, or it belongs to another app."
       },
+      "SandboxPaused": {
+        "content": {
+          "application/json": {
+            "example": {
+              "errors": {
+                "detail": "Sandbox access is paused for this organization because the sandbox period expired and the organization does not currently have both active billing and a recent production connection. Please request an extension if you're still working on your integration or contact support if you have questions."
+              }
+            },
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "A sandbox app whose organization's sandbox access is paused. Nothing was queued."
+      },
       "Unauthorized": {
         "content": {
           "text/plain": {
@@ -30397,6 +30412,167 @@
             "type": "object"
           }
         ]
+      },
+      "RawQBXMLResponseJSON": {
+        "anyOf": [
+          {
+            "properties": {
+              "data": {
+                "description": "What QuickBooks returned, snake_cased, as an operation's `data` is: a list for a query, the record for an add or update."
+              },
+              "error": {
+                "properties": {
+                  "code": {
+                    "description": "QuickBooks' own statusCode. The stable thing to branch on.",
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "message": {
+                    "description": "QuickBooks' own statusMessage.",
+                    "type": "string"
+                  },
+                  "type": {
+                    "description": "A stable name for `code`, when QuBeSync recognises it. Absent otherwise: coverage widens over time, so treat this as a hint and branch on `code` if you need certainty.",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "message": {
+                "description": "QuickBooks' own status message, carried through when there is no data to show for an otherwise successful request (a query that matched nothing, say).",
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "success",
+                  "error"
+                ],
+                "type": "string"
+              },
+              "warning": {
+                "description": "Present only when QuickBooks answered with a `Warn` severity: it carried the request out, and `data` is what it saved or found, but it has something to say about it. For example code `530` with the message `The field \"Memo\" is not supported by this implementation.` means the record was saved without that field, so an add or update that comes back with a `warning` may not have saved everything it sent. Absent on a plain success and on an error.",
+                "properties": {
+                  "code": {
+                    "description": "QuickBooks' own statusCode. The stable thing to branch on.",
+                    "type": "integer"
+                  },
+                  "message": {
+                    "description": "QuickBooks' own statusMessage, such as which field it did not support.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "status"
+            ],
+            "title": "One request",
+            "type": "object"
+          },
+          {
+            "properties": {
+              "responses": {
+                "description": "One entry per request, in the order they were sent.",
+                "items": {
+                  "properties": {
+                    "data": {
+                      "description": "What QuickBooks returned, snake_cased, as an operation's `data` is: a list for a query, the record for an add or update."
+                    },
+                    "error": {
+                      "properties": {
+                        "code": {
+                          "description": "QuickBooks' own statusCode. The stable thing to branch on.",
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        },
+                        "message": {
+                          "description": "QuickBooks' own statusMessage.",
+                          "type": "string"
+                        },
+                        "type": {
+                          "description": "A stable name for `code`, when QuBeSync recognises it. Absent otherwise: coverage widens over time, so treat this as a hint and branch on `code` if you need certainty.",
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "message": {
+                      "description": "QuickBooks' own status message, carried through when there is no data to show for an otherwise successful request (a query that matched nothing, say).",
+                      "type": "string"
+                    },
+                    "request": {
+                      "description": "The request's element name, such as `CustomerQueryRq`.",
+                      "type": "string"
+                    },
+                    "request_id": {
+                      "description": "The request's `requestID`, or `null` when it had none.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "status": {
+                      "description": "`success` or `error` for a request QuickBooks ran or refused; `not_processed` for one it skipped: with `stopOnError`, every request after the first that failed, which QuickBooks answers with 3231.",
+                      "enum": [
+                        "success",
+                        "error",
+                        "not_processed"
+                      ],
+                      "type": "string"
+                    },
+                    "warning": {
+                      "description": "Present only when QuickBooks answered with a `Warn` severity: it carried the request out, and `data` is what it saved or found, but it has something to say about it. For example code `530` with the message `The field \"Memo\" is not supported by this implementation.` means the record was saved without that field, so an add or update that comes back with a `warning` may not have saved everything it sent. Absent on a plain success and on an error.",
+                      "properties": {
+                        "code": {
+                          "description": "QuickBooks' own statusCode. The stable thing to branch on.",
+                          "type": "integer"
+                        },
+                        "message": {
+                          "description": "QuickBooks' own statusMessage, such as which field it did not support.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "request",
+                    "request_id",
+                    "status"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "status": {
+                "description": "`success` only when every entry is `success`.",
+                "enum": [
+                  "success",
+                  "error"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "status",
+              "responses"
+            ],
+            "title": "A batch",
+            "type": "object"
+          }
+        ],
+        "description": "QuBe Sync's summary of QuickBooks' answer. One request: the `{status, data}` summary an operation's `response_json` is. A batch: `{status, responses}`, one entry per request. What each QuickBooks status code means and how to handle it: [Error handling](https://docs.qubesync.com/error_handling#quickbooks-said-no)."
       },
       "updateItemService_response_json": {
         "description": "QuBe Sync's summary of QuickBooks' answer. Only an `Error` severity from QuickBooks is `status: \"error\"` (and makes the request's `state` `error`), so a query that matched nothing is still `success`. A `Warn` severity is a `success` with `warning` beside it.",
@@ -72445,31 +72621,6 @@
           }
         ]
       },
-      "QuickBooksError": {
-        "description": "QuickBooks refused the request: its own status code and message.",
-        "properties": {
-          "code": {
-            "description": "QuickBooks' own statusCode. The stable thing to branch on.",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "message": {
-            "description": "QuickBooks' own statusMessage.",
-            "type": "string"
-          },
-          "type": {
-            "description": "A stable name for `code`, such as `invalid_object_id` for 3000, when QuBe Sync recognises it. Absent otherwise. What each means and how to handle it: [Error handling](https://docs.qubesync.com/error_handling#quickbooks-said-no).",
-            "type": "string"
-          }
-        },
-        "required": [
-          "code",
-          "message"
-        ],
-        "type": "object"
-      },
       "createAccount_response_json": {
         "description": "QuBe Sync's summary of QuickBooks' answer. Only an `Error` severity from QuickBooks is `status: \"error\"` (and makes the request's `state` `error`), so a query that matched nothing is still `success`. A `Warn` severity is a `success` with `warning` beside it.",
         "oneOf": [
@@ -98091,23 +98242,6 @@
           }
         ]
       },
-      "QuickBooksWarning": {
-        "description": "Present only when QuickBooks answered with a `Warn` severity: it carried the request out but has something to say about it, such as `530` for a field it did not support and left out.",
-        "properties": {
-          "code": {
-            "description": "QuickBooks' own statusCode.",
-            "type": "integer"
-          },
-          "message": {
-            "description": "QuickBooks' own statusMessage.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "code"
-        ],
-        "type": "object"
-      },
       "listCustomDetailReports_response_json": {
         "description": "QuBe Sync's summary of QuickBooks' answer. Only an `Error` severity from QuickBooks is `status: \"error\"` (and makes the request's `state` `error`), so a query that matched nothing is still `success`. A `Warn` severity is a `success` with `warning` beside it.",
         "oneOf": [
@@ -116638,7 +116772,7 @@
         ]
       },
       "delete": {
-        "description": "Also deletes every queued request on it.",
+        "description": "Also deletes every queued request on it. The Web Connector on the QuickBooks computer keeps the app until someone removes it there. QuBe Sync answers its check-ins as an invalid login and tells it to check in only once a day.",
         "operationId": "deleteConnection",
         "parameters": [
           {
@@ -117499,11 +117633,162 @@
         ]
       },
       "post": {
-        "description": "Queues qbXML you wrote, sent to QuickBooks as it is: a request no operation expresses, qbXML you already have, or several requests QuickBooks should run together in one envelope. The JSON operations are the usual path: they check each parameter by name and need no qbXML. The body takes `request_xml` and nothing else, so anything more (v1's `queued_request` wrapper, `request_json`) is refused with `400`.\n\n`request_xml` is checked before anything is queued, and the first rule it breaks answers `422`:\n\n1. It has no DOCTYPE: qbXML doesn't use one.\n2. It declares its qbXML version, such as `<?qbxml version=\"16.0\"?>`, and the version is 13.0, 14.0, 15.0 or 16.0.\n3. It is valid against that version's qbXML schema.\n4. `<QBXML>` holds only `<QBXMLMsgsRq>`, with at least one request inside it.\n5. In a batch (two or more requests), no request has an `iterator` attribute: queue an iterator query on its own.\n6. `onError` is `stopOnError` or `continueOnError`. QuickBooks Desktop refuses `rollbackOnError` for the whole envelope.\n\nPass `webhook_url` and QuBe Sync POSTs the answer to it once QuickBooks has answered, as for any operation, and `response_xml` holds QuickBooks' own answer. One request answers exactly as an operation does: `response_json` is the same `{status, data}` summary, and a request QuickBooks refuses ends `error`. An iterator query (`iterator=\"Start\"` with `MaxReturned`), alone in its envelope, is paged as usual, a webhook per page.\n\nA batch's `response_json` is `{status, responses}`: one entry per request, in the order they were sent, with `request` (the request's name), `request_id` (its `requestID`, or `null`) and `status`. An answered entry is `success` or `error`, with the `data`, `message`, `warning` or `error` one request's summary has. `not_processed` is a request QuickBooks skipped: with `onError=\"stopOnError\"` QuickBooks stops at the first request that fails and answers every request after it \"The request has not been processed.\" (status 3231), so each of those is `not_processed`, while `continueOnError` carries on and runs each one. A 3231 that isn't after an earlier failure is QuickBooks declining that request itself (its edition or preferences don't allow it), so it's an `error`. The top-level `status` is `success` only when every entry is.\n\nA batch QuickBooks answered is `response_received`, whatever its entries say: some of its requests may have been carried out. Read the entries to see which, and don't resend the whole batch.",
+        "callbacks": {
+          "answered": {
+            "{$request.query.webhook_url}": {
+              "post": {
+                "description": "Verify `X-QUBE-Signature`, answer 2xx within 5 seconds, then branch on `state`:\n\n* `response_received` -- QuickBooks accepted it: `response_json` is `status: \"success\"` with `data`, or, when there is nothing to show, QuickBooks' `message` (a query that matched nothing is a success, not an error). When QuickBooks carried it out but warned about something, `response_json.warning` has its `code` and `message`: `530`, for one, means a field you sent is not supported by the customer's QuickBooks and was not saved.\n* `error` -- it failed for good. With `error.error_type` `quickbooks_business_error`, QuickBooks refused the request: `response_json` is `status: \"error\"`, and `response_json.error.code` is the status code to branch on. Otherwise QuickBooks never answered it: `xml_error` (the request itself was rejected, and will be again as sent) or `unexpected_error` (the Web Connector's log says more). A connection problem never ends here; it is `retryable`, below.\n* `retryable` -- the Web Connector could not get it into QuickBooks (QuickBooks was not running, the company file was not open or not this connection's, or a window in QuickBooks was in the way), so nothing was applied. QuBe Sync keeps trying on the Web Connector's runs, so don't resend: show the customer `error.user_message` so they can fix it. This webhook comes when the error first appears or changes, not on every try. If you no longer want the request, discard it (`POST /connections/{connection_id}/queued-requests/{id}/discard`).\n* `timed_out` -- abandoned without an answer. QuickBooks may still have applied it, so look before sending an add again.\n* `discarded` -- your app discarded it before the Web Connector picked it up. QuickBooks never got it, so nothing was applied.\n\nAn iterated query sends one webhook per page, all with the same `id` and each with its own `page_request_id` and `page`; `iteration_state` is `done` on the last page, which can arrive before earlier ones, so the import is complete once every page from 1 to the `done` page's `page` has been handled. Deliveries can arrive out of order and, after a retry, more than once: key on `page_request_id` plus `state`. A `retryable` webhook is not final: the answer that follows carries the same `id` and `page_request_id` with a different `state`, and only a repeat of the same `state` is a duplicate.\n\nIf webhooks stop arriving altogether, the Web Connector on the customer's PC has most likely stopped calling in; requests wait until it does. Intuit's guide to its errors: https://quickbooks.intuit.com/learn-support/en-us/help-article/open-programs/fix-common-web-connector-errors-quickbooks-desktop/L9slolvg0_US_en_US\n",
+                "requestBody": {
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "description": "POSTed to `webhook_url` as JSON, signed with `X-QUBE-Signature` (`t=<timestamp>,v1=<hex HMAC-SHA256 of \"<timestamp>.<raw body>\" with your app's webhook secret>`).",
+                        "properties": {
+                          "app_id": {
+                            "description": "Your app's id.",
+                            "format": "uuid",
+                            "type": "string"
+                          },
+                          "app_name": {
+                            "type": "string"
+                          },
+                          "error": {
+                            "description": "Set when `state` is `error` or `retryable` (and kept if a `retryable` request is then discarded). `error_type` says where it failed; `user_message` is safe to show an end user; `error_code` is QuickBooks' own status code for a business error, `hresult` the Web Connector's for a connection/XML error; `debug_message` is for you.",
+                            "properties": {
+                              "debug_message": {
+                                "description": "Which element of the request the value came from, when known.",
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "error_code": {
+                                "description": "QuickBooks' statusCode, for a business error.",
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ]
+                              },
+                              "error_type": {
+                                "description": "`quickbooks_business_error`: QuickBooks refused the request -- `response_json.error` has its code. `quickbooks_connection_error`: the Web Connector ran on the customer's PC but could not get the request into QuickBooks, so nothing was applied -- QuickBooks was not running, the company file was not open or not the one this connection belongs to, or a window or message box open in QuickBooks was in the way. Only the customer can fix that, and `user_message` tells them how. `xml_error`: QuickBooks could not parse the qbXML; sent again as-is, it fails again. `unexpected_error`: anything else. Web Connector problems on the customer's PC (its password, log file, the .QWC file) never reach QuBe Sync as an error: the Web Connector just stops calling in, and requests wait. Intuit's guide for those: https://quickbooks.intuit.com/learn-support/en-us/help-article/open-programs/fix-common-web-connector-errors-quickbooks-desktop/L9slolvg0_US_en_US",
+                                "enum": [
+                                  "xml_error",
+                                  "quickbooks_connection_error",
+                                  "quickbooks_business_error",
+                                  "unexpected_error"
+                                ],
+                                "type": "string"
+                              },
+                              "hresult": {
+                                "description": "The Web Connector's HRESULT (e.g. `0x80040400`), for a connection or XML error. Informational: branch on `error_type`, not on this.",
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "message": {
+                                "description": "The raw message from QuickBooks or the Web Connector.",
+                                "type": "string"
+                              },
+                              "user_message": {
+                                "description": "A friendly message for the end user.",
+                                "type": "string"
+                              }
+                            },
+                            "type": [
+                              "object",
+                              "null"
+                            ]
+                          },
+                          "id": {
+                            "description": "The request's id, as the 201 returned it. For an iterated query, every page carries the first page's id here.",
+                            "format": "uuid",
+                            "type": "string"
+                          },
+                          "iteration_state": {
+                            "description": "`continue`: more pages will follow, each its own webhook. `done`: this was the last page. `max_sandbox_iterations_reached`: a sandbox app's page limit stopped the iteration.",
+                            "enum": [
+                              "not_applicable",
+                              "continue",
+                              "done",
+                              "max_sandbox_iterations_reached"
+                            ],
+                            "type": "string"
+                          },
+                          "page": {
+                            "description": "The page number, when iterated.",
+                            "type": [
+                              "integer",
+                              "null"
+                            ]
+                          },
+                          "page_request_id": {
+                            "description": "This page's own id. Equal to `id` except on later pages of an iterated query.",
+                            "format": "uuid",
+                            "type": "string"
+                          },
+                          "response_json": {
+                            "$ref": "#/components/schemas/RawQBXMLResponseJSON"
+                          },
+                          "response_xml": {
+                            "description": "QuickBooks' raw qbXML answer. `response_json` is the same, summarized.",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "sandbox": {
+                            "description": "Whether the app is a sandbox app.",
+                            "type": "boolean"
+                          },
+                          "state": {
+                            "description": "`response_received`: QuickBooks accepted it; read `response_json`. `error`: it failed for good -- see `error`, and `response_json.error` for a QuickBooks business error. `retryable`: QuickBooks could not be reached and QuBe Sync keeps trying; show the customer `error.user_message` so they can fix it. `timed_out`: the request was abandoned and will not be answered. `discarded`: your app discarded it before the Web Connector picked it up, so QuickBooks never got it.",
+                            "enum": [
+                              "response_received",
+                              "error",
+                              "retryable",
+                              "timed_out",
+                              "discarded"
+                            ],
+                            "type": "string"
+                          },
+                          "timestamp": {
+                            "description": "Unix seconds; the same `t` the signature covers.",
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "app_id",
+                          "app_name",
+                          "sandbox",
+                          "timestamp",
+                          "id",
+                          "page_request_id",
+                          "state",
+                          "response_json",
+                          "error"
+                        ],
+                        "type": "object"
+                      }
+                    }
+                  },
+                  "required": true
+                },
+                "responses": {
+                  "2XX": {
+                    "description": "Received. Anything else is retried, up to 5 attempts."
+                  }
+                },
+                "summary": "QuickBooks answered (or the request failed)"
+              }
+            }
+          }
+        },
+        "description": "Queues qbXML you wrote, sent to QuickBooks as it is: a request no operation expresses, qbXML you already have, or several requests QuickBooks should run together in one envelope. The JSON operations are the usual path: they check each parameter by name and need no qbXML. The body takes `request_xml`, and anything else in it (v1's `queued_request` wrapper, `request_json`) is refused with `400`.\n\n`request_xml` is checked before anything is queued, and the first rule it breaks answers `422`:\n\n1. It has no DOCTYPE: qbXML doesn't use one.\n2. It declares its qbXML version, such as `<?qbxml version=\"16.0\"?>`, and the version is 13.0, 14.0, 15.0 or 16.0.\n3. It is valid against that version's qbXML schema.\n4. `<QBXML>` holds only `<QBXMLMsgsRq>`, with at least one request inside it.\n5. In a batch (two or more requests), no request has an `iterator` attribute: queue an iterator query on its own.\n6. `onError` is `stopOnError` or `continueOnError`. QuickBooks Desktop refuses `rollbackOnError` for the whole envelope.\n\nPass `webhook_url` and QuBe Sync POSTs the answer to it once QuickBooks has answered, as for any operation, and `response_xml` holds QuickBooks' own answer. One request answers exactly as an operation does: `response_json` is the same `{status, data}` summary, and a request QuickBooks refuses ends `error`. An iterator query (`iterator=\"Start\"` with `MaxReturned`), alone in its envelope, is paged as usual, a webhook per page.\n\nA batch's `response_json` is `{status, responses}`: one entry per request, in the order they were sent, with `request` (the request's name), `request_id` (its `requestID`, or `null`) and `status`. An answered entry is `success` or `error`, with the `data`, `message`, `warning` or `error` one request's summary has. `not_processed` is a request QuickBooks skipped: with `onError=\"stopOnError\"` QuickBooks stops at the first request that fails and answers every request after it \"The request has not been processed.\" (status 3231), so each of those is `not_processed`, while `continueOnError` carries on and runs each one. A 3231 that isn't after an earlier failure is QuickBooks declining that request itself (its edition or preferences don't allow it), so it's an `error`. The top-level `status` is `success` only when every entry is.\n\nA batch QuickBooks answered is `response_received`, whatever its entries say: some of its requests may have been carried out. Read the entries to see which, and don't resend the whole batch.",
         "operationId": "createQueuedRequest",
         "parameters": [
           {
-            "description": "The connection to act on.",
+            "description": "The connection (a customer's QuickBooks company file) this request is queued for.",
             "in": "path",
             "name": "connection_id",
             "required": true,
@@ -117527,12 +117812,14 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "example": {
+                "request_xml": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<?qbxml version=\"16.0\"?>\n<QBXML>\n  <QBXMLMsgsRq onError=\"stopOnError\">\n    <CustomerQueryRq requestID=\"1\">\n      <MaxReturned>10</MaxReturned>\n    </CustomerQueryRq>\n  </QBXMLMsgsRq>\n</QBXML>"
+              },
               "schema": {
                 "additionalProperties": false,
                 "properties": {
                   "request_xml": {
-                    "description": "The whole qbXML document: the `<?qbxml version=\"...\"?>` declaration, then `<QBXML>`, then `<QBXMLMsgsRq>` holding one request. Sent to QuickBooks as it is.",
-                    "example": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<?qbxml version=\"16.0\"?>\n<QBXML>\n  <QBXMLMsgsRq onError=\"stopOnError\">\n    <CustomerQueryRq requestID=\"1\">\n      <MaxReturned>10</MaxReturned>\n    </CustomerQueryRq>\n  </QBXMLMsgsRq>\n</QBXML>",
+                    "description": "The whole qbXML document: the `<?qbxml version=\"...\"?>` declaration, then `<QBXML>`, then `<QBXMLMsgsRq>` holding one request, or several to run as a batch. Sent to QuickBooks as it is.",
                     "type": "string"
                   }
                 },
@@ -117561,104 +117848,13 @@
                             "response_json": {
                               "anyOf": [
                                 {
-                                  "properties": {
-                                    "data": {
-                                      "description": "What QuickBooks returned, snake_cased, as an operation's `data` is: a list for a query, the record for an add or update."
-                                    },
-                                    "error": {
-                                      "$ref": "#/components/schemas/QuickBooksError"
-                                    },
-                                    "message": {
-                                      "description": "QuickBooks' own status message, when a success has no data to show (a query that matched nothing, say).",
-                                      "type": "string"
-                                    },
-                                    "status": {
-                                      "enum": [
-                                        "success",
-                                        "error"
-                                      ],
-                                      "type": "string"
-                                    },
-                                    "warning": {
-                                      "$ref": "#/components/schemas/QuickBooksWarning"
-                                    }
-                                  },
-                                  "required": [
-                                    "status"
-                                  ],
-                                  "title": "One request",
-                                  "type": "object"
-                                },
-                                {
-                                  "properties": {
-                                    "responses": {
-                                      "description": "One entry per request, in the order they were sent.",
-                                      "items": {
-                                        "properties": {
-                                          "data": {
-                                            "description": "What QuickBooks returned, snake_cased, as an operation's `data` is: a list for a query, the record for an add or update."
-                                          },
-                                          "error": {
-                                            "$ref": "#/components/schemas/QuickBooksError"
-                                          },
-                                          "message": {
-                                            "description": "QuickBooks' own status message, when a success has no data to show (a query that matched nothing, say).",
-                                            "type": "string"
-                                          },
-                                          "request": {
-                                            "description": "The request's element name, such as `CustomerQueryRq`.",
-                                            "type": "string"
-                                          },
-                                          "request_id": {
-                                            "description": "The request's `requestID`, or `null` when it had none.",
-                                            "type": [
-                                              "string",
-                                              "null"
-                                            ]
-                                          },
-                                          "status": {
-                                            "description": "`success` or `error` for a request QuickBooks ran or refused; `not_processed` for one it skipped (with `stopOnError`, every request after the first that failed).",
-                                            "enum": [
-                                              "success",
-                                              "error",
-                                              "not_processed"
-                                            ],
-                                            "type": "string"
-                                          },
-                                          "warning": {
-                                            "$ref": "#/components/schemas/QuickBooksWarning"
-                                          }
-                                        },
-                                        "required": [
-                                          "request",
-                                          "request_id",
-                                          "status"
-                                        ],
-                                        "type": "object"
-                                      },
-                                      "type": "array"
-                                    },
-                                    "status": {
-                                      "description": "`success` only when every entry is `success`.",
-                                      "enum": [
-                                        "success",
-                                        "error"
-                                      ],
-                                      "type": "string"
-                                    }
-                                  },
-                                  "required": [
-                                    "status",
-                                    "responses"
-                                  ],
-                                  "title": "A batch",
-                                  "type": "object"
+                                  "$ref": "#/components/schemas/RawQBXMLResponseJSON"
                                 },
                                 {
                                   "type": "null"
                                 }
                               ],
-                              "description": "`null` until answered. One request: the `{status, data}` summary an operation's `response_json` is. A batch: `{status, responses}`, one entry per request."
+                              "description": "`null` until answered."
                             }
                           },
                           "type": "object"
@@ -117673,10 +117869,10 @@
                 }
               }
             },
-            "description": "Queued for the connection's Web Connector. Pass `webhook_url` and QuBe Sync POSTs the answer to it once QuickBooks has answered. `links.self` returns this document on demand, with `response_json` filled in.",
+            "description": "Queued for the connection's Web Connector. Pass `webhook_url` and QuBe Sync POSTs the answer to it once QuickBooks has answered (see the `answered` callback: its own payload, not this document). `links.self` returns this document on demand, with `response_json` filled in.",
             "headers": {
               "location": {
-                "description": "The queued request's path, as in `links.self`.",
+                "description": "The queued request's path. `links.self` is the same request as a full URL.",
                 "schema": {
                   "type": "string"
                 }
@@ -117700,19 +117896,7 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "content": {
-              "application/json": {
-                "example": {
-                  "errors": {
-                    "detail": "Sandbox access is paused for this organization because the sandbox period expired and the organization does not currently have both active billing and a recent production connection. Please request an extension if you're still working on your integration or contact support if you have questions."
-                  }
-                },
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            },
-            "description": "A sandbox app whose organization's sandbox access is paused. Nothing was queued."
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -117735,11 +117919,6 @@
             "description": "`request_xml` or `webhook_url` failed validation, field by field, and nothing was queued: a `request_xml` that is missing or breaks one of the rules above, or a `webhook_url` that is not an absolute http or https URL, carries a username or password, is longer than 2048 characters, or (in production) points at localhost or a private address."
           }
         },
-        "security": [
-          {
-            "apiKey": []
-          }
-        ],
         "summary": "Queue a qbXML request",
         "tags": [
           "Queued Requests"
@@ -119652,6 +119831,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -120147,6 +120329,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -120657,6 +120842,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -121056,6 +121244,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -121996,6 +122187,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -122264,6 +122458,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -122664,6 +122861,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -122927,6 +123127,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -123629,6 +123832,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -124237,6 +124443,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -124515,6 +124724,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -125216,6 +125428,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -125706,6 +125921,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -126133,6 +126351,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -126831,6 +127052,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -127294,6 +127518,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -127658,6 +127885,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -128059,6 +128289,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -128450,6 +128683,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -129181,6 +129417,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -130065,6 +130304,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -131054,6 +131296,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -131497,6 +131742,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -132101,6 +132349,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -132485,6 +132736,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -132856,6 +133110,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -133533,6 +133790,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -133985,6 +134245,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -134455,6 +134718,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -135169,6 +135435,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -136047,6 +136316,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -137034,6 +137306,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -137430,6 +137705,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -137728,6 +138006,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -138039,6 +138320,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -138315,6 +138599,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -138608,6 +138895,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -138867,6 +139157,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -139567,6 +139860,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -140371,6 +140667,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -141284,6 +141583,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -141983,6 +142285,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -142787,6 +143092,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -143700,6 +144008,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -144434,6 +144745,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -145650,6 +145964,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -146732,6 +147049,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -147130,6 +147450,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -147462,6 +147785,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -147804,6 +148130,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -148794,6 +149123,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -149759,6 +150091,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -150152,6 +150487,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -150433,6 +150771,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -150830,6 +151171,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -151128,6 +151472,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -151582,6 +151929,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -152510,6 +152860,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -153450,6 +153803,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -153703,6 +154059,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -153963,6 +154322,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -154298,6 +154660,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -154650,6 +155015,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -155028,6 +155396,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -155293,6 +155664,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -155677,6 +156051,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -156057,6 +156434,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -156443,6 +156823,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -156841,6 +157224,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -157148,6 +157534,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -157772,6 +158161,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -158489,6 +158881,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -159195,6 +159590,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -159453,6 +159851,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -159970,6 +160371,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -160421,6 +160825,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -161312,6 +161719,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -162207,6 +162617,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -162711,6 +163124,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -163438,6 +163854,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -164338,6 +164757,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -165358,6 +165780,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -165637,6 +166062,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -165956,6 +166384,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -166979,6 +167410,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -167932,6 +168366,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -168215,6 +168652,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -168936,6 +169376,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -169560,6 +170003,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -170012,6 +170458,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -170404,6 +170853,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -170772,6 +171224,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -171152,6 +171607,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -171905,6 +172363,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -173013,6 +173474,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -174144,6 +174608,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -174417,6 +174884,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -174913,6 +175383,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -175305,6 +175778,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -175709,6 +176185,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -176214,6 +176693,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -176665,6 +177147,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -177113,6 +177598,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -177535,6 +178023,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -177897,6 +178388,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -178286,6 +178780,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -178796,6 +179293,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -179295,6 +179795,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -179801,6 +180304,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -180311,6 +180817,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -180841,6 +181350,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -181389,6 +181901,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -181884,6 +182399,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -182409,6 +182927,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -182943,6 +183464,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -183437,6 +183961,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -183943,6 +184470,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -184454,6 +184984,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -184944,6 +185477,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -185299,6 +185835,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -185662,6 +186201,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -186373,6 +186915,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -187186,6 +187731,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -188104,6 +188652,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -188523,6 +189074,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -188856,6 +189410,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -189191,6 +189748,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -189683,6 +190243,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -190043,6 +190606,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -190411,6 +190977,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -190906,6 +191475,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -191426,6 +191998,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -191955,6 +192530,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -192424,6 +193002,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -192843,6 +193424,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -193154,6 +193738,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -193473,6 +194060,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -193944,6 +194534,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -194819,6 +195412,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -195215,6 +195811,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -195513,6 +196112,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -196210,6 +196812,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -196779,6 +197384,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -197208,6 +197816,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -197600,6 +198211,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -198017,6 +198631,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -198456,6 +199073,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -198806,6 +199426,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -199075,6 +199698,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -199349,6 +199975,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -199678,6 +200307,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -199985,6 +200617,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -200408,6 +201043,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -200810,6 +201448,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -201220,6 +201861,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -201920,6 +202564,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -202339,6 +202986,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -202638,6 +203288,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -203302,6 +203955,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -204231,6 +204887,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -204613,6 +205272,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -204999,6 +205661,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -205465,6 +206130,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -205925,6 +206593,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -206370,6 +207041,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -206814,6 +207488,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -207111,6 +207788,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -207412,6 +208092,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -207808,6 +208491,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -208249,6 +208935,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -208683,6 +209372,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -209082,6 +209774,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -209400,6 +210095,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -209726,6 +210424,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -210111,6 +210812,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -210489,6 +211193,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -210899,6 +211606,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -211143,6 +211853,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -211835,6 +212548,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -212273,6 +212989,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -212964,6 +213683,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -213652,6 +214374,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -214008,6 +214733,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -214872,6 +215600,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -215565,6 +216296,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -216045,6 +216779,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -216314,6 +217051,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -216604,6 +217344,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -217064,6 +217807,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -217479,6 +218225,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -217899,6 +218648,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -218627,6 +219379,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -219476,6 +220231,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -220440,6 +221198,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -220765,6 +221526,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -221046,6 +221810,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -221748,6 +222515,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -222350,6 +223120,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -223017,6 +223790,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -223939,6 +224715,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -224995,6 +225774,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -225719,6 +226501,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -227100,6 +227885,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -228197,6 +228985,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -228591,6 +229382,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -228891,6 +229685,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -229198,6 +229995,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -229596,6 +230396,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -229919,6 +230722,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -230253,6 +231059,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -230537,6 +231346,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -231260,6 +232072,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -231707,6 +232522,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -232090,6 +232908,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -232370,6 +233191,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -232628,6 +233452,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -233022,6 +233849,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -233303,6 +234133,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -233639,6 +234472,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -233957,6 +234793,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -234354,6 +235193,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -234651,6 +235493,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -234929,6 +235774,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -235328,6 +236176,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -236079,6 +236930,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -236544,6 +237398,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -236936,6 +237793,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -237333,6 +238193,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -237737,6 +238600,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -238161,6 +239027,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -238595,6 +239464,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -239656,6 +240528,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -240335,6 +241210,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -240755,6 +241633,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -241165,6 +242046,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -241585,6 +242469,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -241925,6 +242812,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -242277,6 +243167,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -242614,6 +243507,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -242912,6 +243808,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -243201,6 +244100,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -243486,6 +244388,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -243781,6 +244686,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -244179,6 +245087,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -244552,6 +245463,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -244978,6 +245892,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -245393,6 +246310,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -245787,6 +246707,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -246073,6 +246996,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -246371,6 +247297,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -247082,6 +248011,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -247888,6 +248820,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -248806,6 +249741,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -249202,6 +250140,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -249500,6 +250441,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -250105,6 +251049,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -250894,6 +251841,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -251695,6 +252645,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -252114,6 +253067,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -252433,6 +253389,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -252757,6 +253716,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/SandboxPaused"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"

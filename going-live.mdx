@@ -35,13 +35,13 @@ Your code doesn't change between the two. The API key, the webhook secret and th
     working copy for a final look, then publish it there when you're happy.
   </Step>
   <Step title="Harden your webhook endpoint">
-    [Verify every signature](/webhooks#verify-the-signature), answer `2xx` within 5 seconds and do the work in
-    a job, and process each `page_request_id` and `state` once. A `retryable` webhook is followed by the answer
+    [Verify every signature](/webhooks#securing-your-endpoints), answer `2xx` within 5 seconds and do the work in
+    a job, and process each `page_request_id` and `state` once. A <Badge color="orange">`retryable`</Badge> webhook is followed by the answer
     with the same `page_request_id`. Deliveries can repeat or arrive out of order.
   </Step>
   <Step title="Handle every state">
-    Show your customer `error.user_message` for `error` and `retryable`. Don't resend a `retryable`
-    request. Decide what a `timed_out` create means for you. [Error handling](/error_handling) has the full
+    Show your customer `error.user_message` for <Badge color="red">`error`</Badge> and <Badge color="orange">`retryable`</Badge>. Don't resend a <Badge color="orange">`retryable`</Badge>
+    request. Decide what a <Badge color="purple">`timed_out`</Badge> create means for you. [Error handling](/error_handling) has the full
     list.
   </Step>
   <Step title="Finish your onboarding flow">

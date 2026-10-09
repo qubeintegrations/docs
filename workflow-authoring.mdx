@@ -4,6 +4,8 @@ description: "Write a workflow chart in the builder, by hand or with an AI assis
 icon: "pen-ruler"
 ---
 
+import { Request } from "/snippets/request.jsx";
+
 A workflow is one JSON document: a statechart QuBe Sync runs against a QuickBooks company file. You can
 build one on the dashboard's canvas, write the JSON yourself, or have an AI assistant write it. The charts
 are designed so an assistant writes them well and a person can review them.
@@ -99,7 +101,7 @@ stateDiagram-v2
     | --- | --- |
     | `request` | Sends one QuickBooks operation with `params`, or several with `requests`. Raises `success` or `error`. |
     | `wait` | Pauses and asks your app a question. Raises the id of the option your app chose. |
-    | `notify` | Sends your app data (`data`, under the `name` it routes on) and waits for its `2xx`. Raises `success` or `error` ([Sending your app data](/workflows#sending-your-app-data)). |
+    | `notify` | Sends your app data (`data`, under the `name` it routes on) and waits for its `2xx`. Raises `success` or `error` ([Sending your app data from a chart](#sending-your-app-data-from-a-chart)). |
     | `workflow` | Runs another workflow as one step, optionally once per item of a list ([Calling other workflows](#calling-other-workflows)). |
     | `transform` | Sets variables, then moves on (`always`). |
     | `choice` | A pure branch point (`always`). |
@@ -111,16 +113,16 @@ stateDiagram-v2
     only when every answer succeeded; `response` is the first answer and `responses` all of them. A
     `success` QuickBooks warned about carries `response.warning`, its `code` and `message`, such as `530`
     for a field it saved the record without ([Warnings](/error_handling#quickbooks-said-yes-with-a-warning)). If
-    QuickBooks never answers, the run [settles it](/workflows#lost-answers) before the state raises
+    QuickBooks never answers, the run [settles it](#settling-lost-answers) before the state raises
     anything: `success` as if the answer had arrived, with `response.settled` saying how and
     `response.evidence` on what grounds, or `error` with
     `response.error.type` set to `unsettled` or `no_response`. `"settle": false` skips that: a lost answer
     raises `no_response` at once, with `response.error.reason` saying why and, for an add,
     `response.error.external_guid`, the GUID it was sent with, so the chart can do the looking itself
-    ([Lost answers](/workflows#lost-answers)). An update may
+    ([Doing the looking in the chart](#doing-the-looking-in-the-chart)). An update may
     leave `edit_sequence` out: the run reads the record first, and `on_conflict` (`ask`, the default,
     `overwrite` or `fail`) says what happens when it changed after that read
-    ([Conflicts](/workflows#conflicts)). `qbxml_version` defaults to `16.0`.
+    ([Conflicts in a chart](#conflicts-in-a-chart)). `qbxml_version` defaults to `16.0`.
 
     **Paging.** With `"paginate": true`, a query goes through every result, `page_size` (1–200, default 100)
     at a time. Customers, vendors, items and every transaction query page this way; a query QuickBooks
@@ -204,7 +206,7 @@ stateDiagram-v2
     `description` saying why a run can end that way when its name doesn't already. Your app branches on the
     run's `outcome`, so name every ending it should treat differently. No state may use an outcome's key.
 
-    A declared outcome is a success unless it has `"kind": "failure"`, which ends the run `failed` with
+    A declared outcome is a success unless it has `"kind": "failure"`, which ends the run <Badge color="red">`failed`</Badge> with
     `outcome` set to its key. The run's `error` is then what the transition assigned to `error`, else the
     outcome's description. `create_customer_safely` declares `renames_exhausted` this way.
 
@@ -343,10 +345,206 @@ Neither generic chart handles lost answers: the run settles those before a state
 `find_or_create` does handle one race. When its add meets 3100 because something created the name after
 the query, it looks once more, counting its looks with `$add` so that it looks at most twice.
 
+## Sending your app data from a chart
+
+A `notify` state hands your app data while the run goes, not only at the end
+([what your app receives](/workflows#sending-your-app-data)). The usual use is a whole list, a page at a
+time. This is `send_lists_to_app`'s first list:
+
+```mermaid
+stateDiagram-v2
+  [*] --> find_customers
+  find_customers --> send_customers: each page
+  send_customers --> find_customers: next page
+  find_customers --> find_vendors: every page sent
+  classDef send fill:#ecfeff,stroke:#0891b2,color:#164e63
+  class send_customers send
+```
+
+```json
+"find_customers": {
+  "type": "request", "operation": "customer.query",
+  "params": {"active_status": "All"}, "paginate": true, "page_size": 200,
+  "on": {
+    "page": [{"target": "send_customers", "description": "send this page"}],
+    "success": [{"target": "find_vendors", "assign": {"customers": "${response.count}"}}]
+  }
+},
+"send_customers": {
+  "type": "notify", "name": "customers_page",
+  "data": {"page": "${response.page}", "more": "${response.more}", "customers": "${response.data}"},
+  "on": {"success": [{"target": "find_customers", "description": "next page"}]}
+}
+```
+
+In `data`, `response` is the response that brought the run to the state -- on a paginating query's `page`,
+that page -- so `${response.data}` is the page's records. When a notification can't be delivered, the state
+raises `error` with `response.error.type` `not_delivered` (every attempt failed) or `too_large` (over 4 MB),
+for the chart to handle: go to a `wait` that asks whether to retry, say. Unhandled, the run fails.
+
+## Settling lost answers
+
+When QuickBooks never answers a request a run sent, the run settles it before the state raises anything:
+it finds out whether QuickBooks applied it ([Lost answers](/workflows#lost-answers)). This is how.
+
+| What was sent | How the run settles it |
+| --- | --- |
+| A query | Sends it again. |
+| A list add: a customer, vendor, item, class... | Looks for a record with the full name it sent, under its parent if it had one. None there, it sends the add again. |
+| A transaction add: an invoice, bill, check... | Looks for it by its reference number, or else by its customer or vendor and its date, at most 50, and matches the `external_guid` the run put on it. None matches, it sends the add again, unless all 50 came back: then it may be past them, and the run can't tell (below). |
+| An update | Reads the record back. If it already has the fields sent, the update was applied. If nobody has touched it, the update is sent again. If someone else changed it, it's a [conflict](#conflicts-in-a-chart). |
+| A delete | Looks the record up by its id. If it's gone, the delete was applied; if not, it's sent again. |
+
+Every add a workflow sends that has an `external_guid` field carries one: yours if you set it, otherwise one
+the run generates. That's nearly every transaction, plus customers, vendors, employees, other names and
+items. QuickBooks stores it on the record, which is how the run tells its own invoice from another one for
+the same customer on the same day.
+
+The state then raises what the answer would have raised, usually `success`, and `response.settled` says how
+the run got it. `response.evidence` says on what grounds, in a sentence: what the check looked at, what came
+back and what that means, such as `of 2 candidates with reference number "1044", one carries the GUID sent
+(txn_id 2-1791267763), so the add was applied`. A first-time answer has neither.
+
+| `response.settled` | What happened |
+| --- | --- |
+| `found` | The add had been applied. `response.data` is the record the run found. |
+| `already_deleted` | The delete had been applied. `response.data` is only the id and its delete type. |
+| `already_current` | The record already had every field the update sends. |
+| `resent` | It hadn't been applied, or it was a query, so the run sent it again. This is that answer. |
+| `reapplied` | An update sent again with the current edit sequence, because what someone else changed doesn't overlap with it ([Conflicts in a chart](#conflicts-in-a-chart)). |
+| `overwritten` | An update sent again over someone else's change, because your app or the chart said to. |
+| `kept` | Your app chose to keep QuickBooks' version of a changed record. `response.data` is that record. |
+
+Two endings are left for the chart to handle, both as `error` with `code` `null`:
+
+- **`response.error.type` is `unsettled`**: the run can't tell. Usually it found records that might be the
+  one it sent and nothing to tell them apart, as with a transaction type that has no `external_guid`, and
+  `response.error.candidates` lists them. It's also `unsettled` when the check itself can't be trusted: the
+  record an update was for no longer exists, a list add's parent is gone, the check came back full with none
+  carrying the GUID sent (so there may be more), or QuickBooks answered the check with an error. Then
+  `candidates` may be empty.
+  `response.error.message` says which. Unhandled, `unsettled` fails the run with that message.
+- **`response.error.type` is `no_response`**: QuickBooks didn't answer the checks and re-sends either. The
+  run sends at most five more requests for one that was lost, re-sending it at most twice, then gives up.
+
+<Accordion title="The two errors, exactly" icon="code">
+  ```json unsettled
+  { "status": "error",
+    "error": { "code": null, "type": "unsettled",
+               "message": "QuickBooks never answered transfer.create, and 2 candidates match what was sent, and it carried no GUID to tell them apart",
+               "candidates": [ { "txn_id": "1B-1790470702", "txn_date": "2026-09-28", "amount": 250.0, "...": "..." },
+                               { "txn_id": "1C-1790470744", "txn_date": "2026-09-28", "amount": 250.0, "...": "..." } ] } }
+  ```
+
+  ```json no_response
+  { "status": "error",
+    "error": { "code": null, "type": "no_response", "reason": "timed_out",
+               "external_guid": "{3B6E1F0A-52C4-4D8B-9E21-7A0C5D93F4B2}",
+               "message": "QuickBooks never answered: the Web Connector session ended before it did; 2 re-sends and 3 checks did not settle it" } }
+  ```
+
+  An `unsettled` message is always `QuickBooks never answered <operation>, and <why>`. A `no_response`
+  message starts `QuickBooks never answered: ` and says why: the session ended, the request was withdrawn
+  before it was sent, the Web Connector reported a failure in place of the answer, or the request ended in
+  some other state.
+  `reason` says the same as a word to branch on, and an add's `external_guid` is the GUID it was sent with:
+
+  | `reason` | What happened | Could QuickBooks have it? |
+  | --- | --- | --- |
+  | `timed_out` | Sent, and the Web Connector session ended before the answer came back: the customer's computer lost its connection, or QuickBooks or the Web Connector was closed, part way. | Yes |
+  | `connector_error` | The Web Connector handed the request to QuickBooks, then reported a failure in place of the answer: QuickBooks was closed or stopped responding part way. | It can't be told |
+  | `rejected` | QuickBooks couldn't read the request (`xml_error`). | No |
+  | `withdrawn` | Your app withdrew it before the Web Connector took it. | No |
+  | `page_expired` | A later page of a paginated query, whose session ended before it was fetched. | No, it's a query |
+</Accordion>
+
+Some requests aren't settled, and raise `no_response` straight away: one your app withdrew, one QuickBooks
+couldn't parse (`xml_error`), a paginated query, and an operation with nothing to look for afterwards, such
+as a void or a merge. A request state with `"settle": false` isn't settled either.
+
+The request itself keeps its own ending (<Badge color="purple">`timed_out`</Badge>, say) in the dashboard. The run's event log has a
+`settling` event for each check and re-send, saying why it went out and what it looks at ("looking for
+reference number "1044" with invoice.query, which answers whole"), and a `settled` or `unsettled` one at the
+end with the verdict and its grounds, so the decision can be audited without opening a payload. The step's row
+on the run's page says the same. `summary.requests` lists the checks and re-sends, each with a `role`:
+`settle`, `resend`, `reapply`, `overwrite`, or `prepare` for the read before an update. The original
+request's entry says how it was `settled` and its `evidence`, and an add, delete or update found applied is in
+`summary.side_effects` with both too.
+
+### Doing the looking in the chart
+
+`"settle": false` hands a lost answer to the chart at once, as `no_response`, with `response.error.reason`
+saying why and, for an add, `response.error.external_guid`, the GUID it was sent with. That's how to make the
+looking part of the chart, where the diagram and the run's log show it. No shipped template does it any more:
+`create_invoice` leaves its invoice add to settling and handles only `unsettled`, with a question. A chart that
+looks for itself:
+
+- Treats a QuickBooks error answer as "nothing was added", and a `no_response` whose `reason` is `withdrawn`
+  or `rejected` the same way: the request never reached the company file.
+- On any other `no_response`, queries for the record -- by its `ref_number`, or among the customer's
+  transactions on its date, without their lines -- and uses `$find` to pick out the one whose
+  `external_guid` equals `response.error.external_guid`. QuickBooks returns the GUID exactly as it was
+  sent, braces and upper case, so an `external_guid` you send yourself should be written that way too.
+- Sends the add again only when the query's answer was whole (by number, or fewer than its cap came back),
+  and asks your app otherwise.
+
+The run's `summary` counts an add such a chart found as the change it was, once, at the state that sent it.
+Its entry in `summary.requests` reads as one the run settled itself: `"status": "success"`,
+`"settled": "found"`, the record's `identifiers`, and `found_by`, the state whose answer carried it. It's in
+`summary.side_effects`, and the run's page lists it under **Changed in QuickBooks**:
+
+```json summary of a chart that looked for its own lost invoice add (abridged)
+{ "requests": [
+    { "state": "add_invoice", "workflow": "my_invoices", "operation": "invoice.create",
+      "status": "success", "settled": "found", "found_by": "look_for_invoice",
+      "identifiers": { "txn_id": "1F-1791238970", "ref_number": "1044" } },
+    { "state": "look_for_invoice", "workflow": "my_invoices", "operation": "invoice.query", "status": "success" },
+    { "state": "fetch_invoice", "workflow": "my_invoices", "operation": "invoice.query", "status": "success" } ],
+  "side_effects": [
+    { "state": "add_invoice", "workflow": "my_invoices", "operation": "invoice.create", "settled": "found",
+      "identifiers": { "txn_id": "1F-1791238970", "ref_number": "1044" } } ] }
+```
+
+Any query the run sends after the add counts, in your own charts too, as long as its answer carries the
+`external_guid` the add was sent with, or, for a list add sent without one, the full name it was sent with.
+A reference number alone doesn't count: QuickBooks lets two invoices share one. A change the run sends again
+and gets an answer to is counted once, as that answer. One nothing in the run settles keeps
+`"status": "error"`, gets `"unconfirmed": true`, and is listed under `summary.unconfirmed` instead: your app
+picked another invoice, say, or the run failed or was cancelled first. It may or may not be in QuickBooks,
+so look before sending it again.
+
+## Conflicts in a chart
+
+When an update meets a record someone changed after it was read, the run compares fields before anything
+is overwritten ([Conflicts](/workflows#conflicts)). It reads the record again and compares each field the
+update sends with the record as it is now and, when the run read it itself, as it was then:
+
+- The record already has what the update sends: the state raises `success` with `response.settled` set to
+  `already_current`.
+- The other person changed only fields the update doesn't send: the run sends the update again with the
+  current edit sequence, without asking (`reapplied`). It can only tell this when it read the record itself.
+- They changed a field the update sends: what happens is the state's `on_conflict`.
+
+| `on_conflict` | What happens |
+| --- | --- |
+| `ask` (default) | The run asks your app with a `conflict` prompt ([answering it](/workflows#two-kinds-of-question)). |
+| `overwrite` | The run sends the update again with the current edit sequence, without asking. For a chart that owns the record, such as a nightly sync. |
+| `fail` | The state raises `error` with code 3200, type `stale_edit_sequence`, and the diff (`sent`, `current`, `as_read`, `conflicts`, `theirs`) under `response.error.conflict`, for the chart to handle. |
+
+When your app answers `overwrite`, the state raises whatever QuickBooks answers, with `response.settled` set
+to `overwritten`. When it answers `keep`, the state raises `success` with the record as QuickBooks has it
+and `response.settled` set to `kept`, so a chart that only needed the record to be there carries on.
+
+**Leave `edit_sequence` out.** An update in a workflow doesn't need one: the run reads the record first and
+fills it in. That read is the `as_read` the diff is judged against, and it's what lets the run tell their
+changes from yours. Pass your own `edit_sequence` and there's no baseline, so every field that differs from
+QuickBooks counts as a conflict. If the read finds the record gone, the state raises `error` 3120
+(`object_not_found`), "nothing to update: the record no longer exists".
+
 ## Build it in the dashboard
 
 On the **Workflows** page, **New workflow** starts a blank chart, clones a
-[shipped template](/workflows#templates), or takes JSON you already have (**Import a chart**). Each opens the
+[shipped template](/workflows#pick-a-template), or takes JSON you already have (**Import a chart**). Each opens the
 builder. Its header says what is live ("v2 is live. You have unpublished changes.") and has **Test run**, the
 publish button, and a **⋯** menu with **Workflow settings**, **JSON** and **Delete workflow…**. Its tabs are the
 **Chart**, the workflow's **Runs**, its **Versions**, and **Use from your app**. The chart is a canvas with a
@@ -400,10 +598,38 @@ reasoning ends up in the `description` fields, where the next person will read i
   <Step title="Let it check its work">
     The assistant validates the chart until it's clean, with the MCP `validate_workflow_chart` tool, or:
 
-    ```bash
-    curl -u "$QUBE_API_KEY:" -X POST https://qubesync.com/api/v2/workflows/validate \
-      -H "Content-Type: application/json" -d @chart-request.json   # {"key": "...", "definition": {...}}
+    <Request
+      method="POST"
+      path="/api/v2/workflows/validate"
+      file="chart-request.json"
+      body={`{
+      "key": "find_or_create_customer",
+      "definition": {...}
+    }`}
+    />
+
+    {/* agent-block:start */}
+    <Visibility for="agents">
+
+    ```http
+    POST /api/v2/workflows/validate
+
+    {
+      "key": "find_or_create_customer",
+      "definition": {...}
+    }
     ```
+
+    ```bash
+    curl -u "$QUBE_API_KEY:" \
+      -X POST \
+      "https://qubesync.com/api/v2/workflows/validate" \
+      -H "Content-Type: application/json" \
+      -d @chart-request.json
+    ```
+
+    </Visibility>
+    {/* agent-block:end */}
 
     It always answers `200`, with `valid` and every `error`, each with the path to the problem. Once the
     chart is valid, `warnings` lists what's allowed but probably wrong, such as an unreachable state, an
@@ -412,10 +638,31 @@ reasoning ends up in the `description` fields, where the next person will read i
     a required input the `workflow` state doesn't pass, or an ending it doesn't branch on, is a warning.
   </Step>
   <Step title="Save it">
-    ```bash
-    curl -u "$QUBE_API_KEY:" -X PUT https://qubesync.com/api/v2/workflows/find_or_create_customer \
-      -H "Content-Type: application/json" -d '{"definition": {...}}'
+    <Request
+      method="PUT"
+      path="/api/v2/workflows/find_or_create_customer"
+      body={`{"definition": {...}}`}
+    />
+
+    {/* agent-block:start */}
+    <Visibility for="agents">
+
+    ```http
+    PUT /api/v2/workflows/find_or_create_customer
+
+    {"definition": {...}}
     ```
+
+    ```bash
+    curl -u "$QUBE_API_KEY:" \
+      -X PUT \
+      "https://qubesync.com/api/v2/workflows/find_or_create_customer" \
+      -H "Content-Type: application/json" \
+      -d '{"definition": {...}}'
+    ```
+
+    </Visibility>
+    {/* agent-block:end */}
 
     `PUT` creates or replaces by key, so charts can live in your repository and be pushed from a deploy
     script. Add `"publish": true` to publish in the same call. The [CLI](/cli) does the same with

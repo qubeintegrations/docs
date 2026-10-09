@@ -4,6 +4,8 @@ description: "Point Claude Code, Cursor or any MCP client at QuBe Sync. Your age
 icon: "robot"
 ---
 
+import { Request } from "/snippets/request.jsx";
+
 QuBe Sync runs a public [Model Context Protocol](https://modelcontextprotocol.io) server at:
 
 ```
@@ -122,20 +124,95 @@ built, inject faults, and push the workflows it wrote, without ever seeing a sec
 
 It's plain JSON-RPC over `POST`, so `curl` works for scripting or debugging. (A `GET` answers `405`.)
 
-<CodeGroup>
-```bash List tools
-curl https://qubesync.com/mcp -H "Content-Type: application/json" \
-  -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}'
+<Request
+  label="List tools"
+  method="POST"
+  path="/mcp"
+  auth={false}
+  body={{ jsonrpc: "2.0", id: 1, method: "tools/list" }}
+/>
+
+{/* agent-block:start */}
+<Visibility for="agents">
+
+List tools:
+
+```http
+POST /mcp
+
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/list"
+}
 ```
 
-```bash Build a request
-curl https://qubesync.com/mcp -H "Content-Type: application/json" \
+```bash
+curl -X POST \
+  "https://qubesync.com/mcp" \
+  -H "Content-Type: application/json" \
   -d '{
-    "jsonrpc": "2.0", "id": 2, "method": "tools/call",
-    "params": {"name": "find_customers", "arguments": {"active_status": "ActiveOnly", "max_returned": 25}}
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/list"
   }'
 ```
-</CodeGroup>
+
+</Visibility>
+{/* agent-block:end */}
+
+<Request
+  label="Build a request"
+  method="POST"
+  path="/mcp"
+  auth={false}
+  body={{
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "find_customers",
+      arguments: { active_status: "ActiveOnly", max_returned: 25 },
+    },
+  }}
+/>
+
+{/* agent-block:start */}
+<Visibility for="agents">
+
+Build a request:
+
+```http
+POST /mcp
+
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/call",
+  "params": {
+    "name": "find_customers",
+    "arguments": {"active_status": "ActiveOnly", "max_returned": 25}
+  }
+}
+```
+
+```bash
+curl -X POST \
+  "https://qubesync.com/mcp" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "tools/call",
+    "params": {
+      "name": "find_customers",
+      "arguments": {"active_status": "ActiveOnly", "max_returned": 25}
+    }
+  }'
+```
+
+</Visibility>
+{/* agent-block:end */}
 
 `tools/list` returns 100 tools per page. The first page starts with the workflow tools and
 `report_confusion`, then the operations in alphabetical order. Pass `nextCursor` back as `params.cursor`

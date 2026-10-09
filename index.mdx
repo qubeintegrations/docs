@@ -43,7 +43,7 @@ QuBe Sync helps with that.
 
 ## The hard parts, handled
 
-QuickBooks Desktop/Enterprise integration is a fundamentally asynchronous process, with many points of failure. You can't handle all of them in advance, but 16 years of QBD integration experience built a system that eliminates and avoids many of them. Even more importantly, it gives you the tools and transparency to quickly solve any unexpected problems that come your way.
+QuickBooks Desktop/Enterprise integration is fundamentally an asynchronous process, with many points of failure. You can't handle all of them in advance, but 16 years of QBD integration experience built a system that eliminates and avoids many of them. Even more importantly, it gives you the tools and transparency to quickly solve any unexpected problems that come your way.
 
 <AccordionGroup>
   <Accordion title="The Web Connector protocol" icon="plug-circle-bolt">
@@ -70,8 +70,9 @@ QuickBooks Desktop/Enterprise integration is a fundamentally asynchronous proces
   </Accordion>
   <Accordion title="QuickBooks' own rules" icon="scale-balanced">
     Names have to be unique across customers, vendors, employees and other names. Updates need the
-    record's current `edit_sequence`. Every refusal comes back with QuickBooks' status code, a stable
-    name such as `name_in_use`, and a message written for your end user.
+    record's current `edit_sequence`. QuBe Sync automatically resolves many of these issues with no
+    work on your end. QuickBooks issues that can't be resolved are given to you with QuickBooks' status code, a stable
+    name such as `name_in_use`, extra debug information, and a message written for your end user.
   </Accordion>
   <Accordion title="Large result sets" icon="layer-group">
     Pass `iterator=true` and QuBe Sync pages through the results for you, delivering each page as
