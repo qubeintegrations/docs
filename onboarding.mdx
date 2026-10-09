@@ -120,8 +120,13 @@ app.get("/quickbooks/callback", (req, res) => {
 
 Pass `type` when you create the connection:
 
-- `standard` (the default): the Web Connector checks in every 5 minutes. Best for background syncing.
-- `realtime`: every 10 seconds. When a person is waiting on the result, or might need to resolve conflicts in the moment. Realtime connections are billed at a higher rate; see [pricing](https://qubesync.com/#pricing).
+- `standard` (the default): requests are picked up every 5 minutes. Best for background syncing.
+- `realtime`: requests are picked up every 10 seconds. When a person is waiting on the result, or might need to resolve conflicts in the moment. Realtime connections are billed at a higher rate; see [pricing](https://qubesync.com/#pricing).
+
+Every connection's Web Connector is set to run every 10 seconds, and QuBe Sync tells a standard connection's
+to wait, so its **Last Result** often reads "Update postponed by application". That's normal. Your customer
+shouldn't change the schedule or the Auto-Run tick, whichever type the connection is. You can switch a
+connection's type later without a new QWC file.
 
 ## Keep an eye on the connection
 
@@ -145,5 +150,8 @@ the Web Connector needs yourself:
    Offer it as a download. QuickBooks has to be open with the company file when they add it.
 2. **A password**: [`POST /connections/{id}/password`](/api-reference/v2/connections/generate-or-set-a-password)
    generates one, or sets one you choose. They paste it into the Web Connector after adding the QWC file.
+
+Tell them to leave **Auto-Run** ticked and not to change the schedule (the **Every Min** column). QuBe Sync
+decides how often a connection checks in, so editing it only breaks that.
 
 The connection is live when `last_connected_at` is set.
