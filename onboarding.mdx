@@ -53,12 +53,28 @@ import { Request } from "/snippets/request.jsx";
     {/* agent-block:end */}
 
     Store the connection's `id` against the customer's account. You'll use it for every request.
+
+    <Accordion title="Standard or realtime?">
+      Pass `type` when you create the connection:
+
+      | `type` | Picks up requests | Best for |
+      | --- | --- | --- |
+      | `standard` (default) | Every 5 minutes | Background syncing |
+      | `realtime` | Every 10 seconds | Interactive UIs, where time matters |
+
+      Realtime connections are billed at a higher rate; see [pricing](https://qubesync.com/#pricing).
+
+      Every connection's Web Connector is set to run every 10 seconds, and QuBe Sync tells a standard connection's
+      to wait, so its **Last Result** often reads "Update postponed by application". That's normal. Your customer
+      shouldn't change the "Every Min" field (leave it blank) in the Web Connector, no matter which type is chosen. This also let's you switch a
+      connection's type later without installing a new QWC file.
+    </Accordion>
   </Step>
   <Step title="Send them to onboarding">
     Redirect the browser to the connection's `links.onboarding`. Ask your customer to do this on the
     Windows computer where QuickBooks is installed. If they use a QuickBooks server, that machine is best.
   </Step>
-  <Step title="Handle their return">
+  <Step title="Handle their return to your app">
     QuBe Sync redirects to your `redirect_url` with two query parameters, `connection_id` and `state`:
 
     | `state` | What happened | What to do |
@@ -67,9 +83,9 @@ import { Request } from "/snippets/request.jsx";
     | `cancelled` | Your customer chose "Cancel and return" on the onboarding page. | Offer to try again, or delete the connection. |
     | `expired` | The onboarding link was more than 48 hours old. | [Regenerate the link](/api-reference/v2/connections/regenerate-the-onboarding-url) and send them again. |
 
-    <Note>
+    <Visibility for="agents">
       Don't include query parameters in your `redirect_url`, because QuBe Sync appends <span style="text-wrap: nowrap;">`?connection_id=…&state=…`</span>. To bring your own context back, look the account up by `connection_id` or put it in the path (`/quickbooks/callback/42`).
-    </Note>
+    </Visibility>
   </Step>
 </Steps>
 
@@ -116,18 +132,6 @@ app.get("/quickbooks/callback", (req, res) => {
 ```
 </CodeGroup>
 
-## Choosing standard or realtime?
-
-Pass `type` when you create the connection:
-
-- `standard` (the default): requests are picked up every 5 minutes. Best for background syncing.
-- `realtime`: requests are picked up every 10 seconds. When a person is waiting on the result, or might need to resolve conflicts in the moment. Realtime connections are billed at a higher rate; see [pricing](https://qubesync.com/#pricing).
-
-Every connection's Web Connector is set to run every 10 seconds, and QuBe Sync tells a standard connection's
-to wait, so its **Last Result** often reads "Update postponed by application". That's normal. Your customer
-shouldn't change the schedule or the Auto-Run tick, whichever type the connection is. You can switch a
-connection's type later without a new QWC file.
-
 ## Keep an eye on the connection
 
 A connection's `last_connected_at` is the last time its Web Connector checked in. Displaying it to your user can help them self-diagnose why they're still waiting on a request. If it's hours or days old, the computer running QuickBooks is probably off, the Web Connector
@@ -146,10 +150,16 @@ Until your app is removed, the Web Connector keeps checking in on its own.
 If you'd rather keep your customer inside your app, skip `links.onboarding` and give them the two things
 the Web Connector needs yourself:
 
-1. **The QWC file**: [`POST /connections/{id}/qwc`](/api-reference/v2/connections/get-the-qwc-file).
-   Offer it as a download. QuickBooks has to be open with the company file when they add it.
-2. **A password**: [`POST /connections/{id}/password`](/api-reference/v2/connections/generate-or-set-a-password)
-   generates one, or sets one you choose. They paste it into the Web Connector after adding the QWC file.
+<Steps>
+  <Step title="The QWC file">
+    [`POST /connections/{id}/qwc`](/api-reference/v2/connections/get-the-qwc-file) returns it. Offer it as
+    a download. QuickBooks has to be open with the company file when they add it.
+  </Step>
+  <Step title="A password">
+    [`POST /connections/{id}/password`](/api-reference/v2/connections/generate-or-set-a-password)
+    generates one, or sets one you choose. They paste it into the Web Connector after adding the QWC file.
+  </Step>
+</Steps>
 
 Tell them to leave **Auto-Run** ticked and not to change the schedule (the **Every Min** column). QuBe Sync
 decides how often a connection checks in, so editing it only breaks that.

@@ -181,25 +181,15 @@ stateDiagram-v2
 
     Six `$` keys build values, and no others are allowed:
 
-    - `"$from"` uses a value as the base of a map and deep-merges the map's own keys onto it. That's how
-      `create` above passes the caller's whole customer through.
-    - `{"$map": "${vars.items}", "as": "item", "template": {...}}` builds a list from a list, rendering the
-      template once per element (`each.item`, `each.index`, `each.count`).
-    - `{"$add": [a, b]}` is the sum of its operands, numbers or templates that render to numbers, with
-      nothing counting as 0: `{"$add": ["${vars.attempts}", 1]}` counts, and `-1` counts down. An operand
-      that isn't a number fails the run.
-    - `{"$default": [a, b]}` is the first candidate that renders to something other than nothing or an
-      empty string: `{"$default": ["${vars.record.full_name}", "${vars.record.name}"]}` is a list record's
-      name whatever list it came from.
-    - `{"$merge": [a, b]}` deep-merges objects, each onto the ones before it, the way `$from` merges a map's
-      own keys: objects merge key by key, and lists and plain values replace. An operand that renders to
-      nothing is skipped. `{"$merge": ["${input.invoice}", "${vars.overrides}"]}` merges two objects the run
-      holds, where `$from` would need the second one's keys written out.
-    - `{"$find": "${response.data}", "as": "invoice", "where": <condition>}` is the first element for which
-      the condition holds, with the element at `each.invoice`, or nothing:
-      `{"$find": "${response.data}", "as": "invoice", "where": {"path": "each.invoice.external_guid", "op":
-      "eq", "value": "${vars.guid}"}}` picks out the invoice carrying a GUID, which is how a chart that looks
-      for a lost add itself recognises the one it sent.
+    | Key | What it does |
+    | --- | --- |
+    | `$from` | Uses a value as the base of a map and deep-merges the map's own keys onto it. That's how `create` above passes the caller's whole customer through. |
+    | `$map` | `{"$map": "${vars.items}", "as": "item", "template": {...}}` builds a list from a list, rendering the template once per element (`each.item`, `each.index`, `each.count`). |
+    | `$add` | `{"$add": [a, b]}` is the sum of its operands, numbers or templates that render to numbers, with nothing counting as 0: `{"$add": ["${vars.attempts}", 1]}` counts, and `-1` counts down. An operand that isn't a number fails the run. |
+    | `$default` | `{"$default": [a, b]}` is the first candidate that renders to something other than nothing or an empty string: `{"$default": ["${vars.record.full_name}", "${vars.record.name}"]}` is a list record's name whatever list it came from. |
+    | `$merge` | `{"$merge": [a, b]}` deep-merges objects, each onto the ones before it, the way `$from` merges a map's own keys: objects merge key by key, and lists and plain values replace. An operand that renders to nothing is skipped. `{"$merge": ["${input.invoice}", "${vars.overrides}"]}` merges two objects the run holds, where `$from` would need the second one's keys written out. |
+    | `$find` | `{"$find": "${response.data}", "as": "invoice", "where": <condition>}` is the first element for which the condition holds, with the element at `each.invoice`, or nothing: `{"$find": "${response.data}", "as": "invoice", "where": {"path": "each.invoice.external_guid", "op": "eq", "value": "${vars.guid}"}}` picks out the invoice carrying a GUID, which is how a chart that looks for a lost add itself recognises the one it sent. |
+
   </Accordion>
   <Accordion title="Outcomes" icon="flag-checkered">
     `completed` and `failed` always exist. Declare more under `outcomes`, each with an optional
@@ -258,20 +248,22 @@ Prefer it to copying another chart's states. `create_invoice` is built this way:
 }
 ```
 
-- The state raises `success` when the called workflow ends with a success outcome, with its output in
-  `response.data` and the outcome in `response.outcome`. A called workflow's `cancelled` is a success
-  like any other, which is why `create_customer` branches on it.
-- It raises `error` when the called workflow fails, with `response.error.message` and `response.outcome`
-  set to `failed` or the named failure. `create_invoice` doesn't handle `renames_exhausted`, so its root
-  `error → failed` ends the order with the called workflow's message.
-- With `each`, it runs the workflow once per element of the list, one at a time, in order, at most 200.
-  `input` is rendered per element, with the element at `each.<as>` (`as` defaults to `item`), its position
-  at `each.index` and the length at `each.count`. The state raises one `success` with the outputs in
-  `response.data`, how each ended in `response.outcomes`, and failures in `response.errors`. Under
-  `"on_item_error": "stop"`, the default, the first failure raises `error` instead ("item 2 of 3: ..."), and
-  under `"continue"` the others go ahead. A list that renders to nothing, such as an `items` the run
-  wasn't sent, is empty: the state raises `success` at once with `response.data` `[]`.
-- A `workflow` state takes no `always`, `params`, `operation` or `prompt`.
+| The called workflow | The state raises |
+| --- | --- |
+| Ends with a success outcome | `success`, with its output in `response.data` and the outcome in `response.outcome`. A called workflow's `cancelled` is a success like any other, which is why `create_customer` branches on it. |
+| Fails | `error`, with `response.error.message` and `response.outcome` set to `failed` or the named failure. `create_invoice` doesn't handle `renames_exhausted`, so its root `error → failed` ends the order with the called workflow's message. |
+
+With `each`, the state runs the workflow once per element of the list, one at a time, in order, at most 200.
+`input` is rendered per element, with the element at `each.<as>` (`as` defaults to `item`), its position
+at `each.index` and the length at `each.count`. The state raises one `success` with the outputs in
+`response.data`, how each ended in `response.outcomes`, and failures in `response.errors`. Under
+`"on_item_error": "stop"`, the default, the first failure raises `error` instead ("item 2 of 3: ..."), and
+under `"continue"` the others go ahead. A list that renders to nothing, such as an `items` the run
+wasn't sent, is empty: the state raises `success` at once with `response.data` `[]`.
+
+<Note>
+  **A `workflow` state takes no `always`, `params`, `operation` or `prompt`.**
+</Note>
 
 Your app sees one run. A question the called workflow asks arrives on it, and so does everything the called
 workflow does ([Good to know](/workflows#good-to-know)). Publishing waits for the workflows it calls to be
@@ -417,15 +409,10 @@ back and what that means, such as `of 2 candidates with reference number "1044",
 
 Two endings are left for the chart to handle, both as `error` with `code` `null`:
 
-- **`response.error.type` is `unsettled`**: the run can't tell. Usually it found records that might be the
-  one it sent and nothing to tell them apart, as with a transaction type that has no `external_guid`, and
-  `response.error.candidates` lists them. It's also `unsettled` when the check itself can't be trusted: the
-  record an update was for no longer exists, a list add's parent is gone, the check came back full with none
-  carrying the GUID sent (so there may be more), or QuickBooks answered the check with an error. Then
-  `candidates` may be empty.
-  `response.error.message` says which. Unhandled, `unsettled` fails the run with that message.
-- **`response.error.type` is `no_response`**: QuickBooks didn't answer the checks and re-sends either. The
-  run sends at most five more requests for one that was lost, re-sending it at most twice, then gives up.
+| `response.error.type` | What happened |
+| --- | --- |
+| `unsettled` | The run can't tell. Usually it found records that might be the one it sent and nothing to tell them apart, as with a transaction type that has no `external_guid`, and `response.error.candidates` lists them. It's also `unsettled` when the check itself can't be trusted: the record an update was for no longer exists, a list add's parent is gone, the check came back full with none carrying the GUID sent (so there may be more), or QuickBooks answered the check with an error. Then `candidates` may be empty. `response.error.message` says which. Unhandled, `unsettled` fails the run with that message. |
+| `no_response` | QuickBooks didn't answer the checks and re-sends either. The run sends at most five more requests for one that was lost, re-sending it at most twice, then gives up. |
 
 <Accordion title="The two errors, exactly" icon="code">
   ```json unsettled
@@ -479,14 +466,16 @@ looking part of the chart, where the diagram and the run's log show it. No shipp
 `create_invoice` leaves its invoice add to settling and handles only `unsettled`, with a question. A chart that
 looks for itself:
 
-- Treats a QuickBooks error answer as "nothing was added", and a `no_response` whose `reason` is `withdrawn`
-  or `rejected` the same way: the request never reached the company file.
-- On any other `no_response`, queries for the record -- by its `ref_number`, or among the customer's
-  transactions on its date, without their lines -- and uses `$find` to pick out the one whose
-  `external_guid` equals `response.error.external_guid`. QuickBooks returns the GUID exactly as it was
-  sent, braces and upper case, so an `external_guid` you send yourself should be written that way too.
-- Sends the add again only when the query's answer was whole (by number, or fewer than its cap came back),
-  and asks your app otherwise.
+| The add's answer is | The chart |
+| --- | --- |
+| A QuickBooks error | Treats it as "nothing was added". |
+| A `no_response` whose `reason` is `withdrawn` or `rejected` | Treats it the same way: the request never reached the company file. |
+| Any other `no_response` | Queries for the record -- by its `ref_number`, or among the customer's transactions on its date, without their lines -- and uses `$find` to pick out the one whose `external_guid` equals `response.error.external_guid`. Sends the add again only when the query's answer was whole (by number, or fewer than its cap came back), and asks your app otherwise. |
+
+<Note>
+  **QuickBooks returns the GUID exactly as it was sent, braces and upper case.** An `external_guid` you send
+  yourself should be written that way too.
+</Note>
 
 The run's `summary` counts an add such a chart found as the change it was, once, at the state that sent it.
 Its entry in `summary.requests` reads as one the run settled itself: `"status": "success"`,
@@ -516,14 +505,16 @@ so look before sending it again.
 ## Conflicts in a chart
 
 When an update meets a record someone changed after it was read, the run compares fields before anything
-is overwritten ([Conflicts](/workflows#conflicts)). It reads the record again and compares each field the
-update sends with the record as it is now and, when the run read it itself, as it was then:
+is overwritten ([Conflicts](/workflows#conflicts)). QuickBooks answers the 3200 with the record as it is now
+(when an answer doesn't, the run reads it again), and the run compares each field the update sends with it
+and, when the run read the record itself, with the record as it was then. Lines, linked transactions and data
+extensions aren't compared: the run's own read doesn't include them, so they're left out of both.
 
-- The record already has what the update sends: the state raises `success` with `response.settled` set to
-  `already_current`.
-- The other person changed only fields the update doesn't send: the run sends the update again with the
-  current edit sequence, without asking (`reapplied`). It can only tell this when it read the record itself.
-- They changed a field the update sends: what happens is the state's `on_conflict`.
+| The comparison finds | What happens |
+| --- | --- |
+| The record already has what the update sends | The state raises `success` with `response.settled` set to `already_current`. |
+| The other person changed only fields the update doesn't send | The run sends the update again with the current edit sequence, without asking (`reapplied`). It can only tell this when it read the record itself. |
+| They changed a field the update sends | The state's `on_conflict` decides, as below. |
 
 | `on_conflict` | What happens |
 | --- | --- |
@@ -697,8 +688,8 @@ it waits, its question to answer right there; then the start form and the recent
 
 Use the simulator's faults to walk the unhappy paths: a 3100 on the create, QuickBooks closed halfway
 through, an answer lost on its way back (**Next request** on the connection's page, or `next_lost_response`
-through the API). A 3200 fault on a workflow's update doesn't make a conflict prompt: the run reads the record
-back, finds nobody changed it, and sends the update again. To see a conflict prompt, give your chart an update
+through the API). A 3200 fault on a workflow's update doesn't make a conflict prompt: a fault's answer carries no
+record, so the run reads the record back, finds nobody changed it, and sends the update again. To see a conflict prompt, give your chart an update
 state, change the record through the API, then run the update with the `edit_sequence` from before. With your
 own `edit_sequence` there's no baseline, so `as_read` is `null` and every field that differs counts as a
 conflict.

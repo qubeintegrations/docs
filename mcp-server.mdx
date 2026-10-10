@@ -88,18 +88,28 @@ Calling `create_customer` with a name and email returns the request to send, rea
   "method": "POST",
   "url": "https://qubesync.com/api/v2/connections/{connection_id}/customers",
   "body": { "name": "Northwind Builders", "email": "ap@northwind.example" },
+  "headers": { "Idempotency-Key": "0b7e4f2c-9a1d-4c63-8e5b-2f7d1a9c3e40" },
   "webhook": { "type": "object", "properties": { "state": { ... }, "response_json": { ... } } }
 }
 ```
 
-- `method`, `url`, and `query` (for a `GET`) or `body`: the API call. Swap in a real `connection_id`, add
-  your `webhook_url`, and send it with your API key.
-- `webhook`: the JSON Schema of the [webhook](/webhooks) the answer will arrive in, including this
-  operation's own `data` and every QuickBooks status code it can fail with, each with what it means and
-  what to do.
-- The text content repeats the same as a ready-to-run `curl` command, plus a short guide to handling each
-  webhook `state` and the rest of the operation's notes from Intuit's qbXML reference. The tool's
-  description carries only their opening paragraph, since a client loads every tool's description at once.
+<ResponseField name="method, url, query or body" type="string, string, object">
+  The API call, with `query` for a `GET` or `body`. Swap in a real `connection_id`, add your
+  `webhook_url`, and send it with your API key.
+</ResponseField>
+<ResponseField name="headers" type="object">
+  Send them too. Each call of a tool gives a fresh `Idempotency-Key`, so if the `201` never arrives, the
+  same request sent again, key and all, answers with the request already queued instead of queueing a
+  second one. See [Retrying a call safely](/making-requests#retrying-a-call-safely).
+</ResponseField>
+<ResponseField name="webhook" type="object">
+  The JSON Schema of the [webhook](/webhooks) the answer will arrive in, including this operation's own
+  `data` and every QuickBooks status code it can fail with, each with what it means and what to do.
+</ResponseField>
+
+The text content repeats the same as a ready-to-run `curl` command, plus a short guide to handling each
+webhook `state` and the rest of the operation's notes from Intuit's qbXML reference. The tool's
+description carries only their opening paragraph, since a client loads every tool's description at once.
 
 So an agent writing your webhook handler gets the data shape and the error cases from the same call that
 built the request. Pass `"include_qbxml": true` to also see the qbXML QuBe Sync will send QuickBooks. That's

@@ -77,7 +77,9 @@ Every simulated company starts with the same small, realistic data set, so your 
 Customers, vendors, employees, items and transactions such as invoices, bills and payments can be queried,
 added and modified. The simulator enforces QuickBooks' rules along the way: names are unique across lists
 (3100), references must exist (3140), an amount needs its two decimals (`40.00`, not `40`; 3040), and
-updates need the current `edit_sequence` (3200). Values keep
+updates need the current `edit_sequence` (3200). As on real QuickBooks, a 3200's qbXML answer carries
+the record as it stands, current `edit_sequence` included, though the JSON answer passes on only the
+error. Values keep
 their spacing as QuickBooks keeps it: a name's double space or a note's line break comes back exactly as
 sent, and a `full_name` filter finds a record by that spelling, or by one with extra spaces, but a
 single-spaced filter does not find a double-spaced name. Iterated queries page like the real thing.
@@ -111,106 +113,216 @@ curl -u "$QUBE_API_KEY:" \
 Transactions keep their lines the way QuickBooks keeps them, so you can build and read line items
 against the simulator:
 
-- **Sales forms** (invoices, estimates, sales orders, sales receipts, credit memos) keep their item and
-  item-group lines. **Purchases** (bills, checks, credit card charges and credits, item receipts, vendor
-  credits) keep their `item_line_add`, `item_group_line_add` and `expense_line_add` lines. Every line gets a
-  `txn_line_id`.
-- An item line with no price starts from the item's: its sales price on a sale, its purchase cost on a
-  purchase. A `quantity` and an `amount` without a price imply one. Otherwise `amount` is `quantity`
-  times the price, with a quantity of 1 when none is given. An expense line carries the `amount` you send.
-- An item-group line expands into one line per item in the group, each item's quantity times the group's.
-- Totals come from the lines: an invoice's `subtotal` and `balance_remaining`, a bill's `amount_due` and
-  `open_amount`, a check's or card charge's `amount`, an item receipt's `total_amount`, and a vendor
-  credit's `credit_amount` and `open_amount`. A bill posts to Accounts Payable and falls due by its
-  terms, or 10 days after its date.
-- Queries return item, group and expense lines only with `include_line_items` (a journal entry's lines
-  come back either way). Lines come back in the order QuickBooks received them.
-- A line that names an item, account, customer or item group that doesn't exist is refused with 3140.
-- **Updating lines** follows QuickBooks' rule: send `txn_line_id` `-1` to add a line, an existing
-  `txn_line_id` to change one, and leave a line out to remove it. Item and group lines count as one list.
-  A purchase's expense lines are a separate list, replaced only when you send `expense_line_mod`.
-  `clear_item_lines` and `clear_expense_lines` empty a list. An update that sends no lines leaves them
-  alone.
-- **Journal entries** keep their debit and credit lines. `journal_line_mod` changes them by `txn_line_id`
-  under the same rule, and `journal_line_type` (`Debit` or `Credit`) moves a line to the other side. A
-  new line needs a type. An entry whose debits and credits don't balance is refused with 3180 when it's
-  created and 3170 when it's updated, with the message "Transaction not in balance." Both codes and
-  full messages match what real QuickBooks answers. An entry created with an entry-level `memo` is saved
-  without it and answered with a status 530 warning (`The field "Memo" is not supported by this
-  implementation.`), as real QuickBooks does; a `memo` on a line is kept.
-- **Lines inside a group** can be updated too: an `invoice_line_group_mod` (or a purchase's
-  `item_group_line_mod`) with its own line updates changes the group's lines by `txn_line_id` under the
-  same rule, and a new group `quantity` scales its lines. Intuit doesn't document how real QuickBooks
-  handles these updates. The simulator copies how a group behaves when it's added, so test group
-  updates against real QuickBooks too.
+| Transactions | Lines they keep |
+| --- | --- |
+| **Sales forms**: invoices, estimates, sales orders, sales receipts, credit memos | Item and item-group lines |
+| **Purchases**: bills, checks, credit card charges and credits, item receipts, vendor credits | `item_line_add`, `item_group_line_add` and `expense_line_add` lines |
+
+Every line gets a `txn_line_id`. A line that names an item, account, customer or item group that doesn't
+exist is refused with 3140. Queries return item, group and expense lines only with `include_line_items`
+(a journal entry's lines come back either way). Lines come back in the order QuickBooks received them.
+
+<AccordionGroup>
+  <Accordion title="Prices, amounts and totals" icon="calculator">
+    An item line with no price starts from the item's: its sales price on a sale, its purchase cost on a
+    purchase. A `quantity` and an `amount` without a price imply one. Otherwise `amount` is `quantity`
+    times the price, with a quantity of 1 when none is given. An expense line carries the `amount` you
+    send. An item-group line expands into one line per item in the group, each item's quantity times the
+    group's.
+
+    Totals come from the lines:
+
+    | Transaction | Totals |
+    | --- | --- |
+    | Invoice | `subtotal` and `balance_remaining` |
+    | Bill | `amount_due` and `open_amount` |
+    | Check or card charge | `amount` |
+    | Item receipt | `total_amount` |
+    | Vendor credit | `credit_amount` and `open_amount` |
+
+    A bill posts to Accounts Payable and falls due by its terms, or 10 days after its date.
+  </Accordion>
+  <Accordion title="Updating lines" icon="pen-to-square">
+    Updating lines follows QuickBooks' rule:
+
+    | To | Do this |
+    | --- | --- |
+    | Add a line | Send `txn_line_id` `-1` |
+    | Change a line | Send its existing `txn_line_id` |
+    | Remove a line | Leave it out |
+    | Empty a list | Send `clear_item_lines` or `clear_expense_lines` |
+    | Leave the lines alone | Send no lines |
+
+    Item and group lines count as one list. A purchase's expense lines are a separate list, replaced only
+    when you send `expense_line_mod`.
+  </Accordion>
+  <Accordion title="Journal entries" icon="scale-balanced">
+    Journal entries keep their debit and credit lines. `journal_line_mod` changes them by `txn_line_id`
+    under the same rule as other lines, and `journal_line_type` (`Debit` or `Credit`) moves a line to the
+    other side. A new line needs a type.
+
+    An entry whose debits and credits don't balance is refused with 3180 when it's created and 3170 when
+    it's updated, with the message "Transaction not in balance." Both codes and full messages match what
+    real QuickBooks answers. An entry created with an entry-level `memo` is saved without it and answered
+    with a status 530 warning (`The field "Memo" is not supported by this implementation.`), as real
+    QuickBooks does; a `memo` on a line is kept.
+  </Accordion>
+  <Accordion title="Lines inside a group" icon="layer-group">
+    Lines inside a group can be updated too: an `invoice_line_group_mod` (or a purchase's
+    `item_group_line_mod`) with its own line updates changes the group's lines by `txn_line_id` under the
+    same rule, and a new group `quantity` scales its lines. Intuit doesn't document how real QuickBooks
+    handles these updates. The simulator copies how a group behaves when it's added, so test group
+    updates against real QuickBooks too.
+  </Accordion>
+</AccordionGroup>
 
 ## Payments, deposits, voids and custom fields
 
-- **Payments** pay invoices down: an `applied_to_txn_add`'s `payment_amount` lowers the invoice's
-  `balance_remaining` and marks it paid at zero. A `set_credit` applies a credit memo first: its
-  `applied_amount` comes off the invoice's `balance_remaining` and the credit memo's `credit_remaining`.
-  An `invoice.create` can apply credit memos with `set_credit` the same way. What the credit memos have
-  left is the payment's `unused_credits`, and the part of a payment the invoice no longer needs is its
-  `unused_payment`. Each `applied_to_txn_ret` gives the invoice's `balance_remaining` after the payment
-  and lists each credit it applied as a `linked_txn` (`txn_type` `CreditMemo`, `link_type` `AMTTYPE`, a
-  negative `amount`); its own `amount` is the payment's part only. Intuit doesn't document how real
-  QuickBooks lists an applied credit, so don't build on the `linked_txn` shape. The simulator caps a credit at what's available and what the invoice owes, and a
-  payment at what's left after the credits; real QuickBooks may refuse such a payment instead.
-- **A payment of credits alone** (`total_amount` `0.00`, every `applied_to_txn_add` a `set_credit` with no
-  `payment_amount`) applies the credits but creates no payment, as in real QuickBooks. Its answer has no
-  `txn_id` of its own: `applied_to_txn_ret` lists only each invoice's `txn_id` and `txn_type`. Read the
-  invoice or credit memo again to see what was applied, and don't store an id for that payment.
-- **Deposits**: a payment received without a `deposit_to_account_ref` goes to Undeposited Funds, as in
-  QuickBooks. `receive_payment_to_deposit.query` lists it until a deposit takes it. A `deposit.create`
-  line with a `payment_txn_id` deposits that payment for its whole amount, and a line with an
-  `account_ref` and `amount` deposits money from that account. `deposit_total` is the sum of the lines.
-  A payment that isn't waiting to be deposited (unknown, deposited already, or received straight into a
-  bank account) is refused with 3120. Deleting a deposit puts its payments back in Undeposited Funds.
-- **Voids**: `txn_void.execute` keeps the transaction and sets its totals and every line's amount and
-  quantity to 0, for bills, checks, credit card charges and credits, credit memos, invoices, item receipts,
-  journal entries, sales receipts and vendor credits. The memo gets `VOID: ` in front. Real QuickBooks does
-  both for an invoice; for the other types it's the simulator's reading. An unknown `txn_id`, or one of
-  another type, gets 3120.
-- **Custom fields and private data extensions**: `data_ext_def.create`, `.update`, `.delete` and
-  `.query` keep definitions per company, unique by `owner_id` and `data_ext_name`. Following Intuit's
-  rules, a custom field (`owner_id` `0`) must be `STR255TYPE` and assigned to Customer, Employee,
-  Vendor or Item, and one assigned to Customer also reaches credit memos, estimates, invoices, sales
-  orders and sales receipts. To get one onto sales orders, assign it to Customer, or use a private
-  extension assigned to SalesOrder; the refusal says so. A private extension (a GUID `owner_id`) can be assigned to any list or
-  transaction type, and only a private definition can be deleted. `data_ext.create`, `.update` and
-  `.delete` set and clear a value on a list object or a transaction whose type the definition is
-  assigned to. A query that sends `owner_id` gets the values back as `data_ext_ret`, for those owners
-  only. Pass `owner_id` to `data_ext_def.query` too (0 for custom fields, your GUID for private
-  extensions). Without it QuickBooks answers status 1 "did not find a matching object" even when
-  definitions exist, so an empty answer there doesn't prove a field is missing. The simulator answers the
-  same way, and a custom field's definition comes back as real QuickBooks returns it: `data_ext_id` 0,
-  `data_ext_format_string` "Any text", and `assign_to_object` listing the transactions a Customer field
-  reaches. Refusals of what Intuit rules out (a custom field on a sales order, a value with no definition)
-  use 3180, 3170, 3100 and 3120; Intuit doesn't document those codes, so treat them as approximate.
-  An unknown `txn_id` gets 3120, as real QuickBooks answers it.
+<AccordionGroup>
+  <Accordion title="Payments" icon="money-bill">
+    Payments pay invoices down: an `applied_to_txn_add`'s `payment_amount` lowers the invoice's
+    `balance_remaining` and marks it paid at zero. A `set_credit` applies a credit memo first: its
+    `applied_amount` comes off the invoice's `balance_remaining` and the credit memo's `credit_remaining`.
+    An `invoice.create` can apply credit memos with `set_credit` the same way.
+
+    The part of a payment the invoice no longer needs is its `unused_payment`. As on real QuickBooks, a
+    payment's `unused_credits` is all the credit its customer's credit memos have left when you read it,
+    whether or not this payment applied any, so it falls to 0 once that credit is applied elsewhere. Each
+    `applied_to_txn_ret` gives the invoice's `balance_remaining` and `txn_date` as they are when you read
+    the payment, not when it was made: after an `invoice.update` raises the total, a payment's
+    `balance_remaining` rises with it. Its `amount` is the payment's part only.
+
+    A `payment_amount` more than the invoice's `balance_remaining` is refused with 3210 ("You cannot pay
+    more than the amount due.") and nothing is saved, as on real QuickBooks. The simulator caps a credit
+    at what's available and what the invoice owes, and a payment that the line's own credits leave more
+    than the invoice needs at what's left; real QuickBooks may refuse those too. A payment sent without a
+    `ref_number` has none, as on real QuickBooks, which doesn't number payments the way it numbers
+    invoices.
+  </Accordion>
+  <Accordion title="Deleting a payment" icon="trash-can">
+    Deleting a payment (`txn.delete`) gives each invoice it paid its `balance_remaining` and
+    `applied_amount` back and takes it out of the invoice's `linked_txn`. As on real QuickBooks, the
+    invoice's `time_modified` moves to the deletion but its `edit_sequence` doesn't. Credits the payment's
+    own `set_credit` applied stay applied.
+  </Accordion>
+  <Accordion title="Linked transactions" icon="link">
+    The simulator lists linked transactions as real QuickBooks lists them:
+
+    | `linked_txn` | Lists |
+    | --- | --- |
+    | In each of a payment's `applied_to_txn_ret` | Everything else applied to that invoice, in the order it was applied. That means credit memos, applied before or after this payment (by its own `set_credit` or a payment of credits alone too), and the invoice's other payments, but never the payment itself. |
+    | On the invoice: in the answer to `invoice.update`, and from `invoice.query` only with `include_linked_txns` | Everything applied to it, a payment's own credits before the payment. |
+    | On a credit memo, from `credit_memo.query` with `include_linked_txns` | The invoice its credit went to (`txn_type` `Invoice`, the credit as a negative `amount`), not the payment that applied it. |
+
+    Under a payment, each gives the other transaction's `txn_id`, `txn_type` (`CreditMemo` or
+    `ReceivePayment`), `txn_date`, `ref_number`, `link_type` `AMTTYPE`, and what it took off the invoice
+    as a negative `amount`.
+
+    Every list shows what's applied when you read it, with each transaction's current `txn_date`, so a
+    credit applied after a payment shows up under that payment. For the total applied to an invoice, read
+    its `applied_amount`, since a payment's `linked_txn` leaves out the payment's own part.
+  </Accordion>
+  <Accordion title="What a payment does to the invoice" icon="file-invoice-dollar">
+    As real QuickBooks does it, the invoice's `applied_amount` is negative (an invoice paid 80.00 reads
+    `-80.00`), and its `balance_remaining` is its total plus `applied_amount`. The invoice's
+    `time_modified` moves to the payment's time, but its `edit_sequence` doesn't, so the `edit_sequence`
+    you last read still updates it. A credit memo whose credit is applied keeps its `edit_sequence` the
+    same way.
+
+    In the other direction, an `invoice.update` that changes a line's `amount` (even with the total
+    unchanged) or the invoice's `txn_date` moves the `time_modified` of every payment and credit memo
+    applied to it, and leaves their `edit_sequence`, so a sync by `modified_date_range_filter` picks them
+    up again. One that changes only the `memo` or a line's `desc` leaves them alone.
+  </Accordion>
+  <Accordion title="Reading payments back" icon="magnifying-glass">
+    `receive_payment.query` returns what each payment was applied to (`applied_to_txn_ret`) only with
+    `include_line_items`, as real QuickBooks does. Without it, a payment that paid invoices comes back
+    without them. The answer to `receive_payment.create` always has them.
+  </Accordion>
+  <Accordion title="A payment of credits alone" icon="receipt">
+    A payment of credits alone (`total_amount` `0.00`, every `applied_to_txn_add` a `set_credit` with no
+    `payment_amount`) applies the credits but creates no payment, as in real QuickBooks. Its answer has no
+    `txn_id` of its own: `applied_to_txn_ret` lists only each invoice's `txn_id` and `txn_type`. Read the
+    invoice or credit memo again to see what was applied, and don't store an id for that payment. The
+    credit then shows as a `linked_txn` on the invoice and under each of its payments.
+  </Accordion>
+  <Accordion title="Deposits" icon="building-columns">
+    A payment received without a `deposit_to_account_ref` goes to Undeposited Funds, as in QuickBooks.
+    `receive_payment_to_deposit.query` lists it until a deposit takes it. A `deposit.create` line with a
+    `payment_txn_id` deposits that payment for its whole amount, and a line with an `account_ref` and
+    `amount` deposits money from that account. `deposit_total` is the sum of the lines.
+
+    As in real QuickBooks, each payment a deposit takes gets the deposit's time as its `time_modified` and
+    keeps its `edit_sequence`. A payment that isn't waiting to be deposited (unknown, deposited already, or
+    received straight into a bank account) is refused with 3120. Deleting a deposit puts its payments back
+    in Undeposited Funds.
+  </Accordion>
+  <Accordion title="Voids" icon="ban">
+    `txn_void.execute` keeps the transaction and sets its totals and every line's amount and quantity to
+    0, for bills, checks, credit card charges and credits, credit memos, invoices, item receipts, journal
+    entries, sales receipts and vendor credits. Each line keeps its rate, the memo gets `VOID: ` in front,
+    and a voided invoice reads back `is_paid` true, even one nothing paid. It keeps its `ref_number`.
+
+    An invoice that payments paid is voided too, as real QuickBooks does: each payment keeps its
+    `total_amount`, loses its `applied_to_txn_ret` for that invoice, and what it had applied there is added
+    to its `unused_payment`, ready to apply to another invoice. Real QuickBooks does all this for an
+    invoice; for the other types it's the simulator's reading. An unknown `txn_id`, or one of another
+    type, gets 3120.
+  </Accordion>
+  <Accordion title="Custom fields and private data extensions" icon="puzzle-piece">
+    `data_ext_def.create`, `.update`, `.delete` and `.query` keep definitions per company, unique by
+    `owner_id` and `data_ext_name`. Following Intuit's rules:
+
+    | | Custom field | Private extension |
+    | --- | --- | --- |
+    | `owner_id` | `0` | A GUID |
+    | Assigned to | Customer, Employee, Vendor or Item, and must be `STR255TYPE` | Any list or transaction type |
+    | Can be deleted | No | Yes |
+
+    A custom field assigned to Customer also reaches credit memos, estimates, invoices, sales orders and
+    sales receipts. To get one onto sales orders, assign it to Customer, or use a private extension
+    assigned to SalesOrder; the refusal says so.
+
+    `data_ext.create`, `.update` and `.delete` set and clear a value on a list object or a transaction
+    whose type the definition is assigned to. `data_ext.update` also sets a first value, as it does on
+    real QuickBooks, so you don't need `data_ext.create` before it. A query that sends `owner_id` gets the
+    values back as `data_ext_ret`, for those owners only.
+
+    <Warning>
+      **Pass `owner_id` to `data_ext_def.query` too** (0 for custom fields, your GUID for private
+      extensions). Without it QuickBooks answers status 1 "did not find a matching object" even when
+      definitions exist, so an empty answer there doesn't prove a field is missing. The simulator answers
+      the same way.
+    </Warning>
+
+    A custom field's definition comes back as real QuickBooks returns it: `data_ext_id` 0,
+    `data_ext_format_string` "Any text", and `assign_to_object` listing the transactions a Customer field
+    reaches. Refusals of what Intuit rules out (a custom field on a sales order, a value with no
+    definition) use 3180, 3170, 3100 and 3120; Intuit doesn't document those codes, so treat them as
+    approximate. An unknown `txn_id` gets 3120, as real QuickBooks answers it.
+  </Accordion>
+</AccordionGroup>
 
 The simulator doesn't model sales tax (always 0), payments against bills (bills stay open), inventory
-quantities or account balances moving, units of measure, linked transactions such as `link_to_txn_id`
-(only a payment's `applied_to_txn_ret` lists the credits it applied), price levels, account types (a card charge
-can name any account), date-driven terms, payment discounts, `is_auto_apply` (the payment is received
+quantities or account balances moving, units of measure, linked transactions other than payments and
+credits applied to an invoice (`link_to_txn_id`, or a bill's `linked_txn`),
+price levels, account types (a card charge can name any account), date-driven terms, payment discounts, `is_auto_apply` (the payment is received
 unapplied), changing what an update to an invoice or payment applies, sales receipts waiting in
 Undeposited Funds, data extension values' types and required flags, or QuickBooks refusing a
 transaction with no lines. It answers 1030 rather than guess for: voiding a deposit, bill payment,
-statement charge, credit card refund or inventory adjustment, a transaction that's already void, or one
-with payments or credits applied to it; a data extension on a transaction line or on the company; and
-a deposit with cash back.
+statement charge, credit card refund or inventory adjustment, a transaction that's already void, an
+invoice with a credit memo applied to it, or a credit memo that has been applied; a data extension on
+a transaction line or on the company; and a deposit with cash back.
 
 Other differences we know of:
 
-- A reference by a `list_id` that doesn't exist gets 3140. Real QuickBooks answers 3120 for an id, and 3140
-  only for a `full_name`.
-- Deleting a record that's in use, such as a customer with invoices, succeeds.
-- Queries for deleted records always find nothing.
-- A payment applied to a `txn_id` that doesn't exist, or a `set_credit` naming a `credit_txn_id`
-  that isn't a credit memo, skips it without an error.
-- Every simulated company allows every feature. A real company file can answer 3250 ("This feature is not
-  enabled or not available in this version of QuickBooks") for bar codes, currencies, inventory sites or units
-  of measure, and decline payroll and sales-tax-return queries.
+| When | The simulator |
+| --- | --- |
+| A reference names a `list_id` that doesn't exist | Answers 3140. Real QuickBooks answers 3120 for an id, and 3140 only for a `full_name`. |
+| You delete a record that's in use, such as a customer with invoices | Lets the delete succeed. |
+| You query for deleted records | Always finds nothing. |
+| A payment is applied to a `txn_id` that doesn't exist, or a `set_credit` names a `credit_txn_id` that isn't a credit memo | Skips it without an error. |
+| A request needs a feature, such as bar codes, currencies, inventory sites or units of measure | Allows it: every simulated company allows every feature. A real company file can answer 3250 ("This feature is not enabled or not available in this version of QuickBooks") for those, and decline payroll and sales-tax-return queries. |
 
 ## Make it fail
 

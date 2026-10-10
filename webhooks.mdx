@@ -5,8 +5,7 @@ icon: "bell"
 ---
 
 Any time a QuickBooks request is processed, QuBe Sync POSTs the result to the `webhook_url` you specified in the request.
-Create a customer with `POST /customers`, and this is what your endpoint receives: QuickBooks' answer, as
-clean JSON, in `response_json.data`.
+Create a customer with `POST /customers`, and your endpoint receives the new customer as clean JSON in `response_json.data`.
 
 ```json Webhook for POST /customers {11-27}
 {
@@ -143,7 +142,9 @@ The four fields you act on, from the example at the top of this page. The rest a
   `{"status": "error", "error": {"code", "type", "message"}}`. A query's `data` is always a list; a create
   or update's `data` is the record. A success also has `warning`, `{"code", "message"}`, when QuickBooks
   did what you asked but warned about something, such as a field it didn't save. See
-  [Warnings](/error_handling#quickbooks-said-yes-with-a-warning).
+  [Warnings](/error_handling#quickbooks-said-yes-with-a-warning). An update refused because the record
+  changed after you read it (3200) has `error.current`, the record as it stands, to retry from. See
+  [When the record changed after you read it](/error_handling#when-the-record-changed-after-you-read-it).
 </ResponseField>
 <ResponseField name="error" type="object | null">
   Set when `state` is <Badge color="red">`error`</Badge> or <Badge color="orange">`retryable`</Badge>: `error_type`, `error_code`, `message`, `user_message` (safe
@@ -298,21 +299,37 @@ included, is signed afresh, so a healthy receiver never sees an old one.
 An app can have several webhook secrets, and each delivery is signed with all of them. That header carries
 one `v1=` per secret, so you can rotate without dropping a delivery:
 
-1. Generate a new secret in the dashboard (**My Applications**, then your app).
-2. Set the new secret in your production environment.
-3. Expire the old secret. An app always keeps at least one.
+<Steps>
+  <Step title="Generate a new secret">
+    In the dashboard: **My Applications**, then your app.
+  </Step>
+  <Step title="Deploy it">
+    Set the new secret in your production environment.
+  </Step>
+  <Step title="Expire the old secret">
+    An app always keeps at least one.
+  </Step>
+</Steps>
 
 ## When a delivery fails
 
-- **Retried, up to 5 attempts in all.** Anything but a `2xx` within 5 seconds is a failed delivery: a 3xx
-  (redirects aren't followed), 4xx or 5xx, a timeout, or a refused connection. QuBe Sync retries with
-  backoff.
-- **Then marked failed.** After the last attempt the request's `webhook_state` becomes `failed`, your
-  organization's owners get an email, and the dashboard offers **Resend webhook**.
-- **Some addresses fail at once.** A delivery to an address webhooks
+<Steps>
+  <Step title="Retried, up to 5 attempts in all">
+    Anything but a `2xx` within 5 seconds is a failed delivery: a 3xx (redirects aren't followed), 4xx or
+    5xx, a timeout, or a refused connection. QuBe Sync retries with backoff.
+  </Step>
+  <Step title="Then marked failed">
+    After the last attempt the request's `webhook_state` becomes `failed`, your organization's owners get an
+    email, and the dashboard offers **Resend webhook**.
+  </Step>
+</Steps>
+
+<Note>
+  **Some addresses fail at once.** A delivery to an address webhooks
   [may not go to](#receiving-webhooks-in-development), such as a hostname that now resolves to a private
   address, isn't sent or retried: it fails at once with "Webhook not sent: ...", and the owners get the
   email.
+</Note>
 
 ## Receiving webhooks in development
 

@@ -58,16 +58,20 @@ Every page's webhook has the same `id` (the request you queued) and its own `pag
 | `page` | `1` | `2` | `3` |
 | `iteration_state` | `continue` | `continue` | `done` |
 
-- Process each page as it arrives. You don't need to wait for the last one.
-- Rarely, conditions external to QuBe Sync can cause pages to arrive out of order (page 4 can land before page 3), or a retried delivery to arrive twice.
-  Key on `page_request_id` plus `state`. A page whose `state` is <Badge color="orange">`retryable`</Badge> isn't final: the same
-  `page_request_id` arrives again later as <Badge color="green">`response_received`</Badge>, <Badge color="red">`error`</Badge>, <Badge color="purple">`timed_out`</Badge> or <Badge color="gray">`discarded`</Badge>. See
+Process each page as it arrives. You don't need to wait for the last one.
+
+<Warning>
+  **Rarely, conditions external to QuBe Sync can cause pages to arrive out of order (page 4 can land before
+  page 3), or a retried delivery to arrive twice.** Key on `page_request_id` plus `state`. A page whose
+  `state` is <Badge color="orange">`retryable`</Badge> isn't final: the same `page_request_id` arrives again later as <Badge color="green">`response_received`</Badge>, <Badge color="red">`error`</Badge>, <Badge color="purple">`timed_out`</Badge> or <Badge color="gray">`discarded`</Badge>. See
   [What to do with each `state`](/webhooks#what-to-do-with-each-state).
-- The `done` page (or `max_sandbox_iterations_reached` in a sandbox) is the last one, and its `page`
-  number tells you how many pages there are. The import is complete once you've handled **every page from
-  1 to that number**, not when the `done` page arrives: it can arrive before earlier pages. Keep the set
-  of page numbers you've handled. A handler that stores only the last `iteration_state` it saw can end on
-  `continue`.
+</Warning>
+
+The `done` page (or `max_sandbox_iterations_reached` in a sandbox) is the last one, and its `page`
+number tells you how many pages there are. The import is complete once you've handled **every page from
+1 to that number**, not when the `done` page arrives: it can arrive before earlier pages. Keep the set
+of page numbers you've handled. A handler that stores only the last `iteration_state` it saw can end on
+`continue`.
 
 <Note>
   In a **sandbox** app, an iteration stops after 4 pages. The last page's `iteration_state` is then
@@ -107,13 +111,13 @@ curl -u "$QUBE_API_KEY:" \
 
 ## Initial import
 
-New QuickBooks connections usually require bringing over large lists of various record types in bulk. You can use:
+New QuickBooks connections usually require bringing over large lists of various record types in bulk. You can use
+the plain paginated API (above), or a workflow:
 
-- the plain paginated API (above)
-- **a workflow that sends multiple lists to your app, one page at a time:** Clone the `send_lists_to_app` template and start
-  it. You can edit the workflow to include whichever entities you'd like to import, but the default pages through every customer, vendor and item (200 at a time), and sends each page to your
-  `webhook_url` exactly once, in order (it waits for your 2xx response before sending the next page). 
-- **the `stream_query` workflow** if you only need one list (e.g. customers)
+| Workflow | Use it when |
+| --- | --- |
+| `send_lists_to_app` | **You need multiple lists.** It sends them to your app, one page at a time. Clone the template and start it. You can edit the workflow to include whichever entities you'd like to import, but the default pages through every customer, vendor and item (200 at a time), and sends each page to your `webhook_url` exactly once, in order (it waits for your 2xx response before sending the next page). |
+| `stream_query` | **You only need one list** (e.g. customers). |
 
 <Request
   label="Install the template"
@@ -190,10 +194,27 @@ different fields, or each page on to a workflow of your own. See
 
 ## Tips
 
-- **Pick a page size QuickBooks can handle comfortably.** 1-200 records per page keeps each round
-  trip quick on a slow machine. Transactions with many lines are heavier than list records.
-- **Import once, then sync changes.** After the first full import, filter on the modified date so each
-  sync only fetches what changed. A list query (`customers`) takes `from_modified_date` directly; a
-  transaction query (`invoices`) takes `modified_date_range_filter[from_modified_date]`. See
-  [Making requests](/making-requests#query). The `pull_changes` [workflow](/workflows) does all this for you, including which records were deleted (
-  which a modified-date filter can't find).
+<AccordionGroup>
+  <Accordion title="Pick a page size QuickBooks can handle comfortably" icon="gauge">
+    1-200 records per page keeps each round trip quick on a slow machine. Transactions with many lines are
+    heavier than list records.
+  </Accordion>
+  <Accordion title="Import once, then sync changes" icon="arrows-rotate">
+    After the first full import, filter on the modified date so each sync only fetches what changed. A list
+    query (`customers`) takes `from_modified_date` directly; a transaction query (`invoices`) takes
+    `modified_date_range_filter[from_modified_date]`. See [Making requests](/making-requests#query).
+
+    The `pull_changes` [workflow](/workflows) does all this for you, including which records were deleted
+    (which a modified-date filter can't find). QuickBooks reports deletions only for the record types you ask
+    about, so list every type your app keeps: a pull that names `invoice` and `sales_order` won't tell you
+    about a deleted payment.
+  </Accordion>
+  <Accordion title="Key transactions by txn_id, not by their number" icon="key">
+    QuickBooks doesn't keep invoice numbers (`ref_number`) unique. It accepts a new invoice with a number
+    another invoice already has, and a voided invoice keeps its number (with its amounts at zero).
+
+    If your app requires unique invoice numbers, expect an import to bring in numbers you already hold, and
+    decide what a clash means for you: keep both, link them by `txn_id`, or skip one and log it. Importing
+    voided invoices too, as void, stops your app handing out their numbers again.
+  </Accordion>
+</AccordionGroup>

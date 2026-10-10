@@ -18,7 +18,7 @@ recover gracefully and reconcile what mutations were made or not. Naive solution
     Names already taken, records someone else changed, races with other apps editing QuickBooks.
   </Card>
   <Card title="Asks when it can't decide" icon="comment" href="#two-kinds-of-question">
-    Your app answers by API, or your user answers on the run's page.
+    Escalate decisions to your app or user when only a human can decide.
   </Card>
   <Card title="Survives lost answers" icon="arrows-rotate" href="#lost-answers">
     When QuickBooks' answer never arrives, the run finds out what was applied.
@@ -29,7 +29,7 @@ recover gracefully and reconcile what mutations were made or not. Naive solution
   <img src="/images/workflows/builder.png" alt="The find_or_create chart: a find request that ends found when the record is already there or goes on to create, a create request that ends created or loops back to find when the name was taken since the query, and a Failed ending for any other QuickBooks error" />
 </Frame>
 
-## Run one
+## Run your first workflow
 
 This runs `create_customer_safely` for a customer that already exists (in a [simulated connection](/simulator)), so you see a question and its
 answer.
@@ -89,7 +89,7 @@ answer.
     </Accordion>
   </Step>
   <Step title="Start a run">
-    The input is the same body `POST /customers` takes, so a workflow is a drop-in for the request it
+    The input is the same body `POST /customers` takes, so a workflow can be a drop-in for the request it
     replaces:
 
     <Request
@@ -198,7 +198,7 @@ answer.
     A run can wait as long as it needs to. Your user can answer tomorrow.
 
     <Accordion title="The whole awaiting_input webhook" icon="code">
-      ```json workflow_run.awaiting_input
+      ```json workflow_run.awaiting_input {10-27}
       {
         "event": "workflow_run.awaiting_input",
         "timestamp": 1790470628,
@@ -210,6 +210,7 @@ answer.
         "run_id": "fb1951a1-25b9-4fb2-98c7-c988988ecdf7",
         "prompt": {
           "id": "resolve_conflict.ask_about_customer",
+          "token": "Vq3kT9xRb2LmW8sZ",
           "kind": "decision",
           "message": "A customer named \"Riverbend Electric\" already exists.",
           "data": {
@@ -239,6 +240,8 @@ answer.
       has a `label`, and a `description` when it needs one.
     </Accordion>
 
+    You can use the app to test workflow runs: open the `links.ui` field to answer the question in the app, or just find the running workflow on the **Workflow Runs** page.
+    
     <Frame caption="The same question on the run's page (links.ui). Answering here is the same as POSTing to links.decisions.">
       <img src="/images/workflows/run-waiting.png" alt="A run's question, under Your answer is needed: the existing customer's name, company, address, phone, email and balance, and three answers, each saying where it leads (Use the existing customer, which ends used_existing; Create it with a different name, picked, with Riverbend Electric LLC typed as the new name, which continues at try_create; Don't create a customer, which ends cancelled), and a Send answer button" />
     </Frame>
@@ -348,7 +351,7 @@ such as `{"operation": "customer.query", "params": {"full_name": ["Riverbend Ele
     | `upsert` | Finds a list record as `resolve` does (`id`, `by_name`, optional `candidates`) and sends your `update` to it with its ListID filled in; the engine reads the edit sequence first and asks before overwriting a record someone changed since. Nothing has the name: sends your `create` add instead, looking once more if the name was taken in between. | `resolve / ask`: `use` (with `list_id`), `none` (then the add goes out) or `cancel`. And the [conflict prompt](#conflicts) when the record changed after it was read | `updated`, `created`, `cancelled`; fails as `name_taken` when the update renames it to a name in use |
     | `push_records` | Runs `upsert` once per entry of `records` -- at most 200, each the `id`, `by_name`, `candidates`, `create` and `update` that `upsert` takes, records of different lists mixed -- one at a time, in order, in one run. A record QuickBooks refuses, or one that isn't a valid `upsert` input, is listed in `errors` and the next one goes. For a webhook per record, run `upsert` once per record instead. | Through `upsert`, for each record that asks | `completed` |
     | `resolve_transaction` | Finds a transaction by the `txn_id` your app stored, then by its `ref_number`, then by the filters your `query` carries (a customer, a date range), picking out the one carrying the `external_guid` your app kept from the add. One transaction with the number and no GUID to check is it; anything less sure is offered to your app. Without line items: read it whole by `txn_id` when you need them. | `ask`: `use` (with `txn_id`), `none` (ends `not_found`) or `cancel` | `found`, `picked`, `not_found`, `cancelled` |
-    | `void_transaction` | Finds a transaction of `kind` as `resolve_transaction` does, then voids it, or deletes it when `action` is `delete`. QuickBooks voids sixteen types (invoice, bill, check, journal_entry and the others `kind` lists) and deletes those and nine more (sales_order, estimate, purchase_order, receive_payment, time_tracking and four others), so a delete takes kinds a void does not; asking to void one of those nine fails at once, before anything is sent, and says to pass `action` `delete`. Nothing is voided or deleted until the transaction is identified. | Through `resolve_transaction` | `voided`, `deleted`, `not_found`, `cancelled` |
+    | `void_transaction` | Finds a transaction of `kind` as `resolve_transaction` does, then voids it, or deletes it when `action` is `delete`. QuickBooks voids sixteen types (invoice, bill, check, journal_entry and the others `kind` lists) and deletes those and nine more (sales_order, estimate, purchase_order, receive_payment, time_tracking and four others), so a delete takes kinds a void does not; asking to void one of those nine fails at once, before anything is sent, and says to pass `action` `delete`. An invoice that payments paid can be voided: the payments stay, with what they had applied to it now their `unused_payment`. Nothing is voided or deleted until the transaction is identified. | Through `resolve_transaction` | `voided`, `deleted`, `not_found`, `cancelled` |
     | `record_payment` | Finds an invoice as `resolve_transaction` does and records a `payment` (a `receive_payment.create` body: how it was paid) for the invoice's own customer, applied to that invoice; the amount defaults to what the invoice still owes. An invoice already paid in full is reported, not paid again. | Through `resolve_transaction` | `applied`, `already_paid`, `not_found`, `cancelled` |
     | `create_customer_safely` | Creates a customer from `customer`, the body `POST /customers` takes. On a name clash, finds what has the name and asks. Allows five renames. | `ask_about_customer`: `use_existing`, `rename` (with `name`), `cancel`. `ask_about_other`: `rename`, `cancel` | `created`, `created_renamed`, `used_existing`, `cancelled`; fails as `renames_exhausted` |
     | `find_or_create_customer` | Finds a customer by full name, or creates it from `customer`. `find_or_create`, written out for one type. | No | `found`, `created` |
@@ -357,7 +360,7 @@ such as `{"operation": "customer.query", "params": {"full_name": ["Riverbend Ele
     | `resolve_reference` | Turns a `name`, and optionally a stored `list_id`, into a reference to an account, class, terms, payment method, sales tax code or ship method (`kind`). Only finds, like `resolve`, which it runs: a missing class, payment method or ship method is `find_or_create`'s or `upsert`'s to make. | When nothing has the name: `use` one of the first 50 active ones, `none`, or `cancel`. With none active, it ends `not_found` without asking | `found`, `picked`, `not_found`, `cancelled` |
     | `send_lists_to_app` | An initial import: every customer, vendor and item, active or not, sent to your app 200 at a time as `customers_page`, `vendors_page` and `items_page` [notifications](#sending-your-app-data), then the counts. Needs a `webhook_url`. | No | `completed` |
     | `stream_query` | Pages through the `query` you pass, 200 at a time, and sends each page to your app as a `page` [notification](#sending-your-app-data) carrying `kind`, `page`, `more`, `pass` and `records`, then how many there were. Any query: every customer, the items changed since a date, one customer's invoices; one QuickBooks doesn't page, such as the accounts, arrives as a single page. If the Web Connector session ends between pages, it starts again from page 1 (`pass` 2, at most 3), so take a repeated page without harm. Needs a `webhook_url`. | No | `completed` |
-    | `pull_changes` | The incremental sync. For each kind word in `lists` (`customer`, `vendor`, `account`, `class`, the `item_*` kinds such as `item_service`, and every other list type a deleted-records query knows, all but `billing_rate`) and in `transactions` (`invoice`, `receive_payment`, `bill` and every other transaction type), runs `stream_query` over the records modified on or after `since`, inactive ones included, so they arrive as `page` [notifications](#sending-your-app-data) with that `kind`. Then it sends one `deleted` notification with the records of those kinds deleted since then: QuickBooks keeps 90 days of them. Transactions come without their lines unless `include_line_items` is true (four kinds don't take it: `build_assembly`, `charge`, `time_tracking` and `vehicle_mileage`). A list QuickBooks doesn't page arrives as one page. Needs a `webhook_url`. | No | `completed` |
+    | `pull_changes` | The incremental sync. For each kind word in `lists` (`customer`, `vendor`, `account`, `class`, the `item_*` kinds such as `item_service`, and every other list type a deleted-records query knows, all but `billing_rate`) and in `transactions` (`invoice`, `receive_payment`, `bill` and every other transaction type), runs `stream_query` over the records modified on or after `since`, inactive ones included, so they arrive as `page` [notifications](#sending-your-app-data) with that `kind`. Then it sends one `deleted` notification with the records of those kinds deleted since then, and of no others: a payment deleted since then isn't in it unless `transactions` names `receive_payment`. QuickBooks keeps 90 days of them. Transactions come without their lines unless `include_line_items` is true (four kinds don't take it: `build_assembly`, `charge`, `time_tracking` and `vehicle_mileage`). A list QuickBooks doesn't page arrives as one page. Needs a `webhook_url`. | No | `completed` |
     | `company_profile` | Reads the company (name, legal name, address, fiscal year), its preferences (inventory, class tracking, multiple currencies, sales tax and the defaults QuickBooks posts with) and its host (product, version, country and the qbXML versions it speaks), all three in one Web Connector session. Run it when a connection is set up. | No | `completed` |
     | `create_invoice` | Creates the `customer` with `create_customer_safely`, finds or creates each item add in `items` (optional, any item type), then adds the `invoice` exactly as sent, each line naming its item and carrying its own quantity, rate and the rest. A lost answer to the add is [settled by the run](#lost-answers): the invoice found by the GUID the add carried is read whole, and one not found is added again. | Through `create_customer_safely`. And `ask_about_invoice` when the run could not settle whether the invoice was added: `use_existing` (with `txn_id`), `create_again`, `cancel` | `completed`, `cancelled`; fails as `unanswered_twice` |
 
@@ -394,9 +397,7 @@ such as `{"operation": "customer.query", "params": {"full_name": ["Riverbend Ele
   </Accordion>
 </AccordionGroup>
 
-In the dashboard, open **Workflows**. Under **Start from a template**, click **Use template** on a card, pick
-the app and click **Clone**: it creates the workflow as a draft, installs the templates it calls as drafts too
-(any your app doesn't have yet), and opens it in the builder.
+In the dashboard, open **Workflows** and clone any template into your sandbox app.
 
 <Frame caption="Workflows → Start from a template. A card names the templates it also installs.">
   <img src="/images/workflows/workflows-templates.png" alt="The Start from a template section of the Workflows page: four template cards with a description and Use template, the first opened to its app select (My App Dev), Clone and Cancel, and Find or create item noting it also installs find_or_create" />
@@ -430,23 +431,21 @@ any `2xx` within 5 seconds.
 | `workflow_run.failed` | Something needs attention: a QuickBooks error the chart doesn't handle, a named failure such as `renames_exhausted`, or a limit reached. | Shows `error`. What the run changed stays in QuickBooks. |
 | `workflow_run.cancelled` | Somebody stopped it: your app with `POST links.cancel`, or a person on the run's page. | Reads `cancel_reason`. Nothing is undone. |
 
+<Visibility for="agents">
 Every event has `event`, `timestamp`, `app_id`, `sandbox`, `connection_id`, `workflow` (the key),
 `workflow_id` (`null` once the workflow is deleted), `run_id` and `links` (`run`, `decisions`, `cancel`,
 `ui`). All three endings carry `outcome`, `output`, `error` and `summary`, and `workflow_run.cancelled` adds
 `cancel_reason`. A run's `error` is a sentence, not the error object a request's webhook carries.
 `GET links.run` returns the whole run, including its input, vars and trace.
+</Visibility>
 
-- **Retries**: a failed delivery is retried with backoff, up to 5 attempts, each logged in the run's event
-  log as `webhook_sent`. If they all fail, your organization's owners get an email. There's no **Resend**
-  for a run: read it with `GET links.run` instead. Notifications are retried for longer
-  ([below](#sending-your-app-data)).
-- **Repeats**: deliveries can repeat and arrive out of order. A run ends only once, so key endings on
-  `run_id`. Each delivery is built when it's sent, from the run as it is then: a retried
-  `workflow_run.awaiting_input` that arrives after the question was answered has no `prompt`.
-- **Before the `201`**: a run that ends as it starts, such as a chart that fails before it sends anything,
-  comes back from `POST /workflow-runs` already `failed` or `completed`, and its webhook can reach you
-  before that response does. Store the run's id from the response, and retry an event whose `run_id` you
-  haven't stored yet instead of dropping it.
+Deliveries can fail, repeat, or arrive early:
+
+| Delivery | What happens | What to do |
+| --- | --- | --- |
+| **Retries** | A failed delivery is retried with backoff, up to 5 attempts, each logged in the run's event log as `webhook_sent`. If they all fail, your organization's owners get an email. Notifications are retried for longer ([below](#sending-your-app-data)). | There's no **Resend** for a run: read it with `GET links.run` instead. |
+| **Repeats** | Deliveries can repeat and arrive out of order. A run ends only once. Each delivery is built when it's sent, from the run as it is then: a retried `workflow_run.awaiting_input` that arrives after the question was answered has no `prompt`. | Key endings on `run_id`. |
+| **Before the `201`** | A run that ends as it starts, such as a chart that fails before it sends anything, comes back from `POST /workflow-runs` already `failed` or `completed`, and its webhook can reach you before that response does. | Store the run's id from the response, and retry an event whose `run_id` you haven't stored yet instead of dropping it. |
 
 <Accordion title="Handle them in a job" description="WorkflowRunEventJob, in Ruby" icon="code">
   If one endpoint takes both request and run webhooks, [route on `event`](/webhooks#handle-it-in-a-job)
@@ -562,7 +561,7 @@ kinds are answered at `links.decisions`.
     | `state` | The request state that sent the update, in the workflow that asked. |
     | `data.operation` | The update, such as `customer.update`. |
     | `data.sent` | The fields it sends, without its id and edit sequence. |
-    | `data.current` | The record as QuickBooks has it now, with its edit sequence. |
+    | `data.current` | The record as QuickBooks has it now, with its edit sequence, but without its lines, linked transactions and data extensions, which the run's read of it doesn't include either. |
     | `data.as_read` | The record as the run read it, or `null` when the chart passed its own `edit_sequence`. |
     | `data.conflicts` | One row per field being updated that someone else changed too: `field`, `sent`, `current`, `as_read`. |
     | `data.theirs` | What they changed that the update doesn't send: `field`, `as_read`, `current`. Empty when `as_read` is `null`. |
@@ -687,21 +686,21 @@ the builder) sends a `workflow_run.notification` to the run's `webhook_url`, und
 routes on. The usual use is a whole list, a page at a time: `send_lists_to_app` sends `customers_page`
 with `seq` 1, 2, 3…, then the vendors, then the items, then `workflow_run.completed` with the counts.
 
-- **The run waits for your `2xx`** before it goes on: notifications come one at a time, in `seq` order, and
-  all of them before the run's ending, so `workflow_run.completed` means everything was sent. QuickBooks
-  isn't held up: the pages keep being fetched while your app takes them.
-- **Delivery is at least once.** A failed delivery is retried up to 10 times over about an hour, with the
-  same `delivery_id`. If none succeeds, your organization's owners get an email and the state raises `error`
-  with `response.error.type` `not_delivered`, which the chart can handle (go to a `wait` that asks whether
-  to retry, say); otherwise the run fails.
-- **At most 4 MB** each, once filled in. Bigger is never sent: `error` `too_large`. Send fewer records at a
-  time with a smaller `page_size`.
-- **Only to the run's `webhook_url`.** A chart can't name a URL of its own, and a workflow with a `notify`
-  state, or one that calls such a workflow, refuses to start without a `webhook_url`
-  (`422 webhook_url_required`).
-- **The run's ending counts them**: `summary.notifications` has how many were `sent` and how many `failed`.
-- A run caps at 500 transitions, and a page costs two (to the notify state and back), so one run sends at
-  most about 250 pages: 50,000 records at 200 a page.
+**The run waits for your `2xx`** before it goes on: notifications come one at a time, in `seq` order, and
+all of them before the run's ending, so `workflow_run.completed` means everything was sent. QuickBooks
+isn't held up: the pages keep being fetched while your app takes them. **The run's ending counts them**:
+`summary.notifications` has how many were `sent` and how many `failed`.
+
+| If | What happens |
+| --- | --- |
+| A delivery fails | **Delivery is at least once.** A failed delivery is retried up to 10 times over about an hour, with the same `delivery_id`. If none succeeds, your organization's owners get an email and the state raises `error` with `response.error.type` `not_delivered`, which the chart can handle (go to a `wait` that asks whether to retry, say); otherwise the run fails. |
+| A notification is over 4 MB, once filled in | It's never sent: `error` `too_large`. Send fewer records at a time with a smaller `page_size`. |
+| The run has no `webhook_url` | Notifications go only to the run's `webhook_url`: a chart can't name a URL of its own. A workflow with a `notify` state, or one that calls such a workflow, refuses to start without one (`422 webhook_url_required`). |
+
+<Note>
+  **One run sends at most about 250 pages: 50,000 records at 200 a page.** A run caps at 500 transitions,
+  and a page costs two (to the notify state and back).
+</Note>
 
 <Accordion title="The notification payload" description="delivery_id, seq, name, state, from, data" icon="code">
   A notification has the fields [every event has](#what-your-app-receives), plus:
@@ -802,13 +801,14 @@ request, and how a chart can do the looking itself, is in
 
 QuickBooks refuses an update when the record changed after it was read: error 3200, a stale `edit_sequence`.
 Retrying with the fresh edit sequence would quietly overwrite whatever the other person changed. A workflow
-looks first: the run reads the record again and compares each field the update sends.
+looks first: QuickBooks answers the 3200 with the record as it stands (the run reads it again when an answer
+doesn't), and the run compares each field the update sends with it.
 
-- **The record already has what the update sends**: nothing to do.
-- **The other person changed only fields the update doesn't send**: the run sends the update again with the
-  current edit sequence, without asking.
-- **They changed a field the update sends**: the run pauses and asks your app with a `conflict`
-  [prompt](#two-kinds-of-question).
+| What it finds | What the run does |
+| --- | --- |
+| The record already has what the update sends | Nothing to do. |
+| The other person changed only fields the update doesn't send | Sends the update again with the current edit sequence, without asking. |
+| They changed a field the update sends | Pauses and asks your app with a `conflict` [prompt](#two-kinds-of-question). |
 
 `upsert` and `push_records` send updates, and so may charts of your own. A chart can overwrite or fail
 instead of asking: see [Conflicts in a chart](/workflow-authoring#conflicts-in-a-chart).
@@ -854,7 +854,7 @@ All under `https://qubesync.com/api/v2/connections/{connection_id}`, with your a
 | `POST /workflow-runs` | Starts a run: `workflow` (the key), `input`, optional `webhook_url`. On a sandbox or simulated connection, `version` picks the chart ([versions](/workflow-authoring#versions-and-publishing)). `201` with the run. Input the workflow doesn't accept is `422`, with the path of each problem, before anything is queued. |
 | `GET /workflow-runs/{run_id}` | The whole run: `state`, `current_state`, `outcome`, `input`, `vars`, `prompt`, `output`, `error`, `summary`, `cancel_reason`, `trace` and `links`. |
 | `GET /workflow-runs` | The 100 most recent runs your app started on the connection, newest first. `?state=` and `?outcome=` (the exact key) filter them. |
-| `POST /workflow-runs/{run_id}/decisions` | Answers the question: `option`, plus `data` with the option's fields. `422` for an option it doesn't offer, a missing field, or a conflict's `params` with a field the update doesn't take (`invalid_data`). `400 not_awaiting_input` when the run isn't waiting, which is safe to ignore on a repeat delivery. |
+| `POST /workflow-runs/{run_id}/decisions` | Answers the question: `option`, plus `data` with the option's fields, and `prompt_token` (the prompt's `token`) so a retry can't answer the next question. `422` for an option it doesn't offer, a missing field, a conflict's `params` with a field the update doesn't take (`invalid_data`), or a `prompt_token` that isn't a string. `409 prompt_changed` when the run has asked again since the question your `prompt_token` names. `400 not_awaiting_input` when the run isn't waiting. Both are safe to ignore on a repeat. |
 | `POST /workflow-runs/{run_id}/cancel` | Stops the run, with an optional `reason`. `409 already_finished` once it has ended. |
 | `GET /workflow-runs/{run_id}/events` | The event log, oldest first, the workflows it calls included. Page with `?after=` (the previous page's `next_after`, or the last `seq` you have) and `?limit=` (up to 500, default 100). |
 | `DELETE /workflow-runs/{run_id}` | Deletes a finished run before retention does. `409 run_not_finished` while it's running or waiting. |
@@ -864,37 +864,55 @@ part of the run you started.
 
 ## Good to know
 
-- **Starting a run twice runs it twice.** There's no idempotency key. Key runs by your own record (one run
-  per order, say) and check before starting another.
-- **Workflows can call workflows.** A `workflow` state runs another workflow as one step, optionally once
-  per item in a list (`each`). Your app still deals with one run. The called workflow's requests, decisions
-  and calls are in that run's `summary` and event log, and its questions arrive on that run: `prompt.id` is
-  prefixed with the calling state (`create_customer / resolve_conflict.ask_about_customer`), and
-  `prompt.from` names the `workflow` and `state` that asked, plus `item_index` and `item_count` when it runs
-  once per item. Answer at the run's own `links.decisions`.
-- **An installed template is a copy.** A change we make to a template reaches your workflow only when you install
-  it again with `"replace": true`. `template.status` on `GET /workflows` tells you when there's one to take.
-- **Production runs the published version.** On a production connection, a run always uses the workflow's
-  published version. Sandbox and simulated connections run your latest edits by default, so you can test
-  before publishing. The workflows a run calls follow suit: their working copies for a working-copy run,
-  their published versions for a published one. See [Build your own](/workflow-authoring#versions-and-publishing).
-
-<Accordion title="Limits" icon="gauge">
-  | Limit | Value |
-  | --- | --- |
-  | Transitions per run | 500 |
-  | `always` transitions in a row | 50 |
-  | Items in one `each` | 200, run one at a time, in order |
-  | One notification's `data` | 4 MB |
-  | Delivering a notification | 10 attempts over about an hour |
-  | Workflows calling workflows | 8 deep |
-  | Settling one lost answer | 5 more requests, at most 2 of them re-sends |
-  | Writes after a conflict | 3 |
-  | Cancel reason | 500 characters |
-  | Finished runs kept | 60 days (per-state details are trimmed after 7). Runs waiting on an answer are never removed. |
-  | Runs listed per request | the 100 most recent |
-  | Events per page | 500 (default 100) |
-</Accordion>
+<AccordionGroup>
+  <Accordion title="Starting a run twice runs it twice" description="unless both calls carry the same Idempotency-Key" icon="key">
+    Send a new `Idempotency-Key` with each run you start, and the same key when you send the call again
+    because its `201` never arrived: you get the run already started, as it is now, not a second one. See [Retrying a call safely](/making-requests#retrying-a-call-safely).
+  </Accordion>
+  <Accordion title="Send prompt_token with every answer" icon="ticket">
+    Each question a run asks has a `prompt.token`, new every time it's asked, even when it's the same
+    question again: a `wait` in a loop, or a workflow called once per item. Send it back as `prompt_token`,
+    and an answer you send again because the first got no response can't be taken as the answer to the
+    run's next question: once the run has asked again, it's refused with `409 prompt_changed` and nothing
+    changes. On a retry, a `409` or a `400 not_awaiting_input` means your first answer landed, unless
+    someone answered on the run's page. Without `prompt_token`, an answer is taken for whatever the run is
+    asking when it arrives.
+  </Accordion>
+  <Accordion title="Workflows can call workflows" icon="diagram-project">
+    A `workflow` state runs another workflow as one step, optionally once per item in a list (`each`). Your
+    app still deals with one run. The called workflow's requests, decisions and calls are in that run's
+    `summary` and event log, and its questions arrive on that run: `prompt.id` is prefixed with the calling
+    state (`create_customer / resolve_conflict.ask_about_customer`), and `prompt.from` names the `workflow`
+    and `state` that asked, plus `item_index` and `item_count` when it runs once per item. Answer at the
+    run's own `links.decisions`.
+  </Accordion>
+  <Accordion title="An installed template is a copy" icon="clone">
+    A change we make to a template reaches your workflow only when you install it again with
+    `"replace": true`. `template.status` on `GET /workflows` tells you when there's one to take.
+  </Accordion>
+  <Accordion title="Production runs the published version" icon="rocket">
+    On a production connection, a run always uses the workflow's published version. Sandbox and simulated
+    connections run your latest edits by default, so you can test before publishing. The workflows a run
+    calls follow suit: their working copies for a working-copy run, their published versions for a
+    published one. See [Build your own](/workflow-authoring#versions-and-publishing).
+  </Accordion>
+  <Accordion title="Limits" icon="gauge">
+    | Limit | Value |
+    | --- | --- |
+    | Transitions per run | 500 |
+    | `always` transitions in a row | 50 |
+    | Items in one `each` | 200, run one at a time, in order |
+    | One notification's `data` | 4 MB |
+    | Delivering a notification | 10 attempts over about an hour |
+    | Workflows calling workflows | 8 deep |
+    | Settling one lost answer | 5 more requests, at most 2 of them re-sends |
+    | Writes after a conflict | 3 |
+    | Cancel reason | 500 characters |
+    | Finished runs kept | 60 days (per-state details are trimmed after 7). Runs waiting on an answer are never removed. |
+    | Runs listed per request | the 100 most recent |
+    | Events per page | 500 (default 100) |
+  </Accordion>
+</AccordionGroup>
 
 ## Next
 

@@ -50,10 +50,21 @@ curl -u "$QUBE_API_KEY:" \
 {/* agent-block:end */}
 
 Tips:
-- **Set up a permanent tunnel** using [Cloudflare Tunnels](https://developers.cloudflare.com/tunnel/get-started/)
-- **Keep the URL in configuration** (an `APP_HOST` environment variable, say) and build every `webhook_url`
-  from it, because a free tunnel's address changes each time it starts.
-- **Verify signatures in development too.** Your sandbox app has its own webhook secret, so the code path is
-  the same as in production. [Verify the signature](/webhooks#securing-your-endpoints).
-- **Missed one while the tunnel was down?** QuBe Sync retries each delivery several times, and any request's
-  page in the dashboard has **Resend webhook**.
+
+<CardGroup cols={2}>
+  <Card title="Set up a permanent tunnel" icon="link">
+    Use [Cloudflare Tunnels](https://developers.cloudflare.com/tunnel/get-started/).
+  </Card>
+  <Card title="Keep the URL in configuration" icon="sliders">
+    Put it in an `APP_HOST` environment variable, say, and build every `webhook_url` from it, because a free
+    tunnel's address changes each time it starts.
+  </Card>
+  <Card title="Verify signatures in development too" icon="shield-check">
+    Your sandbox app has its own webhook secret, so the code path is the same as in production.
+    [Verify the signature](/webhooks#securing-your-endpoints).
+  </Card>
+  <Card title="Missed one while the tunnel was down?" icon="arrows-rotate">
+    QuBe Sync retries each delivery several times, and any request's page in the dashboard has
+    **Resend webhook**.
+  </Card>
+</CardGroup>

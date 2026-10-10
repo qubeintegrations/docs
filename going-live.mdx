@@ -57,26 +57,39 @@ Your code doesn't change between the two. The API key, the webhook secret and th
 
 ## How billing works
 
-- **Sandbox apps and simulated connections are free**, however much you use them.
-- **You pay per active production connection per month.** A connection is active when its Web Connector has
-  checked in during the past week. A customer who disconnects stops counting.
-- **Realtime connections** (Web Connector every 10 seconds) are billed at a higher rate than standard ones
-  (every 5 minutes).
-- There's no charge per request or per webhook.
+| You use | You pay |
+| --- | --- |
+| Sandbox apps and simulated connections | Nothing, however much you use them |
+| A `standard` production connection (Web Connector every 5 minutes) | Per active connection per month |
+| A `realtime` production connection (Web Connector every 10 seconds) | Per active connection per month, at a higher rate than standard |
+| Requests and webhooks | Nothing: there's no charge per request or per webhook |
+
+A connection is active when its Web Connector has checked in during the past week. A customer who
+disconnects stops counting.
 
 See [pricing](https://qubesync.com/#pricing) for current rates. High volume or special requirements?
 [Talk to us](https://qubesync.com/contact_us).
 
 ## Operating it
 
-- **Watch connections, not just requests.** A connection whose `last_connected_at` is days old has a Web
-  Connector that stopped, usually because the PC is off or QuickBooks moved. Its requests wait until it's
-  back, and your organization's owners are emailed after a week.
-- **Rotate secrets without downtime.** Webhook deliveries are signed with every active secret on the app,
-  so you can [rotate](/webhooks#rotate-your-webhook-secret) by adding a new one before expiring the old.
-  API keys work the same way: create the new key, deploy it, then expire the old one. Expiring a key takes
-  effect immediately.
-- **Use the dashboard to investigate.** Every request shows what was sent, what QuickBooks answered, and
-  each webhook attempt, with a **Resend webhook** button. Every workflow run shows its path on the canvas.
-- **Invite your team** from your organization's members page. Alerts go to owners, so make sure more than
-  one person is an owner.
+<CardGroup cols={2}>
+  <Card title="Watch connections, not just requests" icon="heart-pulse">
+    A connection whose `last_connected_at` is days old has a Web Connector that stopped, usually because the
+    PC is off or QuickBooks moved. Its requests wait until it's back, and your organization's owners are
+    emailed after a week.
+  </Card>
+  <Card title="Rotate secrets without downtime" icon="rotate">
+    Webhook deliveries are signed with every active secret on the app, so you can
+    [rotate](/webhooks#rotate-your-webhook-secret) by adding a new one before expiring the old. API keys work
+    the same way: create the new key, deploy it, then expire the old one. Expiring a key takes effect
+    immediately.
+  </Card>
+  <Card title="Use the dashboard to investigate" icon="magnifying-glass">
+    Every request shows what was sent, what QuickBooks answered, and each webhook attempt, with a
+    **Resend webhook** button. Every workflow run shows its path on the canvas.
+  </Card>
+  <Card title="Invite your team" icon="users">
+    Invite them from your organization's members page. Alerts go to owners, so make sure more than one
+    person is an owner.
+  </Card>
+</CardGroup>

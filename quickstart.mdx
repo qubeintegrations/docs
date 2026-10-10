@@ -8,9 +8,9 @@ import { Request } from "/snippets/request.jsx";
 
 import CreateAccount from "/snippets/quickstart-create-account.mdx";
 
-## Choose a company file
+## Connect to QuickBooks or a simulator
 
-Use a **simulated** one if you don't have QuickBooks handy. It's ready in seconds, and your code won't
+Use a **simulated** connection if you don't have QuickBooks handy. It's ready in seconds, and your code won't
 change when you connect real QuickBooks later.
 
 <Tabs>
@@ -31,8 +31,7 @@ change when you connect real QuickBooks later.
           <img src="/images/quickstart/new-connection-simulated.png" alt="The New Connection form with App set to My App Dev, Name set to Test company and Type set to simulated (beta)" style={{ maxWidth: "592px" }} />
         </Frame>
 
-        It's connected straight away, to a sample company with customers, items and transactions to
-        query. The simulator is in [beta](/simulator), so test against real QuickBooks before you launch.
+        It's immediately "connected" to a sample company with customers, items and transactions. The simulator is in [beta](/simulator), so test against real QuickBooks before you launch.
 
         <Accordion title="Create it with the CLI or the API instead">
           Both need your API key: see [Do it from your code](#do-it-from-your-code).
@@ -40,6 +39,7 @@ change when you connect real QuickBooks later.
           ```bash CLI
           qube login
           qube use "My App Dev"
+          qube env --write
           qube connections create --simulated --name "Test company"
           ```
 
@@ -188,18 +188,25 @@ change when you connect real QuickBooks later.
 **Create Test Request** is a shortcut for one API call. To make it yourself, copy two values from the
 dashboard:
 
-- Your **API key**: open **My Applications**, then **My App Dev**, and click the key to copy it.
-- The **connection ID**: click **ID** on the connection's page.
+<AccordionGroup>
+  <Accordion title="Where to find your API key">
+    Open **My Applications**, then **My App Dev**, and copy the key.
 
-<Frame caption="Each app has its own keys. Keep them out of your code and your logs.">
-  <img src="/images/quickstart/app-keys.png" alt="My App Dev's API key and webhook secret, each shortened, with Expire and Generate buttons" />
-</Frame>
+    <Frame caption="Each app has its own keys. Keep them out of your code and your logs.">
+      <img src="/images/quickstart/app-keys.png" alt="My App Dev's API key and webhook secret, each shortened, with Expire and Generate buttons" />
+    </Frame>
+  </Accordion>
+  <Accordion title="Where to find your connection ID">
+    Go to QB Connections -> your new connection; copy **ID** on the connection's page.
+  </Accordion>
+</AccordionGroup>
 
 ```bash
 export QUBE_API_KEY="sk_..."
 export CONN_ID="4fdde583-..."
 ```
 
+### Use the RESTful [customer query](/api-reference/v2/customers/list-customers) endpoint
 <Request path="/api/v2/connections/{connection_id}/customers" query={{ max_returned: 2 }} />
 
 {/* agent-block:start */}
@@ -217,9 +224,13 @@ curl -u "$QUBE_API_KEY:" \
 </Visibility>
 {/* agent-block:end */}
 
+<Visibility for="agents">
+
 The API key is the username for HTTP Basic auth, and the password is blank. QuBe Sync replies at once
 with `201 Created` and the request in state `waiting`, because QuickBooks Desktop answers only when its
 Web Connector checks in. Open `links.ui` to watch it get answered, like your test request.
+
+</Visibility>
 
 ```json 201 Created (abridged)
 {

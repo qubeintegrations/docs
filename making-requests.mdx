@@ -6,18 +6,25 @@ icon: "code"
 
 import { Request } from "/snippets/request.jsx";
 
-Every QuickBooks operation is a REST endpoint under a connection. See the [API Reference](/api-reference) to see them all, and even try them from right here in the docs. Better yet, use the [MCP server](/mcp-server) to let your agent build and validate any request.
-There are 261 operations, covering lists
+See the [API Reference](/api-reference) for full documentation of all 261 QuickBooks operations and their REST(ish) endpoints, and even try them from right here in the docs. Better yet, use the [MCP server](/mcp-server) to let your agent build and validate any request.
+
+Every QuickBooks operation is a REST endpoint under a connection, covering lists
 (customers, vendors, items, accounts), transactions (invoices, bills, payments, sales receipts, journal
 entries), payroll and reports. They are all compiled and validated directly from QuickBooks' own schema definitions, so they support
 every feature native qbXML offers. All behave the same way:
 
-1. You send JSON to `https://qubesync.com/api/v2/connections/{connection_id}/{resource}`.
-2. QuBe Sync checks it against QuickBooks' schema. An invalid request is refused immediately, with a
-   message saying what's wrong.
-3. A valid request is queued, and you get `201 Created` with the queued request.
-4. When the Web Connector next checks in, QuickBooks runs it and the answer is POSTed to your
-   `webhook_url` as JSON.
+<Steps>
+  <Step title="Send JSON">
+    You send JSON to `https://qubesync.com/api/v2/connections/{connection_id}/{resource}`.
+  </Step>
+  <Step title="Queue">
+    Your request is validated against QuickBooks' schema. A valid request is queued, and you get `201 Created` with the queued request.
+  </Step>
+  <Step title="Receive the answer">
+    When the Web Connector next checks in, QuickBooks runs it and the answer is POSTed to your
+    `webhook_url` as JSON.
+  </Step>
+</Steps>
 
 ## The pattern
 
@@ -30,8 +37,7 @@ every feature native qbXML offers. All behave the same way:
 | Do something else | `POST` | `POST /connections/{id}/txn-void` | `TxnVoidRq` |
 
 Fields are snake_case versions of QuickBooks' own names (`ListID` becomes `list_id`, `EditSequence` becomes
-`edit_sequence`), in the request body and in the answer. The [API reference](/api-reference/introduction)
-lists every resource and field, and the [MCP server](/mcp-server) can build any request for you.
+`edit_sequence`), in the request body and in the answer.
 
 Add `webhook_url` as a **query parameter** to every call, whatever the method. That's where the answer
 goes.
@@ -90,8 +96,6 @@ def qube(method, path, body=None, **query):
     return res.json()["data"]
 ```
 </CodeGroup>
-
-The examples below show each call as the method, path and JSON body you send, which is all the client takes. Every call uses HTTP Basic auth, with your API key as the username and an empty password. **Copy as curl** gives you the command to try it.
 
 ## Query
 
@@ -300,19 +304,45 @@ test suite, not on your customer's PC. You get `400` and nothing is queued:
 { "errors": "active_status: must be one of [:all, :active_only, :inactive_only], got \"Sometimes\"" }
 ```
 
-A connection that doesn't exist or belongs to another app answers `404`, and a missing or wrong API key
-answers `401`. Every refusal has the one key `errors`.
-
 ## Ordering, dependencies and retries
 
-- **Requests run in the order you queued them**, one connection at a time. Queue a request that depends on
-  another (an invoice for a customer you're creating) from the first one's webhook, not alongside it.
-  Or let a [workflow](/workflows) run the sequence for you.
-- **QuBe Sync never sends the same request to QuickBooks twice.** There is no idempotency key, so a second
-  `POST` from your app is a second request. Record the `id` of each request you queue, and check it before
-  queuing again.
-- **Don't resend a request that's <Badge color="orange">`retryable`</Badge>.** QuBe Sync is already retrying it. See
-  [Error handling](/error_handling).
+| How it works | What to do |
+| --- | --- |
+| **Requests run in the order you queued them**, one connection at a time. | Queue a request that depends on another (an invoice for a customer you're creating) **from the first one's webhook**, not alongside it. Or let a [workflow](/workflows) run the sequence for you. |
+| **Every call queues a new request.** If your app sends the same call twice, QuickBooks runs it twice: two calls to create an invoice make two invoices. QuBe Sync itself never resends a request QuickBooks might have received. It only retries a request the Web Connector couldn't deliver at all. | **Retry with an idempotency key.** Send an `Idempotency-Key` header with each call, and a call you send again after a timeout queues nothing new (see [Retrying a call safely](#retrying-a-call-safely)). |
+| **QuBe Sync is already retrying** a request that's <Badge color="orange">`retryable`</Badge>. | **Don't resend it.** See [Error handling](/error_handling). |
+
+### Retrying a call safely
+
+A timeout or a dropped connection can leave your app without the `201`, and so without the request's `id`,
+though the request was queued. Send an `Idempotency-Key` header with each call, and send a call whose answer
+you never got again with the same key:
+
+```bash
+curl -u "$QUBE_API_KEY:" \
+  -X POST "https://qubesync.com/api/v2/connections/$CONN_ID/customers?webhook_url=https://your-app.example/webhooks/qube" \
+  -H "Idempotency-Key: 4c1f0b9e-7d2a-4b8e-9f3a-1e6d5c2b7a90" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Acme Co"}'
+```
+
+<ParamField header="Idempotency-Key" type="string">
+  1 to 255 printable ASCII characters. Every operation, [queueing qbXML](#sending-qbxml-yourself) and
+  [starting a workflow run](/workflows) take one. Other calls ignore the header.
+
+  A key belongs to your app, so your sandbox and production apps never share one. It lasts as long as the
+  request or run it created.
+</ParamField>
+
+| You send | What happens |
+| --- | --- |
+| The same key with the same call (method, path, query and body) | `201` with the request the first call queued, as it is now, and the header `Idempotent-Replayed: true`. Nothing new is queued, and no extra webhook goes out. |
+| The same key with a different call | `422` naming the header. A key stands for one request: generate a new one (a UUID) for each request you mean to make once, and store it with your record before you send it. |
+| A call that's refused | `400`, `404` or `422`. It queues nothing and uses up no key: fix it and send it again with the same key. |
+
+The key covers a lost `201`, not a lost answer from QuickBooks. A request that ends
+<Badge color="purple">`timed_out`</Badge> was queued and sent, so sending it again with its key only returns it. See
+[When the answer is lost](/error_handling#when-the-answer-is-lost).
 
 ## Sending qbXML yourself
 
@@ -354,31 +384,36 @@ curl -u "$QUBE_API_KEY:" \
 </Visibility>
 {/* agent-block:end */}
 
-`request_xml` is the whole document, and it's validated before anything is queued. If validation fails, it answers `422`, with `errors.request_xml` describing the error:
+<ParamField body="request_xml" type="string" required>
+  The whole qbXML document, sent to QuickBooks as it is. It's checked before anything is queued:
 
-### Rules for raw qbXML
-1. It has no DOCTYPE. qbXML doesn't use one.
-2. It declares its qbXML version, such as `<?qbxml version="16.0"?>`, and the version is 13.0, 14.0, 15.0
-   or 16.0.
-3. It is valid against that version's qbXML schema.
-4. `<QBXML>` holds only `<QBXMLMsgsRq>`, with at least one request inside it.
-5. In a batch (two or more requests), no request has an `iterator` attribute. Queue an iterator query on
-   its own.
-6. `onError` is `stopOnError` or `continueOnError`. QuickBooks Desktop refuses `rollbackOnError` for the
-   whole envelope.
+  1. It has no DOCTYPE. qbXML doesn't use one.
+  2. It declares its qbXML version, such as `<?qbxml version="16.0"?>`, and the version is 13.0, 14.0,
+     15.0 or 16.0.
+  3. It is valid against that version's qbXML schema.
+  4. `<QBXML>` holds only `<QBXMLMsgsRq>`, with at least one request inside it.
+  5. In a batch (two or more requests), no request has an `iterator` attribute. Queue an iterator query
+     on its own.
+  6. `onError` is `stopOnError` or `continueOnError`. QuickBooks Desktop refuses `rollbackOnError` for
+     the whole envelope.
 
-```json 422 Unprocessable Entity
-{ "errors": { "request_xml": ["CustomerQueryRq has an iterator: queue an iterator query on its own, not in a batch"] } }
-```
+  If it breaks one, nothing is queued and the answer is `422`, with `errors.request_xml` saying which:
 
-Write every amount with its two decimals: `<TotalAmount>40.00</TotalAmount>`, not `40`. The schema allows
-`40`, so it passes these checks, but QuickBooks refuses it with `3040` when it runs the request. Quantities
-and rates can be whole numbers. The operations write amounts this way for you.
+  ```json 422 Unprocessable Entity
+  { "errors": { "request_xml": ["CustomerQueryRq has an iterator: queue an iterator query on its own, not in a batch"] } }
+  ```
 
-The body takes `request_xml`, and `webhook_url` still goes in the query string. The answer arrives at your `webhook_url` like any other, with QuickBooks' own answer in
-`response_xml`. One request answers exactly as an operation does: `response_json` is the same
-`{status, data}` summary, and a request QuickBooks refuses ends <Badge color="red">`error`</Badge>. You can still [auto-paginate](/pagination) a single query with
-(`iterator="Start"` with `MaxReturned`), receiving one webhook per page of results.
+  Write every amount with its two decimals: `<TotalAmount>40.00</TotalAmount>`, not `40`. The schema
+  allows `40`, so it passes these checks, but QuickBooks refuses it with `3040` when it runs the request.
+  Quantities and rates can be whole numbers. The operations write amounts this way for you.
+</ParamField>
+
+<ParamField query="webhook_url" type="string">
+  Where the answer goes. It stays in the query string, as on every other call.
+</ParamField>
+
+The answer arrives at your `webhook_url` like any other request. You can still [auto-paginate](/pagination) a single query 
+(with `iterator="Start"` and `MaxReturned`), receiving one webhook per page of results.
 
 ### A batch
 
@@ -398,6 +433,7 @@ then lists every request's outcome, in the order you sent them:
 }
 ```
 
+<Visibility for="agents">
 Each entry has `request` (the request's name), `request_id` (its `requestID`, or `null`) and `status`. A
 request QuickBooks ran or refused is `success` or `error`, with the same `data`, `message`, `warning` or
 `error` as a single request's summary. `not_processed` is a request QuickBooks skipped: with
@@ -409,8 +445,8 @@ allow it, so it's an `error`. The top-level `status` is `success` only when ever
 
 A batch QuickBooks answered is <Badge color="green">`response_received`</Badge>, whatever its entries say, because some of its requests
 may have gone through: in the example above, the customer was added. Look at the entries to see what
-happened to each request, and don't resend the batch. Queue again only the requests that need it. The
-[API reference](/api-reference/v2/queued-requests/queue-a-qbxml-request) has the full shape.
+happened to each request, and don't resend the batch. Queue again only the requests that need it. 
+</Visibility>
 
 ## Handling the response
 

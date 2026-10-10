@@ -65,13 +65,27 @@ sequenceDiagram
 
 Design for that from the start:
 
-- **Queue from anywhere, act on the webhook.** Do the follow-up work, such as storing the new customer's
-  `list_id`, in your webhook handler.
-- **One request at a time, in order.** A connection's requests go to QuickBooks in the order you queued
-  them. If a request depends on the answer to another, for example an invoice for a customer you're
-  creating, queue it from the first one's webhook, or better yet let a [workflow](/workflows) do the sequencing.
-- **Built-in fault-tolerance.** We can't control whether QuickBooks is open on your customer's computer, or ready to process requests, but we *can* gracefully handle every situation. When QuickBooks throws a [connection error](/error_handling#when-quickbooks-is-out-of-reach), show users the `user_message` so they can solve problems themselves without contacting support. The request is automatically retried once the Web Connector resumes functioning.
-- **Do you need realtime integration?** A standard connection polls every five minutes. When a person is waiting on results, use `realtime` connections.
+<CardGroup cols={2}>
+  <Card title="Queue from anywhere, act on the webhook" icon="bell">
+    Do the follow-up work, such as storing the new customer's `list_id`, in your webhook handler.
+  </Card>
+  <Card title="One request at a time, in order" icon="list-ol">
+    A connection's requests go to QuickBooks in the order you queued them. If a request depends on the
+    answer to another, for example an invoice for a customer you're creating, queue it from the first
+    one's webhook, or better yet let a [workflow](/workflows) do the sequencing.
+  </Card>
+  <Card title="Built-in fault-tolerance" icon="shield-halved">
+    We can't control whether QuickBooks is open on your customer's computer, or ready to process requests,
+    but we *can* gracefully handle every situation. When QuickBooks throws a
+    [connection error](/error_handling#when-quickbooks-is-out-of-reach), show users the `user_message` so
+    they can solve problems themselves without contacting support. The request is automatically retried
+    once the Web Connector resumes functioning.
+  </Card>
+  <Card title="Do you need realtime integration?" icon="bolt">
+    A standard connection polls every five minutes. When a person is waiting on results, use `realtime`
+    connections.
+  </Card>
+</CardGroup>
 
 ## The life of a request
 
@@ -118,43 +132,72 @@ The last four are final. [Error handling](/error_handling) covers what to do wit
 
 ## Speed and scheduling
 
-- **Standard** connections are checked every 5 minutes, and **realtime** connections every 10 seconds.
-  Choose with `type` when you create the connection. Every connection's Web Connector is set to run every
-  10 seconds; QuBe Sync tells a standard connection's to wait, so it picks up requests every 5 minutes. That's
-  why its **Last Result** often reads "Update postponed by application". It's normal. Leave **Auto-Run**
-  ticked and don't edit the schedule (**Every Min**) in the Web Connector: QuBe Sync controls it.
-- **You can switch a connection between standard and realtime** from its page in the dashboard. An upgrade
-  is billed as realtime from then on. A downgrade is scheduled for the end of the billing period and stays
-  billed as realtime until then. To slow a realtime connection right away without changing its bill, use
-  **Slow polling to every 5 minutes** there.
-- **Update Selected** in the Web Connector runs a sync immediately, whatever the schedule.
-- **While QuickBooks is out of reach**, QuBe Sync spaces out the Web Connector's automatic runs (each wait
-  double the last, up to 30 minutes) so it isn't retrying against a closed QuickBooks. A manual
-  **Update Selected** is never held back.
-- **To see when a connection will next pick up requests**, read `next_check_in_expected_at` on the
-  connection (`GET /connections/{connection_id}` in v2), or the **Speed** card on its dashboard page.
-  `backing_off` is `true` while QuBe Sync is spacing the tries out because QuickBooks can't be reached. A
-  time more than a minute in the past means the check-in is late: a long session is still running, or the
-  Web Connector isn't running on the QuickBooks computer.
-- **Realtime connections in a sandbox app slow down while idle.** After 10 minutes without a request, they
+| Connection | Picks up requests |
+| --- | --- |
+| `standard` | Every 5 minutes |
+| `realtime` | Every 10 seconds |
+| `simulated` | Answers within a few seconds, with no Web Connector involved |
+| Any, while QuickBooks is out of reach | Automatic runs spaced out, each wait double the last, up to 30 minutes, so it isn't retrying against a closed QuickBooks. A manual **Update Selected** is never held back. |
+| Deleted | Once a day, until someone removes your app from its Web Connector. See [When a customer leaves](/onboarding#when-a-customer-leaves). |
+
+Choose `standard` or `realtime` with `type` when you create the connection. **Update Selected** in the Web
+Connector runs a sync immediately, whatever the schedule.
+
+<Note>
+  **"Update postponed by application" is normal.** Every connection's Web Connector is set to run every 10
+  seconds, and QuBe Sync tells it to wait when it isn't due. That's how a standard connection picks up
+  requests every 5 minutes, and why its **Last Result** often reads "Update postponed by application". It
+  checks in again on its own. Leave **Auto-Run** ticked and don't edit the schedule (**Every Min**) in the
+  Web Connector: QuBe Sync controls it.
+</Note>
+
+You can switch a connection between standard and realtime from its page in the dashboard:
+
+| Change | What happens |
+| --- | --- |
+| Upgrade to realtime | Billed as realtime from then on. |
+| Downgrade to standard | Scheduled for the end of the billing period, and billed as realtime until then. |
+| **Slow polling to every 5 minutes** | Slows a realtime connection right away, without changing its bill. |
+
+To see when a connection will next pick up requests, read it on the connection
+(`GET /connections/{connection_id}` in v2), or the **Speed** card on its dashboard page:
+
+<ResponseField name="next_check_in_expected_at" type="string | null">
+  When the connection will next pick up requests. A time more than a minute in the past means the check-in
+  is late: a long session is still running, or the Web Connector isn't running on the QuickBooks computer.
+</ResponseField>
+
+<ResponseField name="backing_off" type="boolean">
+  `true` while QuBe Sync is spacing the tries out because QuickBooks can't be reached.
+</ResponseField>
+
+<Note>
+  **Realtime connections in a sandbox app slow down while idle.** After 10 minutes without a request, they
   check in once a minute; after an hour, every 5 minutes. The session that picks up the next request brings
   them back to every 10 seconds. To run a request at once, click **Update Selected**. The connection's page
   says when this is why its next check-in is minutes away, and so does `next_check_in_reason`
   (`sandbox_idle`) on the connection.
-- **The Web Connector shows "Update postponed by application"** whenever QuBe Sync has told it to wait.
-  Nothing is wrong: it checks in again on its own.
-- **A deleted connection's Web Connector** is told to check in only once a day until someone removes your
-  app from it. See [When a customer leaves](/onboarding#when-a-customer-leaves).
-- **Simulated** connections answer within a few seconds, with no Web Connector involved.
+</Note>
 
 ## Security
 
-- **API keys belong to one app.** They reach that app's connections, requests and workflows, and nothing
-  else. Keys start with `sk_`, and you can create and expire them in the dashboard.
-- **Webhooks are signed** with your app's webhook secret (HMAC-SHA256 over a timestamp and the body), so
-  you can reject anything that didn't come from QuBe Sync. [Verify signatures](/webhooks#securing-your-endpoints).
-- **Sandbox and production are separate apps**, with separate keys, secrets and connections.
-- **QuBe Sync never needs your customer's QuickBooks login.** The Web Connector authenticates to QuBe Sync
-  with a per-connection username and password, and QuickBooks itself is only ever reached from their PC.
-- **Retention:** a finished request and its answer are kept for 60 days, then deleted. Workflow runs age
-  out on the same schedule. These can also be deleted immediately upon receipt by your app via the API.
+<CardGroup cols={2}>
+  <Card title="API keys belong to one app" icon="key">
+    They reach that app's connections, requests and workflows, and nothing else. Keys start with `sk_`, and
+    you can create and expire them in the dashboard.
+  </Card>
+  <Card title="Webhooks are signed" icon="signature">
+    Each is signed with your app's webhook secret (HMAC-SHA256 over a timestamp and the body), so you can
+    reject anything that didn't come from QuBe Sync. [Verify signatures](/webhooks#securing-your-endpoints).
+  </Card>
+  <Card title="Sandbox and production are separate apps" icon="clone">
+    They have separate keys, secrets and connections.
+  </Card>
+  <Card title="QuBe Sync never needs your customer's QuickBooks login" icon="user-lock">
+    The Web Connector authenticates to QuBe Sync with a per-connection username and password, and
+    QuickBooks itself is only ever reached from their PC.
+  </Card>
+</CardGroup>
+
+**Retention:** a finished request and its answer are kept for 60 days, then deleted. Workflow runs age out
+on the same schedule. These can also be deleted immediately upon receipt by your app via the API.

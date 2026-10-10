@@ -240,15 +240,14 @@ and test them end to end on its own.
 
 A session belongs to you, in one organization.
 
-- With the default **sandbox** scope it can list the organization's sandbox apps, read their API keys and
-  webhook secrets, and act on their connections. It can't see production apps, or change billing, members
-  or your account.
-- Choosing **every app** when you approve the login lifts the first restriction.
-- A **read-only** session can list and show what its scope reaches, run QuickBooks queries, validate
-  charts and download a connection's QWC file. It can't create, change, delete, discard, run or answer
-  anything, and it can't read an app's API key or webhook secret, so `qube env` isn't available to it. The
-  server enforces this. `qube status` and `qube sessions` show each session's access.
-- Sessions expire after 30 days. `qube logout`, `qube sessions revoke <id>`, or **CLI sessions** in the
-  dashboard end one sooner, and the CLI stops working at once: it calls the API with the session's own
-  token, never the app's API key.
-- The token is only ever sent to `qubesync.com`, the host that issued it.
+| Approved with | It can | It can't |
+| --- | --- | --- |
+| **Sandbox** scope (the default) | List the organization's sandbox apps, read their API keys and webhook secrets, and act on their connections. | See production apps, or change billing, members or your account. |
+| **Every app** scope | The same, in production apps too. | Change billing, members or your account. |
+| **Read-only** access | List and show what its scope reaches, run QuickBooks queries, validate charts and download a connection's QWC file. | Create, change, delete, discard, run or answer anything, or read an app's API key or webhook secret, so `qube env` isn't available to it. |
+
+The server enforces read-only access. `qube status` and `qube sessions` show each session's access.
+
+Sessions expire after 30 days. `qube logout`, `qube sessions revoke <id>`, or **CLI sessions** in the
+dashboard end one sooner, and the CLI stops working at once: it calls the API with the session's own
+token, never the app's API key. The token is only ever sent to `qubesync.com`, the host that issued it.
