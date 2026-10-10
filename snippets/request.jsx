@@ -1,7 +1,8 @@
 /**
- * A request as the docs show it everywhere the point is the call, not running it: the method and path
- * in a header with a button that copies the curl command you'd run, then the query parameters and the
- * JSON body in labelled sections.
+ * A request as the docs show it everywhere the point is the call, not running it: one of Mintlify's own
+ * code blocks, matching the response block under it, holding the request as plain HTTP (the method,
+ * path and query on one line, then a blank line and the JSON body), with a button in its header that
+ * copies the curl command you'd run.
  *
  *   <Request method="POST" path="/api/v2/connections/{connection_id}/invoices"
  *            query={{ webhook_url: "https://your-app.example/webhooks/qube" }}
@@ -10,8 +11,9 @@
  * `body` is an object, formatted for you, or a string shown as written (for a body with a `{...}`
  * placeholder). With `file`, the curl command sends that file (`-d @file`) instead of the body shown.
  * A `{name}` in `path` becomes `$NAME` in the curl command, `{connection_id}` becoming `$CONN_ID`.
- * `label` is an optional caption above the request line. `auth={false}` is for a call that takes no API
- * key, such as the MCP server's. Styles are in /style.css.
+ * `label` names the request in the block's header, where a code block shows its filename ("Request"
+ * without one). `auth={false}` is for a call that takes no API key, such as the MCP server's. Styles
+ * are in /style.css.
  */
 export const Request = ({ method = "GET", path, query, body, file, label, auth = true }) => {
   const [copied, setCopied] = useState(false);
@@ -92,6 +94,7 @@ export const Request = ({ method = "GET", path, query, body, file, label, auth =
   // END shared
 
   const { params, hasBody, shown, curl } = requestParts({ method, path, query, body, file, auth });
+  const title = label || "Request";
 
   const copy = () => {
     const text = curl;
@@ -112,10 +115,6 @@ export const Request = ({ method = "GET", path, query, body, file, label, auth =
     done();
   };
 
-  // A path or URL that has to wrap breaks at its slashes.
-  const breakable = (text) =>
-    text.split("/").flatMap((piece, i, all) => (i < all.length - 1 ? [piece, "/", <wbr key={i} />] : [piece]));
-
   // The /api/v2 every path starts with recedes and {param} stands out, as :id does in the hero.
   const prefix = path.startsWith("/api/v2") ? "/api/v2" : "";
   const pathParts = path
@@ -125,7 +124,7 @@ export const Request = ({ method = "GET", path, query, body, file, label, auth =
       /^\{\w+\}$/.test(part) ? (
         <span key={i} className="qube-request-param">{part}</span>
       ) : (
-        breakable(part)
+        part
       )
     );
 
@@ -148,50 +147,47 @@ export const Request = ({ method = "GET", path, query, body, file, label, auth =
     return out;
   };
 
+  // The query as the request line ends with it: ?key=value&key=value.
+  const queryParts = params.length
+    ? [
+        "?",
+        ...params.flatMap(([k, v], i) => [
+          i ? "&" : "",
+          <span key={k + "-key"} className="qube-request-key">{k}</span>,
+          "=",
+          <span key={k + "-value"} className={valueClass(v)}>{String(v)}</span>,
+        ]),
+      ]
+    : null;
+
+  // The panel's text is `http` above, the same text as the agents' block, only colored.
   return (
     <div className="qube-request not-prose">
       <div className="qube-request-head">
-        {label ? <span className="qube-request-label">{label}</span> : null}
-        <div className="qube-request-line">
-          <span className="qube-request-method">{method}</span>
-          <span className="qube-request-path">
-            {prefix ? <span className="qube-request-prefix">{breakable(prefix)}</span> : null}
-            {pathParts}
-          </span>
-          <button type="button" className="qube-request-copy" onClick={copy} aria-live="polite">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              {copied ? (
-                <polyline points="5 13 9 17 19 7" />
-              ) : (
-                <g>
-                  <rect x="9" y="9" width="11" height="11" rx="2" />
-                  <path d="M5 15V6a2 2 0 0 1 2-2h9" />
-                </g>
-              )}
-            </svg>
-            {copied ? "Copied" : "Copy as curl"}
-          </button>
-        </div>
+        <span className="qube-request-title" title={title}>{title}</span>
+        <button type="button" className="qube-request-copy" onClick={copy} aria-live="polite">
+          <svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            {copied ? (
+              <polyline points="4 9.5 7.5 13 14 5" />
+            ) : (
+              <g>
+                <rect x="6.5" y="6.5" width="9" height="9" rx="2" />
+                <path d="M3.5 11.5v-6a2 2 0 0 1 2-2h6" />
+              </g>
+            )}
+          </svg>
+          {copied ? "Copied" : "Copy as curl"}
+        </button>
       </div>
-      {params.length ? (
-        <div className="qube-request-section">
-          <div className="qube-request-eyebrow">Query</div>
-          <dl className="qube-request-params">
-            {params.map(([k, v]) => [
-              <dt key={k + "-key"} className="qube-request-key">{k}</dt>,
-              <dd key={k + "-value"} className={valueClass(v)}>{breakable(String(v))}</dd>,
-            ])}
-          </dl>
-        </div>
-      ) : null}
-      {hasBody ? (
-        <div className="qube-request-section">
-          <div className="qube-request-eyebrow">Body</div>
-          <pre className="qube-request-code">
-            <code>{json(shown)}</code>
-          </pre>
-        </div>
-      ) : null}
+      <pre className="qube-request-code">
+        <code>
+          <span className="qube-request-method">{method}</span>{" "}
+          {prefix ? <span className="qube-request-prefix">{prefix}</span> : null}
+          {pathParts}
+          {queryParts}
+          {hasBody ? ["\n\n", ...json(shown)] : null}
+        </code>
+      </pre>
     </div>
   );
 };
