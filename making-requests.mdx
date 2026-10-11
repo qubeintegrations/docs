@@ -340,7 +340,7 @@ curl -u "$QUBE_API_KEY:" \
 | The same key with a different call | `422` naming the header. A key stands for one request: generate a new one (a UUID) for each request you mean to make once, and store it with your record before you send it. |
 | A call that's refused | `400`, `404` or `422`. It queues nothing and uses up no key: fix it and send it again with the same key. |
 
-The key covers a lost `201`, not a lost answer from QuickBooks. A request that ends
+The key covers a lost `201` from QuBe Sync, not a lost answer from QuickBooks. A request that ends
 <Badge color="purple">`timed_out`</Badge> was queued and sent, so sending it again with its key only returns it. See
 [When the answer is lost](/error_handling#when-the-answer-is-lost).
 

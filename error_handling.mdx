@@ -169,7 +169,7 @@ open. Nothing was applied, and only your customer can fix it.
 
 <Steps>
   <Step title="The Web Connector can't reach QuickBooks">
-    You get one <Badge color="orange">`retryable`</Badge> webhook. Another comes only if the error changes.
+    You receive a <Badge color="orange">`retryable`</Badge> webhook. 
   </Step>
   <Step title="Its runs back off, and the queue waits">
     While QuickBooks stays out of reach, QuBe Sync spaces out the Web Connector's automatic runs: 5, 10, 20,
@@ -215,7 +215,7 @@ open. Nothing was applied, and only your customer can fix it.
 
 ### Discarding a request
 
-If you no longer want a request, for example because your customer cancelled the order, discard it. It
+If you no longer want a request that hasn't already been processed, discard it. It
 becomes <Badge color="gray">`discarded`</Badge>, is never sent, and a <Badge color="gray">`discarded`</Badge> webhook follows.
 
 <Request method="POST" path="/api/v2/connections/{connection_id}/queued-requests/{request_id}/discard" />
@@ -244,7 +244,7 @@ curl -u "$QUBE_API_KEY:" \
 
 ## When the answer is lost
 
-<Badge color="purple">`timed_out`</Badge> means QuickBooks received the request but its answer never came back: the customer's computer
+<Badge color="purple">`timed_out`</Badge> means **QuickBooks received the request but its answer never came back**: the customer's computer
 lost its connection, or QuickBooks/the Web Connector was closed, while the request was being processed.
 QuickBooks may or may not have applied it.
 
@@ -253,14 +253,11 @@ QuickBooks may or may not have applied it.
 | A query | Queue it again. Asking twice is safe. |
 | A create or update | Query first to see whether it happened, and resend only if it didn't. Give a transaction add an `external_guid` of your own, and the query can look for exactly that one. |
 
-An [`Idempotency-Key`](/making-requests#retrying-a-call-safely) doesn't help here. It covers a call whose `201`
-your app never got, and this request was queued and sent: sent again with its key, it's only returned as it
-is. A resend after the query is a new request, with a new key.
+An [`Idempotency-Key`](/making-requests#retrying-a-call-safely) doesn't help here. It covers your app never receiving a `201` while queuing a request or workflow. The <Badge color="purple">`timed_out`</Badge> request, on the other hand, was queued and sent to QuickBooks.
 
-<Info>
-  A [workflow](/workflows#lost-answers) does this check for you and carries on as if the answer had
-  arrived. See [In a workflow](#in-a-workflow).
-</Info>
+<Tip>
+  A [workflow](/workflows#lost-answers) automatically reconciles lost requests for you. Mutations are fingerprinted before sending, so they can be reconciled later if needed. See [In a workflow](#in-a-workflow).
+</Tip>
 
 ## Other endings
 

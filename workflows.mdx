@@ -486,15 +486,10 @@ Deliveries can fail, repeat, or arrive early:
 `workflow_run.awaiting_input` carries the question in `prompt`, and `prompt.kind` says who is asking. Both
 kinds are answered at `links.decisions`.
 
-<CardGroup cols={2}>
-  <Card title="decision: the chart asks" icon="signs-post">
-    At a `wait` state, with the options the chart declares, such as `use_existing`, `rename` and `cancel`.
-  </Card>
-  <Card title="conflict: the run asks" icon="code-compare">
-    When an update meets a record someone changed after it was read ([Conflicts](#conflicts)). Its options
-    are always `overwrite` and `keep`.
-  </Card>
-</CardGroup>
+| `prompt.kind` | Asked | Options |
+| --- | --- | --- |
+| `decision` | At a `wait` state | The ones the chart declares, such as `use_existing`, `rename` and `cancel` |
+| `conflict` | When an update meets a record someone changed after it was read ([Conflicts](#conflicts)) | Always `overwrite` and `keep` |
 
 <AccordionGroup>
   <Accordion title="Both prompts, in full" icon="code">
@@ -736,7 +731,7 @@ isn't held up: the pages keep being fetched while your app takes them. **The run
 </Accordion>
 
 To write a notify state of your own, see [Build your own workflow](/workflow-authoring#sending-your-app-data-from-a-chart).
-[Pagination](/pagination#initial-import) says when to use a workflow for an import and when the plain
+[Pagination](/pagination#an-initial-import) says when to use a workflow for an import and when the plain
 paginated API.
 
 ### How a run ends
@@ -786,11 +781,11 @@ request ends <Badge color="purple">`timed_out`</Badge>, and QuickBooks may or ma
   and the run's page lists it as "confirmed after a lost answer".
 </Check>
 
-When the run can't tell, the chart decides what happens next; a chart that doesn't handle it fails the run
-with a message saying why. A change nothing in the run confirmed is listed under `summary.unconfirmed` and
+If the run can't tell whether the mutation was applied, the chart decides what happens next; a chart that doesn't handle it fails the run
+with a message saying why. A mutation that couldn't be confirmed is listed under `summary.unconfirmed` and
 on the run's page as **Not confirmed**: it may or may not be in QuickBooks, so look before sending it again.
 
-To watch it happen, use a simulated connection to arm a lost answer fault before a run sends a creation request: on the connection's page, set **Next
+To watch it happen, use a simulated connection to arm a lost answer fault before a run sends a creation request. On the connection's page, set **Next
 request** to "applied, then the Web Connector dies before answering", run
 `qube simulator faults <connection> --next lost`, or set the simulator's
 [`next_lost_response`](/simulator#make-it-fail) fault through the API. How the run settles each kind of
@@ -799,10 +794,9 @@ request, and how a chart can do the looking itself, is in
 
 ### Conflicts
 
-QuickBooks refuses an update when the record changed after it was read: error 3200, a stale `edit_sequence`.
+QuickBooks refuses an update based on stale data: error `3200`, a stale `edit_sequence`.
 Retrying with the fresh edit sequence would quietly overwrite whatever the other person changed. A workflow
-looks first: QuickBooks answers the 3200 with the record as it stands (the run reads it again when an answer
-doesn't), and the run compares each field the update sends with it.
+**looks first and compares each field in the update request** with the more recent version in QuickBooks.
 
 | What it finds | What the run does |
 | --- | --- |
@@ -810,32 +804,17 @@ doesn't), and the run compares each field the update sends with it.
 | The other person changed only fields the update doesn't send | Sends the update again with the current edit sequence, without asking. |
 | They changed a field the update sends | Pauses and asks your app with a `conflict` [prompt](#two-kinds-of-question). |
 
-`upsert` and `push_records` send updates, and so may charts of your own. A chart can overwrite or fail
-instead of asking: see [Conflicts in a chart](/workflow-authoring#conflicts-in-a-chart).
+If you want to build a chart that overwrites or fails
+instead of asking, see [Conflicts in a chart](/workflow-authoring#conflicts-in-a-chart).
 
 ## Follow your runs
 
-Every run has a page in the dashboard, at its `links.ui`. **Workflow runs** in the dashboard's menu lists
-them all, newest first: tabs pick a state, filters narrow by workflow, connection, start time and outcome,
-and runs waiting for an answer are pinned at the top with an **Answer** button. Runs a workflow starts for
-another are left out unless you tick **Include runs started by other runs**. Each connection's page lists
-that connection's runs too, and the builder's **Runs** tab a workflow's own.
-
+Every run has a page in the dashboard, at its `links.ui`. **Workflow runs** in the dashboard's menu lists them all.
 <Frame caption="Workflow runs: the ones waiting for an answer first, then every run with where it is or how it ended.">
   <img src="/images/workflows/runs-index.png" alt="The Workflow runs page: state tabs with one run needing an answer, filters for workflow, connection, start and outcome, the waiting run pinned with its question and an Answer button, and today's runs with their status, workflow, connection, start time and how long each took" />
 </Frame>
 
-A run's page leads with its status and one sentence: where it is, where it stopped, or how it ended. Under
-that:
-
-| Section | What it shows |
-| --- | --- |
-| **Your answer is needed** | While it waits: the question, the record it's about, and its answers, each saying where it leads. Answering here is the same as your app answering. A conflict adds each field as you sent it, as QuickBooks has it, and as the run read it. |
-| **Why it failed** | QuickBooks' error, or the failure ending the chart declared. |
-| **Changed in QuickBooks** | What the run changed. A failed run undoes nothing, so its page lists them under **Still in QuickBooks**. |
-| **Cancel run** | While it's going, with an optional reason. |
-| **Steps** | A row per step, with each request and QuickBooks' answer, each workflow it called and each answer it was given. An error the chart handles shows as **Handled**. |
-| **Chart**, **Event log**, **Data** | The path the run took, in blue, and where a failed run stopped, in red; the whole log to filter, copy or **Download**; and its input, vars, per-state responses and output. |
+Click into a run to see its details
 
 <Frame caption="A finished create_invoice run: what it changed in QuickBooks, and its steps.">
   <img src="/images/workflows/run-completed.png" alt="A completed create_invoice run's page: Completed after 8.1s; Changed in QuickBooks, listing the customer Bluebonnet Bakery, the item Site survey and the invoice INV-1042 as created, with their ListIDs and TxnID; and the Steps tab with create_customer, ensure_items and add_invoice, each Done with how long it took" />
@@ -866,25 +845,14 @@ part of the run you started.
 
 <AccordionGroup>
   <Accordion title="Starting a run twice runs it twice" description="unless both calls carry the same Idempotency-Key" icon="key">
-    Send a new `Idempotency-Key` with each run you start, and the same key when you send the call again
-    because its `201` never arrived: you get the run already started, as it is now, not a second one. See [Retrying a call safely](/making-requests#retrying-a-call-safely).
+    Use an `Idempotency-Key` to make sure you're not starting duplicate runs. See [Retrying a call safely](/making-requests#retrying-a-call-safely).
   </Accordion>
   <Accordion title="Send prompt_token with every answer" icon="ticket">
-    Each question a run asks has a `prompt.token`, new every time it's asked, even when it's the same
-    question again: a `wait` in a loop, or a workflow called once per item. Send it back as `prompt_token`,
-    and an answer you send again because the first got no response can't be taken as the answer to the
-    run's next question: once the run has asked again, it's refused with `409 prompt_changed` and nothing
-    changes. On a retry, a `409` or a `400 not_awaiting_input` means your first answer landed, unless
-    someone answered on the run's page. Without `prompt_token`, an answer is taken for whatever the run is
+    Each question a run asks has a `prompt.token` to distinguish between questions that look the same (e.g. a `wait` in a loop, or a workflow called once per item). It also serves as an idempotency key of its own, so send it back as `prompt_token` with your answer. This means if the first time gets no response, you can safely resend without accidentally answering the run's next question. Once the run has asked again, it's refused with `409 prompt_changed` and nothing changes. On a retry, a `409` or a `400 not_awaiting_input` means your first answer landed or someone answered on the run's page. Without `prompt_token`, an answer is taken for whatever the run is
     asking when it arrives.
   </Accordion>
-  <Accordion title="Workflows can call workflows" icon="diagram-project">
-    A `workflow` state runs another workflow as one step, optionally once per item in a list (`each`). Your
-    app still deals with one run. The called workflow's requests, decisions and calls are in that run's
-    `summary` and event log, and its questions arrive on that run: `prompt.id` is prefixed with the calling
-    state (`create_customer / resolve_conflict.ask_about_customer`), and `prompt.from` names the `workflow`
-    and `state` that asked, plus `item_index` and `item_count` when it runs once per item. Answer at the
-    run's own `links.decisions`.
+  <Accordion title="Workflows are composable" icon="diagram-project">
+    A `workflow` state runs another workflow as one step, optionally once per item in a list (`each`). When building complex flows, prefer combining simpler workflows rather than shoving everything into one chart.
   </Accordion>
   <Accordion title="An installed template is a copy" icon="clone">
     A change we make to a template reaches your workflow only when you install it again with
@@ -892,8 +860,7 @@ part of the run you started.
   </Accordion>
   <Accordion title="Production runs the published version" icon="rocket">
     On a production connection, a run always uses the workflow's published version. Sandbox and simulated
-    connections run your latest edits by default, so you can test before publishing. The workflows a run
-    calls follow suit: their working copies for a working-copy run, their published versions for a
+    connections run your latest edits by default, so you can test before publishing. Nested workflows do the same, running their working copies for a working-copy run, their published versions for a
     published one. See [Build your own](/workflow-authoring#versions-and-publishing).
   </Accordion>
   <Accordion title="Limits" icon="gauge">

@@ -65,27 +65,47 @@ sequenceDiagram
 
 Design for that from the start:
 
-<CardGroup cols={2}>
-  <Card title="Queue from anywhere, act on the webhook" icon="bell">
-    Do the follow-up work, such as storing the new customer's `list_id`, in your webhook handler.
-  </Card>
-  <Card title="One request at a time, in order" icon="list-ol">
-    A connection's requests go to QuickBooks in the order you queued them. If a request depends on the
-    answer to another, for example an invoice for a customer you're creating, queue it from the first
-    one's webhook, or better yet let a [workflow](/workflows) do the sequencing.
-  </Card>
-  <Card title="Built-in fault-tolerance" icon="shield-halved">
-    We can't control whether QuickBooks is open on your customer's computer, or ready to process requests,
-    but we *can* gracefully handle every situation. When QuickBooks throws a
-    [connection error](/error_handling#when-quickbooks-is-out-of-reach), show users the `user_message` so
-    they can solve problems themselves without contacting support. The request is automatically retried
-    once the Web Connector resumes functioning.
-  </Card>
-  <Card title="Do you need realtime integration?" icon="bolt">
-    A standard connection polls every five minutes. When a person is waiting on results, use `realtime`
-    connections.
-  </Card>
-</CardGroup>
+<div className="qube-points">
+  <div className="qube-point">
+    <Icon icon="bell" size={20} />
+    <div>
+      **Queue from anywhere, act on the webhook**
+
+      Do the follow-up work, like storing the new customer's `list_id`, in your webhook handler.
+    </div>
+  </div>
+  <div className="qube-point">
+    <Icon icon="list-ol" size={20} />
+    <div>
+      **One request at a time, in order**
+
+      A connection's requests go to QuickBooks in the order you queued them. If one request depends on the
+      answer to another, queue it from the first
+      request's webhook. Better yet, let a [workflow](/workflows) do the sequencing.
+    </div>
+  </div>
+  <div className="qube-point">
+    <Icon icon="shield-halved" size={20} />
+    <div>
+      **Built-in fault-tolerance**
+
+      We can't control whether QuickBooks is open on your customer's computer, or ready to process requests,
+      but we *can* gracefully handle every situation. When QuickBooks throws a
+      [connection error](/error_handling#when-quickbooks-is-out-of-reach), show users the `user_message` so
+      they can solve problems themselves without contacting support. The request is automatically retried
+      once the Web Connector resumes functioning.
+    </div>
+  </div>
+  <div className="qube-point">
+    <Icon icon="bolt" size={20} />
+    <div>
+      **Do you need realtime integration?**
+
+      A standard connection polls every five minutes. When a person is waiting on results, use `realtime`
+      connections that start processing requests within 10 seconds.
+    </div>
+  </div>
+</div>
 
 ## The life of a request
 
@@ -138,7 +158,6 @@ The last four are final. [Error handling](/error_handling) covers what to do wit
 | `realtime` | Every 10 seconds |
 | `simulated` | Answers within a few seconds, with no Web Connector involved |
 | Any, while QuickBooks is out of reach | Automatic runs spaced out, each wait double the last, up to 30 minutes, so it isn't retrying against a closed QuickBooks. A manual **Update Selected** is never held back. |
-| Deleted | Once a day, until someone removes your app from its Web Connector. See [When a customer leaves](/onboarding#when-a-customer-leaves). |
 
 Choose `standard` or `realtime` with `type` when you create the connection. **Update Selected** in the Web
 Connector runs a sync immediately, whatever the schedule.
@@ -174,30 +193,56 @@ To see when a connection will next pick up requests, read it on the connection
 <Note>
   **Realtime connections in a sandbox app slow down while idle.** After 10 minutes without a request, they
   check in once a minute; after an hour, every 5 minutes. The session that picks up the next request brings
-  them back to every 10 seconds. To run a request at once, click **Update Selected**. The connection's page
+  them back to every 10 seconds. To run a request immediately, click **Update Selected**. The connection's page
   says when this is why its next check-in is minutes away, and so does `next_check_in_reason`
   (`sandbox_idle`) on the connection.
 </Note>
 
 ## Security
 
-<CardGroup cols={2}>
-  <Card title="API keys belong to one app" icon="key">
-    They reach that app's connections, requests and workflows, and nothing else. Keys start with `sk_`, and
-    you can create and expire them in the dashboard.
-  </Card>
-  <Card title="Webhooks are signed" icon="signature">
-    Each is signed with your app's webhook secret (HMAC-SHA256 over a timestamp and the body), so you can
-    reject anything that didn't come from QuBe Sync. [Verify signatures](/webhooks#securing-your-endpoints).
-  </Card>
-  <Card title="Sandbox and production are separate apps" icon="clone">
-    They have separate keys, secrets and connections.
-  </Card>
-  <Card title="QuBe Sync never needs your customer's QuickBooks login" icon="user-lock">
-    The Web Connector authenticates to QuBe Sync with a per-connection username and password, and
-    QuickBooks itself is only ever reached from their PC.
-  </Card>
-</CardGroup>
+<div className="qube-points">
+  <div className="qube-point">
+    <Icon icon="key" size={20} />
+    <div>
+      **Each App has its own API keys and webhook secrets**
 
-**Retention:** a finished request and its answer are kept for 60 days, then deleted. Workflow runs age out
-on the same schedule. These can also be deleted immediately upon receipt by your app via the API.
+      They reach that app's connections, requests and workflows, and nothing else. Keys start with `sk_`, and
+      you can create or expire them in the dashboard.
+    </div>
+  </div>
+  <div className="qube-point">
+    <Icon icon="signature" size={20} />
+    <div>
+      **Webhooks are signed**
+
+      Each is signed with your app's webhook secret (HMAC-SHA256 over a timestamp and the body), so you can
+      reject anything that didn't come from QuBe Sync. [Verify signatures](/webhooks#securing-your-endpoints).
+    </div>
+  </div>
+  <div className="qube-point">
+    <Icon icon="clone" size={20} />
+    <div>
+      **Sandbox and production are separate apps**
+
+      They have separate keys, secrets and connections.
+    </div>
+  </div>
+  <div className="qube-point">
+    <Icon icon="user-lock" size={20} />
+    <div>
+      **QuBe Sync never needs your customer's QuickBooks login**
+
+      The Web Connector authenticates to QuBe Sync with a per-connection username and password, and
+      QuickBooks itself is only ever reached from their PC.
+    </div>
+  </div>
+  <div className="qube-point">
+    <Icon icon="clock" size={20} />
+    <div>
+      **Retention**
+
+      A finished request and its answer are kept for 60 days, then deleted. Workflow runs age out on the same
+      schedule. These can also be deleted immediately upon receipt by your app via the API.
+    </div>
+  </div>
+</div>

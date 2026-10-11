@@ -1,6 +1,6 @@
 ---
 title: "Build your own workflow"
-description: "Write a workflow chart in the builder, by hand or with an AI assistant, check it, publish it, and promote it from your sandbox app to production."
+description: "Write a workflow chart in the builder, by hand or with an AI assistant. Check it, publish it, and promote it from your sandbox app to production."
 icon: "pen-ruler"
 ---
 
@@ -102,7 +102,7 @@ stateDiagram-v2
     | `request` | Sends one QuickBooks operation with `params`, or several with `requests`. Raises `success` or `error`. |
     | `wait` | Pauses and asks your app a question. Raises the id of the option your app chose. |
     | `notify` | Sends your app data (`data`, under the `name` it routes on) and waits for its `2xx`. Raises `success` or `error` ([Sending your app data from a chart](#sending-your-app-data-from-a-chart)). |
-    | `workflow` | Runs another workflow as one step, optionally once per item of a list ([Calling other workflows](#calling-other-workflows)). |
+    | `workflow` | Runs another workflow as one step, optionally once per item of a list ([Composing workflows](#composing-workflows)). |
     | `transform` | Sets variables, then moves on (`always`). |
     | `choice` | A pure branch point (`always`). |
     | `compound` | Groups states, with its own `initial`. Catches events its children don't handle. |
@@ -215,10 +215,10 @@ The full rules are in the chart's JSON Schema, served at
 [`/api/v2/workflows/schema.json`](https://qubesync.com/api/v2/workflows/schema.json), and in the authoring
 guide below.
 
-## Calling other workflows
+## Composing workflows
 
-A `workflow` state runs another workflow of the same app as one step, with `input` rendered from this run.
-Prefer it to copying another chart's states. `create_invoice` is built this way:
+A `workflow` state can run another workflow (under the same app) as one step.
+Prefer combining workflows to just copying another chart's states. For example, `create_invoice` has two embedded workflows in its states:
 
 ```json create_invoice.json (two of its states)
 "create_customer": {

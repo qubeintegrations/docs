@@ -6,8 +6,9 @@ icon: "layer-group"
 
 import { Request } from "/snippets/request.jsx";
 
-QuickBooks Desktop returns large result sets in pages, through an iterator you'd normally have to track
-yourself: remember its id, ask for the next page, and know when you're done. QuBe Sync does that for you.
+QuickBooks frequently needs to paginate responses to avoid timeouts and other issues. Usually this would require tracking iterator metadata and making multiple requests to QuickBooks.
+
+# Auto-pagination to the rescue
 Add `iterator=true` to any query that supports it, and `max_returned` becomes the page size:
 
 <Request
@@ -38,54 +39,13 @@ curl -u "$QUBE_API_KEY:" \
 </Visibility>
 {/* agent-block:end */}
 
-QuBe Sync keeps asking QuickBooks for the next page until there are none left, and sends each page to your
+Every page QuickBooks returns is immediately sent to your
 `webhook_url` as it arrives.
 
 <Tip>
     Using the `stream_query` [workflow](/workflows) guarantees pages get delivered in the correct order, even when there are
     weird network latencies, your endpoint goes down, or any other situation that might disrupt the delivery order.
 </Tip>
-
-
-## Telling pages apart
-
-Every page's webhook has the same `id` (the request you queued) and its own `page_request_id`:
-
-| Field | Page 1 | Page 2 | Last page |
-| --- | --- | --- | --- |
-| `id` | `01a0e05d-9068…` | `01a0e05d-9068…` | `01a0e05d-9068…` |
-| `page_request_id` | `01a0e05d-9068…` | `01a0e05d-90bb…` | `01a0e05d-9a12…` |
-| `page` | `1` | `2` | `3` |
-| `iteration_state` | `continue` | `continue` | `done` |
-
-Process each page as it arrives. You don't need to wait for the last one.
-
-<Warning>
-  **Rarely, conditions external to QuBe Sync can cause pages to arrive out of order (page 4 can land before
-  page 3), or a retried delivery to arrive twice.** Key on `page_request_id` plus `state`. A page whose
-  `state` is <Badge color="orange">`retryable`</Badge> isn't final: the same `page_request_id` arrives again later as <Badge color="green">`response_received`</Badge>, <Badge color="red">`error`</Badge>, <Badge color="purple">`timed_out`</Badge> or <Badge color="gray">`discarded`</Badge>. See
-  [What to do with each `state`](/webhooks#what-to-do-with-each-state).
-</Warning>
-
-The `done` page (or `max_sandbox_iterations_reached` in a sandbox) is the last one, and its `page`
-number tells you how many pages there are. The import is complete once you've handled **every page from
-1 to that number**, not when the `done` page arrives: it can arrive before earlier pages. Keep the set
-of page numbers you've handled. A handler that stores only the last `iteration_state` it saw can end on
-`continue`.
-
-<Note>
-  In a **sandbox** app, an iteration stops after 4 pages. The last page's `iteration_state` is then
-  `max_sandbox_iterations_reached` instead of `done`. Production apps page through everything.
-</Note>
-
-## If the session ends partway
-
-QuickBooks only keeps an iteration for the Web Connector session that started it. If that session ends
-before the last page (QuickBooks closes, the Web Connector is stopped, or the connection drops), QuickBooks
-can't pick up where it left off. The next page's webhook then has `state:` <Badge color="red">`error`</Badge>, with `error_type:`
-`quickbooks_connection_error` and a `user_message` saying so. Queue the query again to get the rest. It
-starts from the first page, so save records by their `list_id` or `txn_id` and the ones you already have
-are updated rather than duplicated.
 
 ## Pages on demand
 
@@ -109,14 +69,14 @@ curl -u "$QUBE_API_KEY:" \
 </Visibility>
 {/* agent-block:end */}
 
-## Initial import
+## An initial import
 
 New QuickBooks connections usually require bringing over large lists of various record types in bulk. You can use
 the plain paginated API (above), or a workflow:
 
 | Workflow | Use it when |
 | --- | --- |
-| `send_lists_to_app` | **You need multiple lists.** It sends them to your app, one page at a time. Clone the template and start it. You can edit the workflow to include whichever entities you'd like to import, but the default pages through every customer, vendor and item (200 at a time), and sends each page to your `webhook_url` exactly once, in order (it waits for your 2xx response before sending the next page). |
+| `send_lists_to_app` | **You need multiple lists.** It sends them to your app, one page at a time. Clone the template and start it. You can edit the workflow to include whichever entities you'd like to import, but the template pages through every customer, vendor and item (200 at a time), and sends each page to your `webhook_url` exactly once, in order (it waits for your 2xx response before sending the next page). |
 | `stream_query` | **You only need one list** (e.g. customers). |
 
 <Request
@@ -186,10 +146,10 @@ curl -u "$QUBE_API_KEY:" \
 </Visibility>
 {/* agent-block:end */}
 
-A run needs its `webhook_url` -- without one it is refused, `422 webhook_url_required` -- and your endpoint
+A run needs its `webhook_url` -- without one it's refused, `422 webhook_url_required` -- and your endpoint
 should answer within 5 seconds: a page your app can't take is retried for about an hour with the same
-`delivery_id`, and the run waits meanwhile. Copy the template into your own workflow to send other lists,
-different fields, or each page on to a workflow of your own. See
+`delivery_id`, and the run waits in the meantime. Copy the template into your own workflow to send other lists,
+different fields, or even run each page through a workflow of its own. See
 [Sending your app data](/workflows#sending-your-app-data), which has the payload.
 
 ## Tips
@@ -218,3 +178,46 @@ different fields, or each page on to a workflow of your own. See
     voided invoices too, as void, stops your app handing out their numbers again.
   </Accordion>
 </AccordionGroup>
+
+## Handling far edge cases
+
+In most cases the following is overkill, but for those who need it:
+
+If you're not using a [workflow](/workflows) like `stream_query`, and you can't make your webhook processing idempotent (or it's computationally expensive), and you need to *definitively* know that a query is 100% done, you may want to plan around edge cases that result from network latencies or your endpoint being unreachable:
+
+<Warning>
+  **Rarely, conditions external to QuBe Sync can cause pages to arrive out of order (page 4 can land before
+  page 3), or a retried delivery to arrive twice.** Key on `page_request_id` plus `state`. A page whose
+  `state` is <Badge color="orange">`retryable`</Badge> isn't final: the same `page_request_id` arrives again later as <Badge color="green">`response_received`</Badge>, <Badge color="red">`error`</Badge>, <Badge color="purple">`timed_out`</Badge> or <Badge color="gray">`discarded`</Badge>. See
+  [What to do with each `state`](/webhooks#what-to-do-with-each-state).
+</Warning>
+
+Every page's webhook has the same request `id` from the initial query and its own `page_request_id`:
+
+| Field | Page 1 | Page 2 | Last page |
+| --- | --- | --- | --- |
+| `id` | `01a0e05d-9068…` | `01a0e05d-9068…` | `01a0e05d-9068…` |
+| `page_request_id` | `01a0e05d-9068…` | `01a0e05d-90bb…` | `01a0e05d-9a12…` |
+| `page` | `1` | `2` | `3` |
+| `iteration_state` | `continue` | `continue` | `done` |
+
+Process each page in the background as it arrives. You don't need to wait for the last one.
+
+The `done` page (or `max_sandbox_iterations_reached` in a sandbox) is the last sent, and its `page`
+number tells you how many pages there are. The import is complete once you've handled **every page from
+1 to that number**, not when the `done` page arrives since it could theoretically arrive before earlier pages. Keep the set
+of page numbers you've handled. A handler that stores only the last `iteration_state` it saw can end on
+`continue`.
+
+<Note>
+  In a **sandbox** app, an iteration stops after 4 pages. The last page's `iteration_state` is then
+  `max_sandbox_iterations_reached` instead of `done`. Production apps page through everything.
+</Note>
+
+## If the session ends partway
+
+If that session ends
+before the last page (QuickBooks closes, the Web Connector is stopped, or the connection drops), QuickBooks
+can't pick up where it left off. The next page's webhook then has `state:` <Badge color="red">`error`</Badge>, with `error_type:`
+`quickbooks_connection_error` and a `user_message` saying so. Queue the query again to get the rest. It
+starts from the first page, so save returned records by their `list_id` or `txn_id` and upsert rather than create duplicates.

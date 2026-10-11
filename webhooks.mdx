@@ -4,7 +4,7 @@ description: "Receive webhooks from QuBe Sync when QuickBooks responds to your r
 icon: "bell"
 ---
 
-Any time a QuickBooks request is processed, QuBe Sync POSTs the result to the `webhook_url` you specified in the request.
+Any time a QuickBooks request is processed, the result is POSTed to the `webhook_url` you specified in the request.
 Create a customer with `POST /customers`, and your endpoint receives the new customer as clean JSON in `response_json.data`.
 
 ```json Webhook for POST /customers {11-27}
@@ -43,11 +43,11 @@ Create a customer with `POST /customers`, and your endpoint receives the new cus
 Every field is described under [Payload fields](#payload-fields). [Workflow runs](#workflow-runs) send
 their own webhooks, about the run rather than each request.
 
-## Four jobs for your endpoint
+## Four jobs for your endpoints
 
 <CardGroup cols={2}>
-  <Card title="1. Verify the signature" icon="shield-check" href="#securing-your-endpoints">
-    Check `X-QUBE-Signature` against the raw body before you parse it.
+  <Card title="1. Security first" icon="shield-check" href="#securing-your-endpoints">
+    Verify `X-QUBE-Signature` against the timestamp and raw body before you parse it.
   </Card>
   <Card title="2. Answer 2xx within 5 seconds" icon="stopwatch" href="#when-a-delivery-fails">
     Anything else is retried, up to 5 attempts.
@@ -125,6 +125,8 @@ end
 ```
 </CodeGroup>
 
+Because each request or workflow takes its own `webhook_url`, you can also have separate endpoints to decide what you do with the result.
+
 ## Payload fields
 
 The four fields you act on, from the example at the top of this page. The rest are below them.
@@ -155,7 +157,7 @@ The four fields you act on, from the example at the top of this page. The rest a
   <ResponseField name="page, page_request_id, iteration_state" type="integer, string, string">
     For [paginated](/pagination) answers. Each page has its own `page_request_id`; `iteration_state` is
     `continue` until the last page, which is `done`. Pages can arrive in any order, so count the pages
-    instead of waiting for the `done` one ([how](/pagination#telling-pages-apart)). It's `not_applicable`
+    instead of waiting for the `done` one ([how](/pagination#handling-far-edge-cases)). It's `not_applicable`
     for a single-page answer. A <Badge color="orange">`retryable`</Badge> and the final webhook for the same page share its
     `page_request_id`: tell them apart by `state`.
     <Tip>
@@ -325,9 +327,9 @@ one `v1=` per secret, so you can rotate without dropping a delivery:
 </Steps>
 
 <Note>
-  **Some addresses fail at once.** A delivery to an address webhooks
-  [may not go to](#receiving-webhooks-in-development), such as a hostname that now resolves to a private
-  address, isn't sent or retried: it fails at once with "Webhook not sent: ...", and the owners get the
+  **Some addresses fail immediately.** A delivery to an address webhooks
+  [can't reach](#receiving-webhooks-in-development), like localhost or a private IP
+  address, isn't sent or retried. It fails immediately with "Webhook not sent: ...", and the owners get the
   email.
 </Note>
 
@@ -338,7 +340,7 @@ QuBe Sync needs a publicly available URL (localhost doesn't work) to send to, so
 ## Workflow runs
 
 A [workflow run](/workflows) sends webhooks about the run itself: when it needs a decision, when it sends
-your app data, and when it ends. The QuickBooks requests it makes don't send any. Run webhooks go to the
+your app data, and when it ends. The QuickBooks requests it makes don't send any on their own, without an explicit notification step. Run webhooks go to the
 `webhook_url` the run was started with, are signed the same way and need the same quick `2xx`, but the
 body is different: it has an `event`, such as `workflow_run.completed`, and a `run_id` instead of a
 request's `id`.

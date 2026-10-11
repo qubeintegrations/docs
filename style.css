@@ -156,3 +156,43 @@
 .qube-request-literal {
   color: var(--qr-literal);
 }
+
+/* Points with an icon each (how-it-works): one row per point, the icon beside a bold lead and its text at
+   full width, with hairlines between rows. A two-column CardGroup wrapped this text at about 30 characters a
+   line. Markdown inside the JSX comes out as <span data-as="p">, so those are made blocks here. */
+.qube-points {
+  margin: 0.5rem 0 1.5rem;
+}
+
+.qube-point {
+  display: flex;
+  gap: 1rem;
+  padding: 1.125rem 0;
+  border-bottom: 1px solid rgb(10 15 12 / 0.1);
+}
+
+.qube-point:last-child {
+  border-bottom: 0;
+}
+
+.dark .qube-point {
+  border-color: rgb(255 255 255 / 0.1);
+}
+
+.qube-point > svg {
+  flex: none;
+  margin-top: 0.25rem;
+}
+
+.qube-point > div {
+  min-width: 0;
+}
+
+.qube-point [data-as="p"] {
+  display: block;
+  margin: 0;
+}
+
+.qube-point [data-as="p"] + [data-as="p"] {
+  margin-top: 0.125rem;
+}
