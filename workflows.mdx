@@ -25,20 +25,20 @@ recover gracefully and reconcile what mutations were made or not. Naive solution
   </Card>
 </CardGroup>
 
-<Frame caption="Find or create anything in QuickBooks: includes a retry if another person or app editing QuickBooks causes a race condition. Combine with an update workflow to implement `upsert`.">
-  <img src="/images/workflows/builder.png" alt="The find_or_create chart: a find request that ends found when the record is already there or goes on to create, a create request that ends created or loops back to find when the name was taken since the query, and a Failed ending for any other QuickBooks error" />
+<Frame caption="Upsert anything in QuickBooks: find it, then update it, or create it when nothing is it. If another person or app takes the name between the lookup and the create, it looks once more.">
+  <img src="/images/workflows/builder.png" alt="Part of the upsert chart: resolve, then update when it finds the record, cancelled when your app stops at one of its questions, or create when nothing is the record, with a retry from create back to resolve when the name was taken since the lookup" />
 </Frame>
 
 ## Run your first workflow
 
-This runs `create_customer_safely` for a customer that already exists (in a [simulated connection](/simulator)), so you see a question and its
-answer.
+This runs `ensure` for a customer whose name a vendor already has (in a [simulated connection](/simulator)), so
+you see a question and its answer.
 
 <Steps>
   <Step title="Install the template">
     <Request
       method="POST"
-      path="/api/v2/workflow-templates/create_customer_safely/install"
+      path="/api/v2/workflow-templates/ensure/install"
       body={{ publish: true }}
     />
 
@@ -46,7 +46,7 @@ answer.
     <Visibility for="agents">
 
     ```http
-    POST /api/v2/workflow-templates/create_customer_safely/install
+    POST /api/v2/workflow-templates/ensure/install
 
     {"publish": true}
     ```
@@ -54,7 +54,7 @@ answer.
     ```bash
     curl -u "$QUBE_API_KEY:" \
       -X POST \
-      "https://qubesync.com/api/v2/workflow-templates/create_customer_safely/install" \
+      "https://qubesync.com/api/v2/workflow-templates/ensure/install" \
       -H "Content-Type: application/json" \
       -d '{"publish": true}'
     ```
@@ -62,7 +62,7 @@ answer.
     </Visibility>
     {/* agent-block:end */}
 
-    That installs and publishes it, and any template it calls, in one go.
+    That installs and publishes it, and `resolve`, which it calls, in one go.
 
     <Accordion title="Already installed, or cloned in the dashboard?" icon="circle-question">
       A template cloned in the dashboard is a draft: publish it with **Publish v1** in the builder. A sandbox connection can run a draft; a production connection can't.
@@ -89,16 +89,17 @@ answer.
     </Accordion>
   </Step>
   <Step title="Start a run">
-    The input is the same body `POST /customers` takes, so a workflow can be a drop-in for the request it
-    replaces:
+    The input names the list the record goes to (`kind`) and its `add`, the same body `POST /customers` takes, so
+    a workflow can be a drop-in for the request it replaces:
 
     <Request
       method="POST"
       path="/api/v2/connections/{connection_id}/workflow-runs"
       body={{
-        workflow: "create_customer_safely",
+        workflow: "ensure",
         input: {
-          customer: { name: "Riverbend Electric", email: "billing@riverbend.example" },
+          kind: "customer",
+          add: { name: "Lone Star Supply Co", email: "orders@lonestarsupply.example" },
         },
         webhook_url: "https://your-app.example/webhooks/qube",
       }}
@@ -111,11 +112,12 @@ answer.
     POST /api/v2/connections/{connection_id}/workflow-runs
 
     {
-      "workflow": "create_customer_safely",
+      "workflow": "ensure",
       "input": {
-        "customer": {
-          "name": "Riverbend Electric",
-          "email": "billing@riverbend.example"
+        "kind": "customer",
+        "add": {
+          "name": "Lone Star Supply Co",
+          "email": "orders@lonestarsupply.example"
         }
       },
       "webhook_url": "https://your-app.example/webhooks/qube"
@@ -128,11 +130,12 @@ answer.
       "https://qubesync.com/api/v2/connections/$CONN_ID/workflow-runs" \
       -H "Content-Type: application/json" \
       -d '{
-        "workflow": "create_customer_safely",
+        "workflow": "ensure",
         "input": {
-          "customer": {
-            "name": "Riverbend Electric",
-            "email": "billing@riverbend.example"
+          "kind": "customer",
+          "add": {
+            "name": "Lone Star Supply Co",
+            "email": "orders@lonestarsupply.example"
           }
         },
         "webhook_url": "https://your-app.example/webhooks/qube"
@@ -147,15 +150,19 @@ answer.
     can't start without one (`422 webhook_url_required`).
   </Step>
   <Step title="Answer its question">
-    Riverbend Electric already exists in the simulator, so the run stops at `ask_about_customer` and sends
-    `workflow_run.awaiting_input`. Its `prompt` says "A customer named "Riverbend Electric" already
-    exists." and offers three options:
+    The run looks for the customer first and finds none. But Lone Star Supply Co is a vendor in the simulator,
+    and QuickBooks keeps one name space for customers, vendors, employees and other names, so the add meets
+    error 3100. The run finds what holds the name, stops at `ask_rename` and sends
+    `workflow_run.awaiting_input`. Its `prompt` says the name already belongs to a vendor, and offers two
+    options:
 
     | `option` | `label` | Asks for |
     | --- | --- | --- |
-    | `use_existing` | Use the existing customer | |
-    | `rename` | Create it with a different name | `name` |
-    | `cancel` | Don't create a customer | |
+    | `rename` | Add it under another name | `name` |
+    | `cancel` | Cancel | |
+
+    When the record holding the name is in the same list, `ensure` asks at `ask_use` instead, and offers
+    `use_existing` too.
 
     Show them to your user, or decide in code. Then POST the choice, with any `fields` the option asks for,
     to `links.decisions`. That link ends `?prompt_token=…`, naming this question, so sending the answer
@@ -166,7 +173,7 @@ answer.
       path="/api/v2/connections/{connection_id}/workflow-runs/{run_id}/decisions"
       body={{
         option: "rename",
-        data: { name: "Riverbend Electric LLC" },
+        data: { name: "Lone Star Supply Co (customer)" },
       }}
     />
 
@@ -178,7 +185,7 @@ answer.
 
     {
       "option": "rename",
-      "data": {"name": "Riverbend Electric LLC"}
+      "data": {"name": "Lone Star Supply Co (customer)"}
     }
     ```
 
@@ -189,7 +196,7 @@ answer.
       -H "Content-Type: application/json" \
       -d '{
         "option": "rename",
-        "data": {"name": "Riverbend Electric LLC"}
+        "data": {"name": "Lone Star Supply Co (customer)"}
       }'
     ```
 
@@ -206,26 +213,25 @@ answer.
         "app_id": "98f339a4-32e8-424a-987e-ccaf5bcaa620",
         "sandbox": true,
         "connection_id": "4fdde583-68b1-4c6b-94d1-82abf97afdf5",
-        "workflow": "create_customer_safely",
+        "workflow": "ensure",
         "workflow_id": "01a0e05a-3c52-7a8e-b1f4-6d2e9c0a7b31",
         "run_id": "fb1951a1-25b9-4fb2-98c7-c988988ecdf7",
         "prompt": {
-          "id": "resolve_conflict.ask_about_customer",
+          "id": "ask_rename",
           "token": "Vq3kT9xRb2LmW8sZ",
           "kind": "decision",
-          "message": "A customer named \"Riverbend Electric\" already exists.",
+          "message": "\"Lone Star Supply Co\" already belongs to a record of another list (vendor), and QuickBooks keeps names unique across customers, vendors, employees and other names, and across every type of item. Add this one under another name, or cancel.",
           "data": {
-            "existing": { "type": "customer", "list_id": "8000001F-1790470623", "full_name": "Riverbend Electric",
-                          "company_name": "Riverbend Electric LLC", "phone": "512-555-0142" }
+            "kind": "customer",
+            "name": "Lone Star Supply Co",
+            "existing": { "list": "vendor", "list_id": "80000022-1790470623", "full_name": "Lone Star Supply Co",
+                          "is_active": true, "score": 1.0, "reasons": ["same name"] }
           },
           "options": [
-            { "id": "use_existing", "label": "Use the existing customer",
-              "description": "Carry on with the customer QuickBooks already has. Nothing new is created." },
-            { "id": "rename", "label": "Create it with a different name",
-              "description": "Try again under a name you choose.",
+            { "id": "rename", "label": "Add it under another name",
               "fields": { "name": { "type": "string", "required": true, "label": "New name" } } },
-            { "id": "cancel", "label": "Don't create a customer",
-              "description": "Stop here. The run ends as cancelled, with nothing written to QuickBooks." }
+            { "id": "cancel", "label": "Cancel",
+              "description": "Stop here. Nothing is created." }
           ]
         },
         "links": {
@@ -237,58 +243,66 @@ answer.
       }
       ```
 
-      `data.existing` is the record that has the conflicting name, and its `type` says which list it's on (e.g. vendors, customers, etc). Each option
-      has a `label`, and a `description` when it needs one.
+      `data.existing` is the record that has the conflicting name, as the connection's [name index](/matching)
+      holds it, and its `list` says which list it's on (`vendor`, `customer`, `employee`, ...). Each option has
+      a `label`, and a `description` when it needs one.
     </Accordion>
 
     You can use the app to test workflow runs: open the `links.ui` field to answer the question in the app, or just find the running workflow on the **Workflow Runs** page.
     
     <Frame caption="The same question on the run's page (links.ui). Answering here is the same as POSTing to links.decisions.">
-      <img src="/images/workflows/run-waiting.png" alt="A run's question, under Your answer is needed: the existing customer's name, company, address, phone, email and balance, and three answers, each saying where it leads (Use the existing customer, which ends used_existing; Create it with a different name, picked, with Riverbend Electric LLC typed as the new name, which continues at try_create; Don't create a customer, which ends cancelled), and a Send answer button" />
+      <img src="/images/workflows/run-waiting.png" alt="A run's question, under Your answer is needed: Lone Star Supply Co already belongs to a vendor, the existing vendor's name and active flag, and two answers, each saying where it leads (Add it under another name, picked, with Lone Star Supply Co (customer) typed as the new name, which continues at try_add or ends renames_exhausted; Cancel, which ends cancelled), and a Send answer button" />
     </Frame>
   </Step>
   <Step title="Get the result">
-    The run creates "Riverbend Electric LLC" and sends `workflow_run.completed`. Its `outcome` is
-    `created_renamed`: store `output.customer.list_id` against your record, and you're done.
+    The run adds "Lone Star Supply Co (customer)" and sends `workflow_run.completed`. Its `outcome` is
+    `created_renamed`: store `output.record.list_id` against your record, and you're done.
 
     <Accordion title="The whole completed webhook" icon="code">
       ```json workflow_run.completed (abridged)
       {
         "event": "workflow_run.completed",
         "run_id": "fb1951a1-25b9-4fb2-98c7-c988988ecdf7",
-        "workflow": "create_customer_safely",
+        "workflow": "ensure",
         "outcome": "created_renamed",
         "output": {
-          "customer": { "list_id": "80000025-1790470630", "full_name": "Riverbend Electric LLC" },
-          "outcome": "created_renamed"
+          "record": { "list_id": "80000024-1790470634", "full_name": "Lone Star Supply Co (customer)",
+                      "email": "orders@lonestarsupply.example", "is_active": true, … },
+          "how": null
         },
         "error": null,
         "summary": {
           "ended_at": "2026-09-27T00:57:14.482113Z",
-          "stopped_at": "try_create",
+          "stopped_at": "try_add",
           "requests": [
-            { "state": "try_create", "workflow": "create_customer_safely", "operation": "customer.create", "status": "error" },
-            { "state": "resolve_conflict.find_holder", "workflow": "create_customer_safely", "operation": "entity.query", "status": "success" },
-            { "state": "try_create", "workflow": "create_customer_safely", "operation": "customer.create", "status": "success",
-              "identifiers": { "list_id": "80000025-1790470630", "full_name": "Riverbend Electric LLC" } }
+            { "state": "try_add", "workflow": "ensure", "operation": "customer.create", "status": "error" },
+            { "state": "try_add", "workflow": "ensure", "operation": "customer.create", "status": "success",
+              "identifiers": { "list_id": "80000024-1790470634", "full_name": "Lone Star Supply Co (customer)" } }
           ],
           "side_effects": [
-            { "state": "try_create", "workflow": "create_customer_safely", "operation": "customer.create",
-              "identifiers": { "list_id": "80000025-1790470630", "full_name": "Riverbend Electric LLC" } }
+            { "state": "try_add", "workflow": "ensure", "operation": "customer.create",
+              "identifiers": { "list_id": "80000024-1790470634", "full_name": "Lone Star Supply Co (customer)" } }
           ],
           "decisions": [
-            { "state": "resolve_conflict.ask_about_customer", "workflow": "create_customer_safely",
-              "option": "rename", "at": "2026-09-27T00:57:10.418204Z" }
+            { "state": "ask_rename", "workflow": "ensure", "option": "rename", "at": "2026-09-27T00:57:10.418204Z" }
           ],
-          "discarded": [],
-          "calls": []
+          "calls": [
+            { "state": "resolve", "workflow": "resolve", "status": "completed", "outcome": "not_found", "item_index": null }
+          ],
+          "matches": [
+            { "state": "resolve / look_up", "workflow": "resolve", "match": "none", "candidates": 0,
+              "candidates_total": 0, "candidates_total_complete": true, "index": "ready" },
+            { "state": "find_holder", "workflow": "ensure", "match": "exact", "candidates": 0,
+              "candidates_total": 0, "candidates_total_complete": true, "index": "ready" }
+          ],
+          "discarded": []
         }
       }
       ```
 
-      `summary` lists every request the run sent, what it changed in QuickBooks (`side_effects`) and every
-      decision it was given. Each entry names the `workflow` whose state it was, which tells a called
-      workflow's step from the run's own.
+      `summary` lists every request the run sent, what it changed in QuickBooks (`side_effects`), every
+      decision it was given, the workflows it called and the names it matched. Each entry names the
+      `workflow` whose state it was, which tells a called workflow's step from the run's own.
     </Accordion>
   </Step>
 </Steps>
@@ -299,18 +313,8 @@ Start from a shipped template rather than a blank chart. Each one is complete an
 that calls other workflows installs those too. The generic ones work for any record type. `resolve`, `ensure`
 and `upsert` take a `kind` (`customer`, `item_service`, `account`, ...) and a name, which they
 [match](/matching) by rank on a realtime or simulated connection and through QuickBooks' own filters on a
-standard one. `find_or_create`, `resolve_transaction` and `stream_query` take the operations to send, such as
-`{"operation": "customer.query", "params": {"full_name": ["Riverbend Electric"]}}`.
-
-**Find or create a record.** None of these asks your app, except `ensure` and `create_customer_safely`.
-
-| Template | What it does |
-| --- | --- |
-| `ensure` | Finds a list record of any kind as `resolve` does, and creates it from your add when nothing is it. On a name clash, asks your app what to do. |
-| `find_or_create` | Sends your find query and, if it finds nothing, your create. Any record type. |
-| `find_or_create_customer` | The same, for a customer, by full name. |
-| `find_or_create_item` | Finds an item of any type by full name, or creates it. |
-| `create_customer_safely` | Creates a customer. On a name clash, asks your app what to do. |
+standard one. `add_transaction` takes any transaction add, and `resolve_transaction` and `stream_query` take
+the query to send, such as `{"operation": "customer.query", "params": {"active_status": "All"}}`.
 
 **Find a record, without writing.** Each asks your app to pick one when it isn't sure.
 
@@ -323,10 +327,10 @@ standard one. `find_or_create`, `resolve_transaction` and `stream_query` take th
 
 | Template | What it does |
 | --- | --- |
+| `ensure` | Finds a list record of any kind as `resolve` does, and creates it from your add when nothing is it. On a name clash, asks your app what to do. |
 | `upsert` | Updates a list record if it finds one, as `resolve` does, and creates it if not. |
 | `push_records` | Runs `upsert` for up to 200 records, in order, in one run. |
 | `add_transaction` | Makes sure every customer, item, class and account a transaction names exists, then adds it. Any transaction. |
-| `create_invoice` | Makes sure the customer and items exist, then adds the invoice. |
 | `record_payment` | Finds an invoice and records a payment against it. |
 | `void_transaction` | Finds a transaction, then voids or deletes it. |
 
@@ -335,9 +339,8 @@ standard one. `find_or_create`, `resolve_transaction` and `stream_query` take th
 
 | Template | What it does |
 | --- | --- |
-| `send_lists_to_app` | An initial import: every customer, vendor and item, 200 at a time. |
 | `stream_query` | Pages through any query you pass and sends each page. |
-| `pull_changes` | Every record of the kinds you name, or what changed since a date and then what was deleted. |
+| `pull_changes` | Every record of the kinds you name (an initial import), or what changed since a date and then what was deleted. |
 
 **Read the company's setup.**
 
@@ -349,7 +352,6 @@ standard one. `find_or_create`, `resolve_transaction` and `stream_query` take th
   <Accordion title="What each template takes, asks and ends with" icon="table">
     | Template | What it does | Asks your app | Ends |
     | --- | --- | --- | --- |
-    | `find_or_create` | Sends the `find` query you pass and, if it finds nothing, the `create` add. Any record type, vendors included. On a 3100 from the add, looks once more. | No | `found`, `created` |
     | `resolve` | Finds a list record of `kind` (`customer`, `vendor`, `employee`, `other_name`, `entity` for those four, `item` or one item type, `account`, `class`, `terms`, `sales_tax_code` and the other lists a transaction names) by the `list_id` your app stored, then by `name`, under `parent` (full name or ListID) for a job or a sub-item. The name is [matched](/matching) by rank on a realtime or simulated connection, with `fields` such as `email` or `account_number` for a customer, vendor, employee or other name, and through QuickBooks' own exact and "contains" filters on a standard one. Only an exact match is used without asking, or a strong one with `accept: "strong"`. What it finds is read whole by its ListID before it's used, and matched once more if it was deleted since. With `pick: true`, nothing found asks your app to pick one of the active records instead of ending `not_found`. It only finds: `ensure` and `upsert` write. | `ask` for a strong match or near matches: `use` (with `list_id`), `none` (ends `not_found`) or `cancel`. `ask_detail` (or `ask_name`, for a list without an address) when more than 10 are alike: `narrow` (with an `account_number`, `city`, `postal_code` or fuller `name`), `none` or `cancel`, three times at most. With `pick`, `ask_pick`: `use` (with `list_id`) or `cancel` | `found`, `picked`, `not_found`, `cancelled` |
     | `ensure` | Runs `resolve`, then sends your `add` (the body `POST /<kind>` takes; `kind` is the list it goes to, such as `customer` or `item_service`) when nothing is the record. A name already held in its name space (customers, vendors, employees and other names share one; every item type another) is a 3100: it finds what holds the name and asks. Allows five renames. Without an `add`, it creates nothing, and `resolve` asks your app to pick one of the active records instead. With `lookup: false` it sends the add without looking, for a caller that already did. | Through `resolve` (`ask_pick` without an `add`). `ask_use`: `use_existing`, `rename` (with `name`), `cancel`. `ask_rename` when another list holds the name: `rename`, `cancel` | `found`, `picked`, `created`, `created_renamed`, `used_existing`, `cancelled`; fails as `renames_exhausted` |
     | `upsert` | Finds a list record as `resolve` does (`kind`, the name and parent in your `add`, optional `list_id`, `fields` and `accept`) and sends your `update` to it with its ListID filled in; the engine reads the edit sequence first and asks before overwriting a record someone changed since. Nothing is the record: sends your `add` instead, looking once more if the name was taken in between. | `resolve / ask`: `use` (with `list_id`), `none` (then the add goes out) or `cancel`. And the [conflict prompt](#conflicts) when the record changed after it was read | `updated`, `created`, `cancelled`; fails as `name_taken` when the update renames it to a name in use |
@@ -358,22 +360,18 @@ standard one. `find_or_create`, `resolve_transaction` and `stream_query` take th
     | `resolve_transaction` | Finds a transaction by the `txn_id` your app stored, then by its `ref_number`, then by the filters your `query` carries (a customer, a date range), picking out the one carrying the `external_guid` your app kept from the add. One transaction with the number and no GUID to check is it; anything less sure is offered to your app. Without line items: read it whole by `txn_id` when you need them. | `ask`: `use` (with `txn_id`), `none` (ends `not_found`) or `cancel` | `found`, `picked`, `not_found`, `cancelled` |
     | `void_transaction` | Finds a transaction of `kind` as `resolve_transaction` does, then voids it, or deletes it when `action` is `delete`. QuickBooks voids sixteen types (invoice, bill, check, journal_entry and the others `kind` lists) and deletes those and nine more (sales_order, estimate, purchase_order, receive_payment, time_tracking and four others), so a delete takes kinds a void does not; asking to void one of those nine fails at once, before anything is sent, and says to pass `action` `delete`. An invoice that payments paid can be voided: the payments stay, with what they had applied to it now their `unused_payment`. Nothing is voided or deleted until the transaction is identified. | Through `resolve_transaction` | `voided`, `deleted`, `not_found`, `cancelled` |
     | `record_payment` | Finds an invoice as `resolve_transaction` does and records a `payment` (a `receive_payment.create` body: how it was paid) for the invoice's own customer, applied to that invoice; the amount defaults to what the invoice still owes. An invoice already paid in full is reported, not paid again. | Through `resolve_transaction` | `applied`, `already_paid`, `not_found`, `cancelled` |
-    | `create_customer_safely` | Creates a customer from `customer`, the body `POST /customers` takes. On a name clash, finds what has the name and asks. Allows five renames. | `ask_about_customer`: `use_existing`, `rename` (with `name`), `cancel`. `ask_about_other`: `rename`, `cancel` | `created`, `created_renamed`, `used_existing`, `cancelled`; fails as `renames_exhausted` |
-    | `find_or_create_customer` | Finds a customer by full name, or creates it from `customer`. `find_or_create`, written out for one type. | No | `found`, `created` |
-    | `find_or_create_item` | Finds an item by full name, whatever its type, or creates it from exactly one of `item` (any item add, as `{"operation": "item_other_charge.create", "params": {...}}`), `non_inventory` or `service`. Runs `find_or_create`. | No | `found`, `created` |
-    | `send_lists_to_app` | An initial import: every customer, vendor and item, active or not, sent to your app 200 at a time as `customers_page`, `vendors_page` and `items_page` [notifications](#sending-your-app-data), then the counts. Needs a `webhook_url`. | No | `completed` |
     | `stream_query` | Pages through the `query` you pass, 200 at a time, and sends each page to your app as a `page` [notification](#sending-your-app-data) carrying `kind`, `page`, `more`, `pass` and `records`, then how many there were. Any query: every customer, the items changed since a date, one customer's invoices; one QuickBooks doesn't page, such as the accounts, arrives as a single page. If the Web Connector session ends between pages, it starts again from page 1 (`pass` 2, at most 3), so take a repeated page without harm. Needs a `webhook_url`. | No | `completed` |
     | `pull_changes` | The sync. For each kind word in `lists` (`customer`, `vendor`, `account`, `class`, the `item_*` kinds such as `item_service`, and every other list type a deleted-records query knows, all but `billing_rate`) and in `transactions` (`invoice`, `receive_payment`, `bill` and every other transaction type), runs `stream_query` over the records modified on or after `since`, inactive ones included, so they arrive as `page` [notifications](#sending-your-app-data) with that `kind`. Then it sends one `deleted` notification with the records of those kinds deleted since then, and of no others: a payment deleted since then isn't in it unless `transactions` names `receive_payment`. QuickBooks keeps 90 days of them. Without `since` it sends every record of those kinds, and no `deleted` notification: the initial import. Transactions come without their lines unless `include_line_items` is true (four kinds don't take it: `build_assembly`, `charge`, `time_tracking` and `vehicle_mileage`). A list QuickBooks doesn't page arrives as one page. Needs a `webhook_url`. | No | `completed` |
     | `company_profile` | Reads the company (name, legal name, address, fiscal year), its preferences (inventory, class tracking, multiple currencies, sales tax and the defaults QuickBooks posts with) and its host (product, version, country and the qbXML versions it speaks), all three in one Web Connector session. Run it when a connection is set up. | No | `completed` |
-    | `create_invoice` | Creates the `customer` with `create_customer_safely`, finds or creates each item add in `items` (optional, any item type), then adds the `invoice` exactly as sent, each line naming its item and carrying its own quantity, rate and the rest. A lost answer to the add is [settled by the run](#lost-answers): the invoice found by the GUID the add carried is read whole, and one not found is added again. | Through `create_customer_safely`. And `ask_about_invoice` when the run could not settle whether the invoice was added: `use_existing` (with `txn_id`), `create_again`, `cancel` | `completed`, `cancelled`; fails as `unanswered_twice` |
 
-    A question's `prompt.id` is the path of the state that asks it, such as
-    `resolve_conflict.ask_about_customer`. When one workflow calls another, the calling state comes first:
-    `create_invoice` relays `create_customer / resolve_conflict.ask_about_customer`. `resolve` asks `ask`,
-    `ask_detail` or `ask_name`, which `upsert` and `ensure` relay as `resolve / ask` and the rest; `resolve_transaction` asks `ask`, and `void_transaction` and `record_payment` relay `find / ask`.
-    `push_records` relays `upsert / resolve / ask` for whichever record asks, and `add_transaction` relays
-    `find_references / resolve / ask` (or `ask_detail`, `ask_pick`, ...) in its first pass and `create_missing / ensure / ask_use` (or `ask_rename`) in its second, for whichever reference asks: `prompt.from.item_index` says which, counting from 0,
-    and `item_count` how many there are.
+    A question's `prompt.id` is the path of the state that asks it, such as `ask_use`. When one workflow calls
+    another, the calling state comes first. `resolve` asks `ask`, `ask_detail`, `ask_name` or `ask_pick`, which
+    `upsert` and `ensure` relay as `resolve / ask` and the rest; `resolve_transaction` asks `ask`, and
+    `void_transaction` and `record_payment` relay `find / ask`. `push_records` relays `upsert / resolve / ask`
+    for whichever record asks, and `add_transaction` relays `find_references / ask` (or `ask_detail`,
+    `ask_pick`, ...) in its first pass and `create_missing / ask_use` (or `ask_rename`) in its second, for
+    whichever reference asks: `prompt.from.item_index` says which, counting from 0, and `item_count` how many
+    there are.
 
     Every template can also end <Badge color="red">`failed`</Badge>, when something goes wrong that it doesn't handle. `error` says why,
     usually in QuickBooks' own words.
@@ -381,7 +379,6 @@ standard one. `find_or_create`, `resolve_transaction` and `stream_query` take th
   <Accordion title="What each template returns in output" icon="box-open">
     | Template | `output` |
     | --- | --- |
-    | `find_or_create` | `{outcome, record, ref: {list_id, full_name}}` |
     | `resolve` | `{record, how, list}`: the record read whole, `how` it was found (`id`, `exact`, `strong` or `picked`) and the `list` it's in (`customer`, `item_service`, ...); all null when nothing was found |
     | `ensure` | `{record, how}`: the record found, picked, created or used; `how` as `resolve` gives it when `resolve` found it |
     | `upsert` | `{outcome, matched, how, record}`: `matched` is `found` or `picked` after an update, null after a create |
@@ -389,22 +386,17 @@ standard one. `find_or_create`, `resolve_transaction` and `stream_query` take th
     | `resolve_transaction` | `{outcome, record, ref: {txn_id, ref_number, external_guid}}`: the header, without lines |
     | `void_transaction` | `{outcome, ref: {txn_id, ref_number, external_guid}}` |
     | `record_payment` | `{outcome, payment, invoice: {txn_id, ref_number, balance_before, applied}}` |
-    | `find_or_create_customer` | `{outcome, customer}` |
-    | `find_or_create_item` | `{outcome, item}` |
-    | `create_customer_safely` | `{outcome, customer: {list_id, full_name}}`. On `cancelled`, `{outcome, name_tried}`; on `renames_exhausted`, `null` |
-    | `send_lists_to_app` | `{customers, vendors, items}`: how many of each were sent |
     | `stream_query` | `{kind, records, pages, passes}`: how many records were sent, over how many pages, and how many times the query was started from page 1 |
     | `pull_changes` | `{since, lists, transactions, deleted: {lists, transactions}}`: `lists` and `transactions` hold `stream_query`'s output for each kind, in the order given, and `deleted` how many deleted records of each were sent (0 without `since`) |
     | `add_transaction` | `{record, references, resolved, missing, created}`: what QuickBooks answered the add with (the header, without lines, when its answer was lost and the run found it by its GUID), each distinct reference (`kind`, `full_name`, `name`, `parent`, `list_id`, `paths`) and what the first pass found for each, in the same order, then the references the second pass made and what `ensure` ended with for each. On `cancelled`, `created` lists what was made before the cancel |
     | `company_profile` | `{company, preferences, host}`, each as its query answers it |
-    | `create_invoice` | `{customer, items, invoice}`. It has no `outcome` key: read the run's `outcome`. |
   </Accordion>
 </AccordionGroup>
 
 In the dashboard, open **Workflows** and clone any template into your sandbox app.
 
 <Frame caption="Workflows → Start from a template. A card names the templates it also installs.">
-  <img src="/images/workflows/workflows-templates.png" alt="The Start from a template section of the Workflows page: four template cards with a description and Use template, the first opened to its app select (My App Dev), Clone and Cancel, and Find or create item noting it also installs find_or_create" />
+  <img src="/images/workflows/workflows-templates.png" alt="The Start from a template section of the Workflows page: four template cards with a description and Use template, the first, Add a transaction, opened to its app select (My App Dev), Clone and Cancel, and each card noting the templates it also installs, such as ensure and resolve" />
 </Frame>
 
 ## What your app receives
@@ -471,7 +463,7 @@ Deliveries can fail, repeat, or arrive early:
         # Already handled if this delivery_id was seen: a retry repeats it.
         return if run.deliveries.exists?(delivery_id: event["delivery_id"])
 
-        ImportPage.call(run, event["name"], event["data"]) # e.g. customers_page
+        ImportPage.call(run, event["name"], event["data"]) # e.g. page, with data["kind"]
         run.deliveries.create!(delivery_id: event["delivery_id"])
       when "workflow_run.awaiting_input"
         run.update!(status: "waiting", question: event["prompt"]) if event["prompt"]
@@ -500,20 +492,22 @@ kinds are answered at `links.decisions`.
     <CodeGroup>
     ```json kind: decision (abridged)
     {
-      "id": "resolve_conflict.ask_about_customer",
+      "id": "ask_use",
       "kind": "decision",
-      "message": "A customer named \"Riverbend Electric\" already exists.",
+      "message": "\"Riverbend Electric\" is already in QuickBooks. Use that record, add this one under another name, or cancel.",
       "data": {
-        "existing": { "type": "customer", "list_id": "8000001F-1790470623", "full_name": "Riverbend Electric", "phone": "512-555-0142" }
+        "kind": "customer",
+        "name": "Riverbend Electric",
+        "existing": { "list": "customer", "list_id": "8000001F-1790470623", "full_name": "Riverbend Electric", "is_active": true }
       },
       "options": [
-        { "id": "use_existing", "label": "Use the existing customer",
-          "description": "Carry on with the customer QuickBooks already has. Nothing new is created." },
-        { "id": "rename", "label": "Create it with a different name",
-          "description": "Try again under a name you choose.",
+        { "id": "use_existing", "label": "Use the existing record",
+          "description": "Carry on with the record QuickBooks already has. Nothing new is created." },
+        { "id": "rename", "label": "Add it under another name",
+          "description": "Try the add again under a name you choose.",
           "fields": { "name": { "type": "string", "required": true, "label": "New name" } } },
-        { "id": "cancel", "label": "Don't create a customer",
-          "description": "Stop here. The run ends as cancelled, with nothing written to QuickBooks." }
+        { "id": "cancel", "label": "Cancel",
+          "description": "Stop here. Nothing is created." }
       ]
     }
     ```
@@ -682,8 +676,9 @@ kinds are answered at `links.decisions`.
 
 A run can hand your app data while it goes, not only at the end: a **`notify` state** ("Send to the app" in
 the builder) sends a `workflow_run.notification` to the run's `webhook_url`, under a `name` your app
-routes on. The usual use is a whole list, a page at a time: `send_lists_to_app` sends `customers_page`
-with `seq` 1, 2, 3…, then the vendors, then the items, then `workflow_run.completed` with the counts.
+routes on. The usual use is a whole list, a page at a time: `pull_changes` sends `page` with `seq` 1, 2, 3…,
+each naming its `kind`, the customers, then the vendors, then whatever else you asked for (with a `since`,
+then one `deleted`), then `workflow_run.completed` with the counts.
 
 **The run waits for your `2xx`** before it goes on: notifications come one at a time, in `seq` order, and
 all of them before the run's ending, so `workflow_run.completed` means everything was sent. QuickBooks
@@ -708,8 +703,8 @@ isn't held up: the pages keep being fetched while your app takes them. **The run
   | --- | --- |
   | `delivery_id` | The same on every retry of this notification. Deduplicate on it. |
   | `seq` | 1, 2, 3… across the run, the workflows it calls included. |
-  | `name` | The notify state's `name`, such as `customers_page`. Route on it. |
-  | `state` | The path of the state that sent it, such as `sync_page / send_customer` when a workflow the run calls sent it. |
+  | `name` | The notify state's `name`, such as `page`. Route on it. |
+  | `state` | The path of the state that sent it, such as `pull_lists / send` when a workflow the run calls sent it. |
   | `from` | `null` when the run's own workflow sent it. Otherwise the called workflow and its state, `{"workflow", "state"}`, plus `item_index` and `item_count` in a state that runs once per item. |
   | `data` | The state's `data`, filled in. |
 
@@ -720,16 +715,17 @@ isn't held up: the pages keep being fetched while your app takes them. **The run
     "app_id": "018f0000-0000-7000-8000-000000000003",
     "sandbox": false,
     "connection_id": "018f0000-0000-7000-8000-000000000001",
-    "workflow": "send_lists_to_app",
+    "workflow": "pull_changes",
     "workflow_id": "018f0000-0000-7000-8000-000000000004",
     "run_id": "018f0000-0000-7000-8000-000000000000",
     "links": {"run": "https://qubesync.com/api/v2/connections/…/workflow-runs/…", "decisions": "…", "cancel": "…", "ui": "…"},
     "delivery_id": "018f0000-0000-7000-8000-000000000005",
     "seq": 1,
-    "name": "customers_page",
-    "state": "send_customers",
-    "from": null,
-    "data": {"page": 1, "more": true, "customers": [{"list_id": "80000001-1738310400", "full_name": "Acme Co"}]}
+    "name": "page",
+    "state": "pull_lists / send",
+    "from": {"workflow": "stream_query", "state": "send", "item_index": 0, "item_count": 3},
+    "data": {"kind": "customer", "pass": 1, "page": 1, "more": true,
+             "records": [{"list_id": "80000001-1738310400", "full_name": "Acme Co"}]}
   }
   ```
 </Accordion>
@@ -756,8 +752,8 @@ A chart's own `cancelled` ending, when your app answered `cancel`, is a *complet
   | <Badge color="gray">`cancelled`</Badge> | `null` | `null` | `null`; your reason is in `cancel_reason` |
 
   A chart can declare named failures, so your app can tell them apart by `outcome`.
-  `create_customer_safely` ends `renames_exhausted` with the error `Five renames were tried and every name
-  was taken; the last was "<name>".`
+  `ensure` ends `renames_exhausted` with the error `Five renames were tried and every name was taken; the
+  last was "<name>".`
 
   Someone cancels a run with `POST links.cancel` or **Cancel run**. An optional `{"reason": "..."}` is kept
   as `cancel_reason`, trimmed and cut to 500 characters. The workflows the run calls stop with it. Requests
@@ -820,8 +816,8 @@ Every run has a page in the dashboard, at its `links.ui`. **Workflow runs** in t
 
 Click into a run to see its details
 
-<Frame caption="A finished create_invoice run: what it changed in QuickBooks, and its steps.">
-  <img src="/images/workflows/run-completed.png" alt="A completed create_invoice run's page: Completed after 8.1s; Changed in QuickBooks, listing the customer Bluebonnet Bakery, the item Site survey and the invoice INV-1042 as created, with their ListIDs and TxnID; and the Steps tab with create_customer, ensure_items and add_invoice, each Done with how long it took" />
+<Frame caption="A finished add_transaction run: what it changed in QuickBooks, and its steps.">
+  <img src="/images/workflows/run-completed.png" alt="A completed add_transaction run's page: Completed, ended added; Changed in QuickBooks, listing the customer Bluebonnet Bakery and the item Site survey that its second pass created, and the invoice INV-1042, with their ListIDs and TxnID; and the Steps tab with list_references, find_references (resolve, 3 of 3 done), still_missing, create_missing (ensure, 2 of 2 done) and add (invoice.create), each Done with how long it took" />
 </Frame>
 
 From your app, `GET /connections/{id}/workflow-runs?state=awaiting_input` lists the runs waiting on your

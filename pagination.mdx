@@ -76,13 +76,13 @@ the plain paginated API (above), or a workflow:
 
 | Workflow | Use it when |
 | --- | --- |
-| `send_lists_to_app` | **You need multiple lists.** It sends them to your app, one page at a time. Clone the template and start it. You can edit the workflow to include whichever entities you'd like to import, but the template pages through every customer, vendor and item (200 at a time), and sends each page to your `webhook_url` exactly once, in order (it waits for your 2xx response before sending the next page). |
+| `pull_changes` | **You need several lists.** Started without `since`, it sends every record of the kinds you name in `lists` (and `transactions`), active or not, to your app one page at a time: customers, vendors and items 200 at a time, every other list as one page. Each page goes to your `webhook_url` exactly once, in order (it waits for your 2xx response before sending the next page). Later runs with `since` send only what changed and what was deleted. |
 | `stream_query` | **You only need one list** (e.g. customers). |
 
 <Request
   label="Install the template"
   method="POST"
-  path="/api/v2/workflow-templates/send_lists_to_app/install"
+  path="/api/v2/workflow-templates/pull_changes/install"
   body={{ publish: true }}
 />
 
@@ -92,7 +92,7 @@ the plain paginated API (above), or a workflow:
 Install the template:
 
 ```http
-POST /api/v2/workflow-templates/send_lists_to_app/install
+POST /api/v2/workflow-templates/pull_changes/install
 
 {"publish": true}
 ```
@@ -100,7 +100,7 @@ POST /api/v2/workflow-templates/send_lists_to_app/install
 ```bash
 curl -u "$QUBE_API_KEY:" \
   -X POST \
-  "https://qubesync.com/api/v2/workflow-templates/send_lists_to_app/install" \
+  "https://qubesync.com/api/v2/workflow-templates/pull_changes/install" \
   -H "Content-Type: application/json" \
   -d '{"publish": true}'
 ```
@@ -113,7 +113,8 @@ curl -u "$QUBE_API_KEY:" \
   method="POST"
   path="/api/v2/connections/{connection_id}/workflow-runs"
   body={{
-    workflow: "send_lists_to_app",
+    workflow: "pull_changes",
+    input: { lists: ["customer", "vendor", "item_service", "item_non_inventory"] },
     webhook_url: "https://your-app.example/webhooks/qube",
   }}
 />
@@ -127,7 +128,10 @@ Start a run:
 POST /api/v2/connections/{connection_id}/workflow-runs
 
 {
-  "workflow": "send_lists_to_app",
+  "workflow": "pull_changes",
+  "input": {
+    "lists": ["customer", "vendor", "item_service", "item_non_inventory"]
+  },
   "webhook_url": "https://your-app.example/webhooks/qube"
 }
 ```
@@ -138,7 +142,10 @@ curl -u "$QUBE_API_KEY:" \
   "https://qubesync.com/api/v2/connections/$CONN_ID/workflow-runs" \
   -H "Content-Type: application/json" \
   -d '{
-    "workflow": "send_lists_to_app",
+    "workflow": "pull_changes",
+    "input": {
+      "lists": ["customer", "vendor", "item_service", "item_non_inventory"]
+    },
     "webhook_url": "https://your-app.example/webhooks/qube"
   }'
 ```
@@ -148,9 +155,10 @@ curl -u "$QUBE_API_KEY:" \
 
 A run needs its `webhook_url` -- without one it's refused, `422 webhook_url_required` -- and your endpoint
 should answer within 5 seconds: a page your app can't take is retried for about an hour with the same
-`delivery_id`, and the run waits in the meantime. Copy the template into your own workflow to send other lists,
-different fields, or even run each page through a workflow of its own. See
-[Sending your app data](/workflows#sending-your-app-data), which has the payload.
+`delivery_id`, and the run waits in the meantime. Each page names its `kind` (`customer`, `item_service`, ...), so
+one handler takes them all. Installing `pull_changes` installs the `stream_query` it runs once per kind. Copy the
+template into your own workflow to send different fields, or even run each page through a workflow of its own.
+See [Sending your app data](/workflows#sending-your-app-data), which has the payload.
 
 ## Tips
 

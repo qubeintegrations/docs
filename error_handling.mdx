@@ -66,7 +66,7 @@ text.**
 
 | Code | `type` | Meaning | Usual fix |
 | --- | --- | --- | --- |
-| 3100 | `name_in_use` | The name is already used by a customer, vendor, employee or other name. | Use the existing record, or pick another name. [`create_customer_safely`](/workflows#pick-a-template) asks your app which. |
+| 3100 | `name_in_use` | The name is already used by a customer, vendor, employee or other name. | Use the existing record, or pick another name. [`ensure`](/workflows#pick-a-template) finds what holds the name and asks your app which. |
 | 3120 | `object_not_found` | No record has that `list_id` or `txn_id`. | Re-sync the record; it may have been deleted in QuickBooks. |
 | 3140 | `invalid_reference` | A reference (a `customer_ref`, `item_ref`...) names a record the company file doesn't have. | Create the referenced record first, or look it up by name. |
 | 3170 | `cannot_modify` | QuickBooks refused to save a change to an existing record. | Read `message` for why, such as a closed accounting period. |

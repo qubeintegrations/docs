@@ -22,23 +22,26 @@ agent writes them well and a person can review them.
 
 ## Anatomy of a chart
 
-Let's break down `find_or_create_customer`, one part at a time. Look a customer up, and create it only if it isn't
-there. Vendors, and any other list without a template of its own, use the generic `find_or_create`
-([One chart for any record type](#one-chart-for-any-record-type)).
+Let's break down a short chart, one part at a time. It finds the customer your app means by name, uses it when
+the name matches exactly, asks your app when the name only looks like one, and adds the customer when there's
+nothing like it. The shipped [`ensure`](/workflows#pick-a-template) does the same for any kind of record, and
+also handles a name another list already has.
 
 ```mermaid
 stateDiagram-v2
   direction LR
-  [*] --> find
-  find --> found: already there
-  find --> create: no such customer
+  [*] --> look_up
+  look_up --> found: exactly that name
+  look_up --> ask: only alike
+  look_up --> create: nothing like it
+  ask --> found: your app picked one
+  ask --> create: none of these
   create --> created: created
-  find --> failed: any QuickBooks error
   create --> failed: any QuickBooks error
-  classDef ask fill:#fef3c7,stroke:#d97706,color:#78350f
+  classDef asking fill:#fef3c7,stroke:#d97706,color:#78350f
   classDef good fill:#dcfce7,stroke:#16a34a,color:#14532d
-  classDef quiet fill:#f1f5f9,stroke:#64748b,color:#1e293b
   classDef bad fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+  class ask asking
   class found, created good
   class failed bad
 ```
@@ -53,7 +56,7 @@ stateDiagram-v2
         "type": "operation",
         "operation": "customer.create",
         "required": true,
-        "description": "The customer to create…"
+        "description": "The customer to add…"
       }
     }
     ```
@@ -64,24 +67,38 @@ stateDiagram-v2
     ```json outcomes (abridged)
     "outcomes": {
       "found": {
-        "description": "A customer with this…"
+        "description": "A customer has this…"
       },
       "created": {
-        "description": "No customer had this…"
+        "description": "Nothing was like it…"
       }
     }
     ```
   </Step>
   <Step title="What each state sends">
-    `find` asks QuickBooks for the name. `create` sends the caller's own body, with `$from`.
+    `look_up` asks the connection's [name index](/matching) for the name. `ask` asks your app. `create` sends the
+    caller's own body, with `$from`.
 
     <CodeGroup>
-    ```json find
-    "find": {
-      "type": "request",
-      "operation": "customer.query",
-      "params": {
-        "full_name": ["${input.customer.name}"]
+    ```json look_up
+    "look_up": {
+      "type": "match",
+      "kind": "customer",
+      "name": "${input.customer.name}",
+      "on": { … }
+    }
+    ```
+
+    ```json ask
+    "ask": {
+      "type": "wait",
+      "prompt": {
+        "message": "No customer has exactly…",
+        "data": { "found": "${vars.found}" },
+        "options": [
+          { "id": "use", … },
+          { "id": "add", … }
+        ]
       },
       "on": { … }
     }
@@ -100,24 +117,28 @@ stateDiagram-v2
     </CodeGroup>
   </Step>
   <Step title="Where each answer leads">
-    Tried in order: the first whose `if` passes wins. Each `description` is drawn on the canvas.
+    Tried in order: the first whose `if` passes wins. Each `description` is drawn on the canvas. A match always
+    raises `success`, so `look_up` branches on how sure its answer is.
 
-    ```json states.find.on
+    ```json states.look_up.on
     "success": [
       {
-        "description": "already there",
+        "description": "exactly that name",
         "if": {
-          "path": "response.data",
-          "op": "present"
+          "path": "response.data.match",
+          "op": "eq",
+          "value": "exact"
         },
         "target": "found",
         "assign": {
-          "customer": "${response.data.0}"
+          "list_id": "${response.data.record.list_id}"
         }
       },
+      { "description": "nothing like it", … },
       {
-        "description": "no such customer",
-        "target": "create"
+        "description": "only alike: ask",
+        "target": "ask",
+        "assign": { "found": "${response.data}" }
       }
     ]
     ```
@@ -144,62 +165,81 @@ stateDiagram-v2
 
     | From | Holds |
     | --- | --- |
-    | `vars` | The global data context for the chart. States and transitions can `assign` values there. Here, `vars.customer` is set by `find`'s "already there" branch or by `create`'s success. |
+    | `vars` | The global data context for the chart. States and transitions can `assign` values there. Here, `vars.list_id` is set by `look_up`'s "exactly that name" branch, by `ask`'s `use` answer or by `create`'s success. |
     | `meta` | Info the run collects automatically. `meta.outcome` is the outcome it ended on, `found` or `created` ([Templates](#templates) lists the rest). |
 
     ```json output
     "output": {
       "outcome": "${meta.outcome}",
-      "customer": "${vars.customer}"
+      "list_id": "${vars.list_id}"
     }
     ```
   </Step>
 </Steps>
 
-<Accordion title="The whole chart" description="find_or_create_customer.json" icon="code">
-  ```json find_or_create_customer.json
+<Accordion title="The whole chart" description="find_or_add_customer.json" icon="code">
+  ```json find_or_add_customer.json
   {
     "version": 1,
-    "key": "find_or_create_customer",
-    "name": "Find or create customer",
-    "description": "Looks a customer up by full name and creates it only if it isn't there yet. The same shape as the generic find_or_create, written out for one type so its two states are easy to read. For vendors or any other list, use find_or_create with that type's query and create pair, such as vendor.query and vendor.create.",
+    "key": "find_or_add_customer",
+    "name": "Find or add a customer",
+    "description": "Finds the customer your app means by name, asks your app when the name only looks like one, and adds the customer when there is nothing like it.",
     "input": {
       "customer": { "type": "operation", "operation": "customer.create", "required": true,
-                    "description": "The customer to create if it isn't found, exactly as you would POST it to the v2 customer.create endpoint." }
+                    "description": "The customer to add if it isn't there, exactly as you would POST it to the v2 customer.create endpoint. Its name is what is looked for." }
     },
     "outcomes": {
-      "found": { "description": "A customer with this name was already there; nothing was created." },
-      "created": { "description": "No customer had this name, so it was created from the customer you sent." }
+      "found": { "description": "A customer has this name, or your app picked one. Nothing was added." },
+      "created": { "description": "Nothing was like it, or your app said none of them is it, so the customer you sent was added." }
     },
-    "initial": "find",
+    "initial": "look_up",
     "on": {
       "error": [{ "description": "any QuickBooks error", "target": "failed", "assign": { "error": "${response.error.message}" } }]
     },
     "states": {
-      "find": {
-        "type": "request",
-        "description": "Look for a customer with this exact full name.",
-        "operation": "customer.query",
-        "params": { "full_name": ["${input.customer.name}"] },
+      "look_up": {
+        "type": "match",
+        "description": "QuickBooks finds a name only as it's spelled, so the name index ranks the file's customers against it instead.",
+        "kind": "customer",
+        "name": "${input.customer.name}",
         "on": {
           "success": [
-            { "description": "already there", "if": { "path": "response.data", "op": "present" },
-              "target": "found", "assign": { "customer": "${response.data.0}" } },
-            { "description": "no such customer", "target": "create" }
+            { "description": "exactly that name", "if": { "path": "response.data.match", "op": "eq", "value": "exact" },
+              "target": "found", "assign": { "list_id": "${response.data.record.list_id}" } },
+            { "description": "nothing like it", "if": { "path": "response.data.match", "op": "eq", "value": "none" },
+              "target": "create" },
+            { "description": "only alike: ask", "target": "ask", "assign": { "found": "${response.data}" } }
           ]
+        }
+      },
+      "ask": {
+        "type": "wait",
+        "description": "Acme Inc and Acme LLC can be two companies: only your app knows which one it meant, if either.",
+        "prompt": {
+          "message": "No customer has exactly that name. Pick the one you meant, or add it as a new customer.",
+          "data": { "found": "${vars.found}" },
+          "options": [
+            { "id": "use", "label": "Use this one",
+              "fields": { "list_id": { "type": "string", "required": true, "label": "ListID of the one to use" } } },
+            { "id": "add", "label": "None of these: add it" }
+          ]
+        },
+        "on": {
+          "use": [{ "description": "your app picked one", "target": "found", "assign": { "list_id": "${decision.data.list_id}" } }],
+          "add": [{ "description": "none of these", "target": "create" }]
         }
       },
       "create": {
         "type": "request",
-        "description": "Not there yet -- create it from the caller's own customer.create body.",
+        "description": "Nothing like it: add it from the caller's own customer.create body.",
         "operation": "customer.create",
         "params": { "$from": "${input.customer}" },
         "on": {
-          "success": [{ "description": "created", "target": "created", "assign": { "customer": "${response.data}" } }]
+          "success": [{ "description": "created", "target": "created", "assign": { "list_id": "${response.data.list_id}" } }]
         }
       }
     },
-    "output": { "outcome": "${meta.outcome}", "customer": "${vars.customer}" }
+    "output": { "outcome": "${meta.outcome}", "list_id": "${vars.list_id}" }
   }
   ```
 </Accordion>
@@ -234,7 +274,7 @@ stateDiagram-v2
     | `final` | Only inside a compound. Entering it raises `done` on that compound. |
 
     Every state also takes `entry` and `exit`: assignments made when the run enters or leaves it.
-    `find_or_create` and `resolve` count their looks this way.
+    `upsert` counts its looks this way, and `add_transaction` its sends.
   </Accordion>
   <Accordion title="Request states" description="requests, settle, on_conflict" icon="paper-plane">
     | Key | What it does |
@@ -411,8 +451,8 @@ stateDiagram-v2
     | Key | What it does |
     | --- | --- |
     | `description` | Why a run can end this way, when its name doesn't already say. |
-    | `kind` | `"failure"` ends the run <Badge color="red">`failed`</Badge> with `outcome` set to the outcome's key. The run's `error` is then what the transition assigned to `error`, else the outcome's description. `create_customer_safely` declares `renames_exhausted` this way. Without it, the outcome is a success. |
-    | `output` | Rendered instead of the chart's: `create_customer_safely`'s `cancelled` returns `{outcome, name_tried}`. |
+    | `kind` | `"failure"` ends the run <Badge color="red">`failed`</Badge> with `outcome` set to the outcome's key. The run's `error` is then what the transition assigned to `error`, else the outcome's description. `ensure` declares `renames_exhausted` this way. Without it, the outcome is a success. |
+    | `output` | Rendered instead of the chart's: `ensure`'s `cancelled` returns `{"record": null, "how": null}`, whatever the run found before your app cancelled. |
 
     A workflow that calls this one hears a success outcome as `success` and a failure as `error`, both with
     `response.outcome` naming it.
@@ -456,7 +496,7 @@ Click a step to open it:
 | **Wait for decision** | The question and its answers. |
 
 <Frame caption="A wait step: the message, what it sends with it, and each answer with the option id it sends.">
-  <img src="/images/workflows/builder-selected.png" alt="The inspector for the wait state ask_about_customer: the message with ${vars.name}, the Send with it JSON, and the Answers list with labels that send use_existing and rename, and Ask for a field" />
+  <img src="/images/workflows/builder-selected.png" alt="The inspector for ensure's wait state ask_use: the message with ${vars.name}, the Send with it JSON, and the Answers list with labels that send use_existing and rename, the second asking for a name field" />
 </Frame>
 
 <Check>
@@ -499,7 +539,7 @@ reasoning ends up in the `description` fields, where the next person will read i
       path="/api/v2/workflows/validate"
       file="chart-request.json"
       body={`{
-      "key": "find_or_create_customer",
+      "key": "find_or_add_customer",
       "definition": {...}
     }`}
     />
@@ -511,7 +551,7 @@ reasoning ends up in the `description` fields, where the next person will read i
     POST /api/v2/workflows/validate
 
     {
-      "key": "find_or_create_customer",
+      "key": "find_or_add_customer",
       "definition": {...}
     }
     ```
@@ -540,7 +580,7 @@ reasoning ends up in the `description` fields, where the next person will read i
   <Step title="Save it">
     <Request
       method="PUT"
-      path="/api/v2/workflows/find_or_create_customer"
+      path="/api/v2/workflows/find_or_add_customer"
       body={`{"definition": {...}}`}
     />
 
@@ -548,7 +588,7 @@ reasoning ends up in the `description` fields, where the next person will read i
     <Visibility for="agents">
 
     ```http
-    PUT /api/v2/workflows/find_or_create_customer
+    PUT /api/v2/workflows/find_or_add_customer
 
     {"definition": {...}}
     ```
@@ -556,7 +596,7 @@ reasoning ends up in the `description` fields, where the next person will read i
     ```bash
     curl -u "$QUBE_API_KEY:" \
       -X PUT \
-      "https://qubesync.com/api/v2/workflows/find_or_create_customer" \
+      "https://qubesync.com/api/v2/workflows/find_or_add_customer" \
       -H "Content-Type: application/json" \
       -d '{"definition": {...}}'
     ```
@@ -578,8 +618,8 @@ reasoning ends up in the `description` fields, where the next person will read i
 
     In the builder it's the **Use from your app** tab:
 
-    <Frame caption="Use from your app: the usage contract for create_customer_safely, ready to copy as Markdown.">
-      <img src="/images/workflows/builder-usage.png" alt="The builder's Use from your app tab: Published v1, Copy everything as Markdown, a Start it curl command, and the input table" />
+    <Frame caption="Use from your app: the usage contract for ensure, ready to copy as Markdown.">
+      <img src="/images/workflows/builder-usage.png" alt="The builder's Use from your app tab for ensure: Published v1, Copy everything as Markdown, a Start it curl command, and the input table" />
     </Frame>
   </Step>
 </Steps>
@@ -596,7 +636,7 @@ working copy, the published version or an older one.
 | Below it | The start form and the recent runs. Each run's page has its [steps, chart, event log and data](/workflows#follow-your-runs). |
 
 <Frame caption="Test run, beside the chart: the run's status, its steps (an error the chart handles is Handled), and its question.">
-  <img src="/images/workflows/builder-test-run.png" width="380" alt="The Test run panel: Waiting for an answer at resolve_conflict.ask_about_customer; the steps set_name Done, try_create Handled, find_holder Done and ask_about_customer Waiting; and the start of the question, Your answer is needed: A customer named Riverbend Electric already exists" />
+  <img src="/images/workflows/builder-test-run.png" width="380" alt="The Test run panel beside ensure's chart: Waiting for an answer at ask_rename; the steps resolve Done, try_add Handled, holder_kind, find_holder and same_list Done, and ask_rename Waiting; and the head of the question, Your answer is needed" />
 </Frame>
 
 Walk the unhappy paths too:
@@ -692,40 +732,47 @@ only change by promotion**, under **How production apps change** on the dashboar
 ## Composing workflows
 
 A `workflow` state can run another workflow (under the same app) as one step.
-Prefer combining workflows to just copying another chart's states. For example, `create_invoice` has two embedded workflows in its states:
+Prefer combining workflows to just copying another chart's states. For example, `add_transaction` runs two
+other workflows, each once per reference its add makes:
 
-```json create_invoice.json (two of its states)
-"create_customer": {
+```json add_transaction.json (two of its states, abridged)
+"find_references": {
   "type": "workflow",
-  "workflow": "create_customer_safely",
-  "input": { "customer": "${input.customer}" },
+  "workflow": "resolve",
+  "each": "${vars.refs}",
+  "as": "ref",
+  "stop_on": ["cancelled"],
+  "input": { "kind": "${each.ref.kind}", "name": "${each.ref.name}", "parent": "${each.ref.parent}",
+             "list_id": "${each.ref.list_id}", "pick": "${each.ref.pick}" },
   "on": {
     "success": [
-      { "description": "the app said no", "if": { "path": "response.outcome", "op": "eq", "value": "cancelled" },
-        "target": "cancelled" },
-      { "description": "a customer was created or chosen",
-        "if": { "path": "response.outcome", "op": "in", "value": ["created", "created_renamed", "used_existing"] },
-        "target": "ensure_items", "assign": { "customer": "${response.data.customer}" } }
+      { "description": "the app stopped at one of the questions", "if": { "path": "response.stopped", "op": "present" },
+        "target": "cancelled", "assign": { "resolved": "${response.data}" } },
+      { "description": "every reference looked for", "target": "still_missing", "assign": { "resolved": "${response.data}", … } }
     ]
   }
 },
-"ensure_items": {
+"create_missing": {
   "type": "workflow",
-  "workflow": "find_or_create_item",
-  "each": "${input.items}",
-  "as": "item",
-  "on_item_error": "stop",
-  "input": { "item": "${each.item}" },
+  "workflow": "ensure",
+  "each": "${vars.missing}",
+  "as": "ref",
+  "stop_on": ["cancelled"],
+  "input": { "kind": "${each.ref.ensure.kind}", "add": "${each.ref.ensure.add}", "lookup": false },
   "on": {
-    "success": [{ "description": "every item sent is there", "target": "add_invoice", "assign": { "items": "${response.data}" } }]
+    "success": [
+      { "description": "the app stopped at a name clash", "if": { "path": "response.stopped", "op": "present" },
+        "target": "cancelled", "assign": { "created": "${response.data}" } },
+      { "description": "every record exists", "target": "add", "assign": { "created": "${response.data}", … } }
+    ]
   }
 }
 ```
 
 | The called workflow | The state raises |
 | --- | --- |
-| Ends with a success outcome | `success`, with its output in `response.data` and the outcome in `response.outcome`. A called workflow's `cancelled` is a success like any other, which is why `create_customer` branches on it. |
-| Fails | `error`, with `response.error.message` and `response.outcome` set to `failed` or the named failure. `create_invoice` doesn't handle `renames_exhausted`, so its root `error → failed` ends the order with the called workflow's message. |
+| Ends with a success outcome | `success`, with its output in `response.data` and the outcome in `response.outcome`. A called workflow's `cancelled` is a success like any other, which is why a state that calls one branches on it, or, running it once per item, stops on it with `stop_on` as these two do. |
+| Fails | `error`, with `response.error.message` and `response.outcome` set to `failed` or the named failure. `add_transaction` doesn't handle `ensure`'s `renames_exhausted`, so its root `error → failed` ends the run with the called workflow's message. |
 
 **Once per item.** With `each`, the state runs the workflow once per element of a list: one at a time, in
 order, at most 200.
@@ -754,32 +801,31 @@ published first ([Versions and publishing](#versions-and-publishing)).
 
 ## One chart for any record type
 
-`find_or_create_customer` names its operations, so it only ever finds and creates customers. A chart can take
-its operations as input instead: declare an `operation` input without an `operation`, and it takes a pair, an
-operation and its params. A request state sends the pair with a templated `operation` and `$from`:
+`find_or_add_customer` names its operations, so it only ever finds and adds customers. A chart can take its
+operations as input instead: declare an `operation` input without an `operation`, and it takes a pair, an
+operation and its params. A request state sends the pair with a templated `operation` and `$from`, as
+`stream_query` does:
 
 ```json
 "input": {
-  "find": { "type": "operation", "required": true },
-  "create": { "type": "operation", "required": true }
+  "query": { "type": "operation", "required": true }
 },
 "states": {
   "find": {
     "type": "request",
-    "operation": "${input.find.operation}",
-    "params": { "$from": "${input.find.params}" },
+    "operation": "${input.query.operation}",
+    "params": { "$from": "${input.query.params}" },
     "on": { ... }
   },
   ...
 }
 ```
 
-A run of it then passes the operations it wants, here a vendor's:
+A run of it then passes the operation it wants, here a vendor query:
 
 ```json
 {
-  "find": { "operation": "vendor.query", "params": { "full_name": ["Lone Star Supply Co"] } },
-  "create": { "operation": "vendor.create", "params": { "name": "Lone Star Supply Co" } }
+  "query": { "operation": "vendor.query", "params": { "active_status": "All" } }
 }
 ```
 
@@ -787,76 +833,82 @@ A run of it then passes the operations it wants, here a vendor's:
 | --- | --- |
 | When the run starts | Each pair's `params` are checked against the operation it names, as a fixed `operation` input's are. An unknown operation is refused. |
 | `only` | Not allowed on such an input: it needs a fixed operation to check against. |
-| A templated `operation` | Can be built from any value, such as `"${input.kind}.query"`, but should come from `input` or `vars`: validation warns about one that doesn't. If it renders to something that isn't an operation, the run fails and says what it got. |
+| A templated `operation` | Can be built from any value, such as `"${input.kind}.create"`, but should come from `input` or `vars`: validation warns about one that doesn't. If it renders to something that isn't an operation, the run fails and says what it got. |
+
+`ensure` builds its operation that way: it takes a `kind` and the `add` to send, and sends `"${input.kind}.create"`,
+so `{"kind": "vendor", "add": {"name": "Lone Star Supply Co"}}` adds a vendor.
 
 **Start from the shipped generic charts** rather than writing the states again:
 
 | Template | Takes |
 | --- | --- |
-| `find_or_create` | A `find` and a `create` pair. |
-| `resolve` | A stored `id`, a `by_name` query, and optionally `candidates`. |
-| `upsert` | What `resolve` takes, plus `create` and `update` pairs. |
+| `resolve` | A `kind` and a `name`, and optionally a `parent`, the `list_id` your app stored and `fields` to match on. |
+| `ensure` | What `resolve` takes, plus the `add` to send when nothing is the record. |
+| `upsert` | A `kind`, the `add` and the `update`. |
+| `add_transaction` | Any transaction add's `operation` and `params`, plus `adds` for the records it may have to create. |
 | `resolve_transaction` | A `query` pair, plus the `txn_id`, `ref_number` or `external_guid` the app holds. |
 | `stream_query` | One `query` pair to page. |
 
-A chart for one record type is then a single `workflow` state passing two operations. Here is
-`find_or_create_item`'s, once its `pick` has the add to send: the `item` it was sent, an
-`{"operation": "item_other_charge.create", "params": {...}}` pair for any kind of item, or one it builds
-from `non_inventory` or `service`:
+A chart for many records of any kind is then a single `workflow` state. `push_records` is one: it runs `upsert`
+once per record your app sends, each record the `kind`, `add` and `update` that `upsert` takes, records of
+different lists mixed:
 
 ```json
-"find_or_create": {
+"upsert": {
   "type": "workflow",
-  "workflow": "find_or_create",
+  "workflow": "upsert",
+  "each": "${input.records}",
+  "as": "record",
+  "on_item_error": "continue",
   "input": {
-    "find": { "operation": "item.query", "params": { "full_name": ["${vars.name}"] } },
-    "create": "${vars.create}"
+    "kind": "${each.record.kind}",
+    "add": "${each.record.add}",
+    "update": "${each.record.update}",
+    "list_id": "${each.record.list_id}"
   },
   "on": {
-    "success": [
-      { "description": "created", "if": { "path": "response.outcome", "op": "eq", "value": "created" },
-        "target": "created", "assign": { "item": "${response.data.record}" } },
-      { "description": "already there", "target": "found", "assign": { "item": "${response.data.record}" } }
-    ]
+    "success": [{ "description": "every record tried", "target": "completed",
+                  "assign": { "results": "${response.data}", "outcomes": "${response.outcomes}" } }]
   }
 }
 ```
 
 <Note>
-  **Neither generic chart handles lost answers:** the run settles those before a state hears of them.
-  `find_or_create` does handle one race. When its add meets 3100 because something created the name after the
-  query, it looks once more, counting its looks with `$add` so that it looks at most twice.
+  **None of these handles lost answers:** the run settles those before a state hears of them. `upsert` does
+  handle one race. When its add meets 3100 because something created the name after the lookup, it runs
+  `resolve` once more, counting its looks with `$add` in the state's `entry`, so that it looks at most twice.
 </Note>
 
 ## Sending your app data from a chart
 
 A `notify` state hands your app data while the run goes, not only at the end
 ([what your app receives](/workflows#sending-your-app-data)). The usual use is a whole list, a page at a
-time. This is `send_lists_to_app`'s first list:
+time. This is `stream_query`'s loop:
 
 ```mermaid
 stateDiagram-v2
-  [*] --> find_customers
-  find_customers --> send_customers: each page
-  send_customers --> find_customers: next page
-  find_customers --> find_vendors: every page sent
+  [*] --> find
+  find --> send: each page
+  send --> find: next page
+  find --> completed: every page sent
   classDef send fill:#ecfeff,stroke:#0891b2,color:#164e63
-  class send_customers send
+  class send send
 ```
 
 ```json
-"find_customers": {
-  "type": "request", "operation": "customer.query",
-  "params": {"active_status": "All"}, "paginate": true, "page_size": 200,
+"find": {
+  "type": "request", "operation": "${input.query.operation}",
+  "params": {"$from": "${input.query.params}"}, "paginate": true, "page_size": 200,
   "on": {
-    "page": [{"target": "send_customers", "description": "send this page"}],
-    "success": [{"target": "find_vendors", "assign": {"customers": "${response.count}"}}]
+    "page": [{"target": "send", "description": "send this page"}],
+    "success": [{"target": "completed", "assign": {"records": "${response.count}", "pages": "${response.pages}"}}]
   }
 },
-"send_customers": {
-  "type": "notify", "name": "customers_page",
-  "data": {"page": "${response.page}", "more": "${response.more}", "customers": "${response.data}"},
-  "on": {"success": [{"target": "find_customers", "description": "next page"}]}
+"send": {
+  "type": "notify", "name": "page",
+  "data": {"kind": "${vars.kind}", "pass": "${vars.pass}", "page": "${response.page}",
+           "more": "${response.more}", "records": "${response.data}"},
+  "on": {"success": [{"target": "find", "description": "next page"}]}
 }
 ```
 
@@ -1114,7 +1166,7 @@ Two endings are left for the chart to handle, both as `error` with `code` `null`
 saying why and, for an add, `response.error.external_guid`, the GUID it was sent with. That makes the looking
 part of the chart, where the diagram and the run's log show it.
 
-No shipped template does it any more: `create_invoice` leaves its invoice add to settling and handles only
+No shipped template does it any more: `add_transaction` leaves its add to settling and handles only
 `unsettled`, with a question.
 
 A chart that looks for itself:

@@ -397,7 +397,7 @@ Walk every path before your customers do:
 | Scenario | Set up | Your app should |
 | --- | --- | --- |
 | Happy path | nothing | Store the returned `list_id` / `txn_id` |
-| Duplicate name | `next_status: {code: 3100}` | Ask the user, or use [`create_customer_safely`](/workflows) |
+| Duplicate name | `next_status: {code: 3100}` | Ask the user, or use [`ensure`](/workflows#pick-a-template) |
 | Record changed in QuickBooks | `next_status: {code: 3200}` | Re-query, then retry the update. (A workflow's update reads the record back, finds it unchanged and sends it again.) |
 | Answer lost | `next_lost_response: true` | Query before resending a create or update. A workflow [settles it](/workflows#lost-answers) itself |
 | Record changed before a workflow's update | A chart of your own with an update state: change the record through the API, then run the update with the `edit_sequence` from before | Answer the [conflict prompt](/workflows#conflicts): `overwrite` or `keep` |
