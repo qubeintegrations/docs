@@ -175,9 +175,9 @@ You can switch a connection between standard and realtime from its page in the d
 
 | Change | What happens |
 | --- | --- |
-| Upgrade to realtime | Billed as realtime from then on. |
-| Downgrade to standard | Scheduled for the end of the billing period, and billed as realtime until then. |
-| **Slow polling to every 5 minutes** | Slows a realtime connection right away, without changing its bill. |
+| Upgrade to realtime | Billed as realtime from then on. [Name matching](/matching) is available at once. |
+| Downgrade to standard | Scheduled for the end of the billing period, and billed as realtime until then. Matching stops then, and the connection's name index is deleted. |
+| **Slow polling to every 5 minutes** | Slows a realtime connection right away, without changing its bill. Matching keeps working, though its refreshes wait for the slower check-ins. |
 
 To see when a connection will next pick up requests, read it on the connection
 (`GET /connections/{connection_id}` in v2), or the **Speed** card on its dashboard page:
