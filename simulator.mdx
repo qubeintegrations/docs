@@ -320,7 +320,8 @@ Other differences we know of:
 | --- | --- |
 | A reference names a `list_id` that doesn't exist | Answers 3140. Real QuickBooks answers 3120 for an id, and 3140 only for a `full_name`. |
 | You delete a record that's in use, such as a customer with invoices | Lets the delete succeed. |
-| You query for deleted records | Always finds nothing. |
+| You query for deleted transactions (`txn_deleted.query`) | Always finds nothing. Deleted list records are listed by `list_deleted.query` for 90 days, as QuickBooks lists them. |
+| You merge two list records (`list_merge.execute`) | Answers 1030: merges aren't simulated. |
 | A payment is applied to a `txn_id` that doesn't exist, or a `set_credit` names a `credit_txn_id` that isn't a credit memo | Skips it without an error. |
 | A request needs a feature, such as bar codes, currencies, inventory sites or units of measure | Allows it: every simulated company allows every feature. A real company file can answer 3250 ("This feature is not enabled or not available in this version of QuickBooks") for those, and decline payroll and sales-tax-return queries. |
 

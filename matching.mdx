@@ -1,0 +1,477 @@
+---
+title: "Matching"
+description: "Find the record a name means in your customer's company file, even when it's written differently."
+icon: "magnifying-glass"
+---
+
+import { Request } from "/snippets/request.jsx";
+
+Your app knows a customer as `ACME, Inc.`. QuickBooks has `Acme Inc`, or `Acme LLC`, or both. Before you
+add the customer, or put an invoice on it, you need to know which record your app means.
+
+QuickBooks can't tell you. A `full_name` lookup is exact: it ignores case and the spaces at either end, and
+nothing else. The only looser filter is "contains" (or "starts with", "ends with"), on one list at a time,
+unranked, so `ACME, Inc.` doesn't find `Acme Inc`, and `Smith, John` doesn't find `John Smith`.
+
+Matching does. QuBe Sync keeps an index of the names in the company file, and a match ranks them against
+yours in milliseconds. It ignores case, accents, punctuation, company suffixes such as Inc and LLC, spacing
+and word order, finds near misses, keeps store and unit numbers apart, and can compare an account number,
+email, phone, city and postal code too.
+
+<Note>
+  **Matching needs a `realtime` connection** (or a `simulated` one in your sandbox). A `standard` connection
+  is refused with `matching_requires_realtime`. Your sandbox app isn't billed, so switching a sandbox
+  connection to realtime costs nothing: do it from its page in the dashboard. A
+  [workflow's `match` state](#in-a-workflow) is never refused: on a standard connection it falls back to
+  QuickBooks' own filters.
+</Note>
+
+## Match a name
+
+Send the name in the JSON body, never the query string:
+
+<Request
+  method="POST"
+  path="/api/v2/connections/{connection_id}/matches"
+  body={{
+    kind: "customer",
+    name: "ACME, Inc.",
+    fields: { email: "ap@acme.example" },
+  }}
+/>
+
+{/* agent-block:start */}
+<Visibility for="agents">
+
+```http
+POST /api/v2/connections/{connection_id}/matches
+
+{
+  "kind": "customer",
+  "name": "ACME, Inc.",
+  "fields": {"email": "ap@acme.example"}
+}
+```
+
+```bash
+curl -u "$QUBE_API_KEY:" \
+  -X POST \
+  "https://qubesync.com/api/v2/connections/$CONN_ID/matches" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "kind": "customer",
+    "name": "ACME, Inc.",
+    "fields": {"email": "ap@acme.example"}
+  }'
+```
+
+</Visibility>
+{/* agent-block:end */}
+
+The answer comes back at once, a `200`. This file has both `Acme LLC` and `Acme Corp`. Both are the same
+name once punctuation and suffixes are set aside, so neither is certain, and the one with your email comes
+first:
+
+```json Response {2,4-23}
+{
+  "match": "candidates",
+  "record": null,
+  "candidates": [
+    {
+      "list_id": "80000011-1712345678",
+      "full_name": "Acme LLC",
+      "list": "customer",
+      "is_active": true,
+      "score": 1.0,
+      "reasons": ["same after removing punctuation and suffixes", "same email"]
+    },
+    {
+      "list_id": "80000012-1712345678",
+      "full_name": "Acme Corp",
+      "list": "customer",
+      "is_active": true,
+      "score": 1.0,
+      "reasons": ["same after removing punctuation and suffixes"]
+    }
+  ],
+  "candidates_total": 2,
+  "candidates_total_complete": true,
+  "index": { "state": "ready", "as_of": "2026-10-11T14:02:10Z" }
+}
+```
+
+<ParamField body="kind" type="string" required>
+  Which lists to look in: `customer`, `vendor`, `employee`, `other_name`, or `entity` for all four (they
+  share one name space in QuickBooks); `item` for every item type; or `account`, `class`, `standard_terms`,
+  `date_driven_terms`, `sales_tax_code`, `payment_method`, `ship_method`, `price_level`, `customer_type`,
+  `vendor_type`, `job_type`, `sales_rep` or `customer_msg`.
+</ParamField>
+
+<ParamField body="name" type="string" required>
+  The name your app has for the record, at most 255 characters. With a `parent`, its own name only:
+  `Kitchen`, not `Smith:Kitchen`. Its numbers must agree with a record's: see
+  [numbered locations](#numbered-locations-and-crowded-files).
+</ParamField>
+
+<ParamField body="parent" type="string">
+  For a job, a sub-item, a subaccount and the like: the parent's full name or its `list_id`, so only that
+  parent's children are matched. Without one, children match on their own name too, and say whose they
+  are (`a job under Smith`). Taken for `customer`, `entity`, `item`, `account`, `class`, `customer_type`,
+  `vendor_type` and `job_type`.
+</ParamField>
+
+<ParamField body="fields" type="object">
+  For `customer`, `vendor`, `employee`, `other_name` and `entity`: what else your app knows, as
+  `account_number`, `email`, `phone`, `postal_code`, `city` and `company_name`. The same account number
+  makes a strong match whatever the name. The same email, phone or postal code, with a name at least 0.4
+  alike (see `score`), makes a strong match: `Bill Johnson` with Bill's email finds `William Johnson`. Each
+  one in common is a reason, and ranks a candidate higher; a city or company name does only that. See
+  [distinguishing fields](#distinguishing-fields) for how each is compared.
+</ParamField>
+
+<ParamField body="exact_only" type="boolean" default="false">
+  `true` answers only `exact` or `none`: the one record with this full name, as QuickBooks compares names,
+  or nothing. Never a fuzzy match, so you can act on it without asking.
+</ParamField>
+
+<ParamField body="min_score" type="number">
+  This call's candidate threshold, from 0.3 to 1.0, in place of 0.44. Raise it to list only close names;
+  lower it to list more. Not taken with `exact_only`.
+</ParamField>
+
+## What the answer means
+
+`match` is the first of these that applies:
+
+| `match` | When | What to do |
+| --- | --- | --- |
+| <Badge color="green">`exact`</Badge> | One record has this full name, as QuickBooks compares names: case, the spaces at either end and extra spaces inside don't count. | **Use `record`.** It's the record a `full_name` lookup would find. |
+| <Badge color="blue">`strong`</Badge> | Exactly one record is the same once punctuation, accents, `&`, a leading "The", company suffixes, spacing or word order are set aside, has the same number in its name, has the account number you sent, or shares the email, phone or postal code you sent. | **Confirm `record`, then use it.** It's very likely the one, not certain. |
+| <Badge color="orange">`candidates`</Badge> | Records with a similar name, best first, at most 10. Two or more strong ones land here too. | **Ask which one, if any.** Show each `full_name` and its `reasons`. When there are more than 10, [ask for a detail instead](#when-the-list-is-crowded). |
+| <Badge color="gray">`none`</Badge> | Nothing like it. | **Create it**, if that's what your app was about to do. |
+
+<Warning>
+  **Only use an `exact` match without asking.** `Acme Inc` and `Acme LLC` are a strong match for each
+  other, and they can be two companies: putting an invoice on the wrong one is worse than asking. A phone
+  that a household or an office shares can make another person a strong match, too.
+</Warning>
+
+Each record in `record` or `candidates` has:
+
+<ResponseField name="list_id" type="string">
+  QuickBooks' id for the record: what a reference such as `customer_ref` or `item_ref` names it by.
+</ResponseField>
+<ResponseField name="full_name" type="string">
+  Its full name. A job's or a sub-item's starts with its parent's: `Smith:Kitchen`.
+</ResponseField>
+<ResponseField name="list" type="string">
+  The list it's in: `customer`, `vendor`, an item type such as `item_service`, and so on.
+</ResponseField>
+<ResponseField name="is_active" type="boolean">
+  `false` for an inactive record. Inactive records are matched too: QuickBooks hides them, but they keep
+  their names, and adding another with the same name fails with 3100.
+</ResponseField>
+<ResponseField name="score" type="number">
+  How alike the names are, from 0 to 1, once case, accents, punctuation and suffixes are set aside: `1.0`
+  for an exact match. A candidate has at least 0.44, unless it's there for another reason, such as two
+  letters swapped (`Desing` for `Design`), which scores low on a short name.
+</ResponseField>
+<ResponseField name="reasons" type="string[]">
+  Why it matched, as phrases you can show: `same name`, `same after removing punctuation and suffixes`,
+  `same words in a different order`, `same apart from spacing`, `two letters swapped`, `similar name`, or
+  `different name` for a record found by its account number alone; then `same number`; then
+  `same account number`, `same email`, `same phone`, `same postal code`, `same city` or
+  `same company name`; and `a job under Smith` for a child matched without a `parent`.
+</ResponseField>
+
+And the answer says how many records qualified:
+
+<ResponseField name="candidates_total" type="integer">
+  For `candidates`: how many records qualified, of which `candidates` lists the first 10. `0` for any
+  other tier.
+</ResponseField>
+<ResponseField name="candidates_total_complete" type="boolean">
+  `false` when `candidates_total` is a lower bound: a match reads at most 50 records, the most alike first,
+  and it read that many, so more may qualify.
+</ResponseField>
+
+<Tip>
+  Before a change depends on a matched record, read it by its `list_id` (`GET /customers?list_id=...`).
+  The index can be a few minutes behind QuickBooks: a record renamed since comes back with its new name.
+</Tip>
+
+## Numbered locations and crowded files
+
+Some company files are full of names that differ only by a number: franchise locations (`Subway #1234`,
+`Subway #1235`, and so on), units, a customer's jobs by year. On their letters alone those names look
+nearly the same: `Subway 1234` and `Subway 1235` are 0.71 alike. So matching treats the numbers as what
+tells records apart.
+
+**Numbers must agree.** A word with a digit in it is a number to a match: `1234` in `Subway #1234`, `4B`
+in `Unit 4B`. Leading zeros don't count, so `#01234` is `1234`. When your name and a record's both have
+numbers, the record must have every number you sent. One with a different number instead is never
+offered, however alike the rest is. When exactly one record has the same numbers and a name at least 0.4
+alike, it's a strong match, with the reason `same number`. A record with your numbers and more can be a
+candidate, with the reason `the number asked, and more`, but never a strong match.
+
+| You send | The file has | `match` |
+| --- | --- | --- |
+| `Subway Store 1234` | `Subway #1234`, `Subway #1235`, `Subway #12345`, `Subway #1243` | `strong`: `Subway #1234`, `same number` |
+| `Subway #1243` | `Subway #1234`, `Subway #1235` | `none` |
+| `Unit 4B` | `Unit 4A` | `none` |
+| `Subway #01234` | `Subway #1234` | `strong`, not `exact`: QuickBooks' own lookup wouldn't find one for the other |
+| `Subway` | 30 stores, `Subway #1201` to `Subway #1230` | `candidates`, with `candidates_total: 30` |
+| `7-Eleven` | `7-Eleven #42`, `7-Eleven #43` | `candidates`: both, `the number asked, and more` |
+| `7-Eleven #42` | `7-Eleven` | `none`: the record lacks `42` |
+
+A name with a number, asked for without one, is matched on the rest of the name, so `Subway` lists the
+stores. Two things outrank a different number: the exact full name, and the `account_number` you sent.
+
+
+### When the list is crowded
+
+When `candidates_total` is more than the 10 in `candidates`, or `candidates_total_complete` is `false`, the
+name alone doesn't pick out a record. Don't show your user a pick list of near-identical names. Ask for what
+tells them apart: the store number, the city, the postal code or your account number for it. Then match
+again with that:
+
+<Request
+  method="POST"
+  path="/api/v2/connections/{connection_id}/matches"
+  body={{
+    kind: "customer",
+    name: "Subway",
+    fields: { city: "Austin", postal_code: "78701" },
+  }}
+/>
+
+{/* agent-block:start */}
+<Visibility for="agents">
+
+```http
+POST /api/v2/connections/{connection_id}/matches
+
+{
+  "kind": "customer",
+  "name": "Subway",
+  "fields": {"city": "Austin", "postal_code": "78701"}
+}
+```
+
+```bash
+curl -u "$QUBE_API_KEY:" \
+  -X POST \
+  "https://qubesync.com/api/v2/connections/$CONN_ID/matches" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "kind": "customer",
+    "name": "Subway",
+    "fields": {"city": "Austin", "postal_code": "78701"}
+  }'
+```
+
+</Visibility>
+{/* agent-block:end */}
+
+The one store with that postal code is a strong match. If several share it, the ones in Austin come first.
+
+### Distinguishing fields
+
+Send what your app knows in `fields`. Each one in common is a reason and ranks a candidate higher, and
+some make a match strong on their own:
+
+| Field | When it's the same | Compared |
+| --- | --- | --- |
+| `account_number` | A strong match, whatever the name. Several records with it are candidates, first in line. | Case and the spaces at either end don't count. |
+| `email` | A strong match, with a name at least 0.4 alike. | Case doesn't count. |
+| `phone` | A strong match, with a name at least 0.4 alike. | Only the last ten digits, without an extension. |
+| `postal_code` | A strong match, with a name at least 0.4 alike. | Spaces and case don't count, and a US ZIP+4 by its first five digits. |
+| `city` | Ranked higher, never strong on its own: a city holds many records. | Like a name. |
+| `company_name` | Ranked higher, never strong on its own: many contacts share a company. Not for employees, which have none in QuickBooks. | Like a name. |
+
+The `city` and `postal_code` are compared with a customer's billing address, and with a vendor's, an
+employee's or an other name's own address.
+
+### Tighter or looser, for one call
+
+- **`exact_only: true`** answers `exact` or `none`, never a fuzzy match. Use it when your app should act
+  only on a certain match, as when it's about to create the record if it isn't there.
+- **`min_score`** moves the candidate threshold from 0.44, anywhere from 0.3 to 1.0. Raise it to see only
+  close names, or lower it to cast wider. `exact` and `strong` don't change, and a record two letters
+  swapped stays a candidate.
+
+## Match once, then keep the list_id
+
+Matching is for the records your app has no QuickBooks id for yet. Once your user confirms a match, store
+its `list_id` on your own record, and from then on refer to the QuickBooks record by it, such as
+`customer_ref: {list_id}` on an invoice. A `list_id` survives renames; a name doesn't.
+
+- **Match again only when the `list_id` stops working.** That happens when the record is deleted, or merged
+  into another, in QuickBooks: a lookup by the `list_id` answers status code 500 with no record, and a
+  request that references it is refused with 3120 (see [Error handling](/error_handling)). If your app keeps
+  in step with the `pull_changes` [workflow](/workflows), a merge comes through as a deletion of the record
+  merged away.
+- **Give the records you create an id you can match on.** An app that creates customers can set their
+  `account_number` to its own id for them, and match on that later, even after someone renames the customer
+  in QuickBooks. Check first that the company doesn't already use account numbers for something else.
+
+## In a workflow
+
+A [workflow](/workflows) does the same match as one of its steps: a `match` state. It takes the endpoint's
+body as templates (`kind`, `name`, `parent`, `fields`, `exact_only` and `min_score`), so one chart serves any
+record, and it always raises `success`, with the endpoint's answer in `response.data`. The chart branches on
+`response.data.match`:
+
+```json look_up
+"look_up": {
+  "type": "match",
+  "kind": "customer",
+  "name": "${input.name}",
+  "fields": {
+    "email": "${input.email}",
+    "city": "${vars.city}",
+    "postal_code": "${vars.postal_code}"
+  },
+  "on": {
+    "success": [
+      { "if": { "path": "response.data.match", "op": "eq", "value": "exact" },
+        "target": "found",
+        "assign": { "list_id": "${response.data.record.list_id}" } },
+      { "if": { "path": "response.data.match", "op": "eq", "value": "none" },
+        "target": "not_found" },
+      { "if": { "path": "response.data.candidates_total", "op": "gt", "value": 10 },
+        "target": "ask_detail" },
+      { "target": "ask", "assign": { "found": "${response.data}" } }
+    ]
+  }
+}
+```
+
+Here an `exact` match is used at once, `none` ends the run, a crowded answer asks your app for a city or
+postal code and matches again, and a `strong` match or a few `candidates` go to a `wait` state that asks your
+app which one is meant. The same rule as everywhere: [only use `exact` without asking](#what-the-answer-means).
+
+| | The endpoint | A `match` state |
+| --- | --- | --- |
+| How current | The index as it stands, with `index.as_of`. | Refreshes the index from QuickBooks first, unless the state says `"refresh": false` or the last refresh finished less than a minute ago, so a run that matches several names (an invoice's customer and items) waits for one refresh, not one each. |
+| How it answers | At once, a `200`. | Not at once: the run waits, holding nothing, until the refresh is in, and your app hears what came of it through the run's webhooks. |
+| The first match | Refused with `name_index_building`, and starts the build. | A run whose chart, or a workflow it calls, has a `match` state starts the build as the run starts, so it overlaps the earlier steps. The run waits while the index builds. |
+| A standard connection | Refused with `matching_requires_realtime`. | Falls back to QuickBooks' own filters, below. |
+
+**The fallback.** On a standard connection, or if the index's build gives up, the step sends QuickBooks' own
+filters instead, as ordinary requests of the run: the exact full name, and the "contains" name filter, for
+each list the `kind` covers. The answer has the same shape, with `index.state` `unavailable`. It is `exact`,
+or `candidates` without scores (`score` is `null`, with the reason `contains the name`), or `none`, and
+never `strong`. `exact_only` skips the "contains" query, and `min_score` and `fields` have nothing to apply
+to, so they are ignored. So a chart works on every connection, and realtime makes it better: ranking,
+punctuation, suffixes, word order, typos and the other fields.
+
+**Or let a template do it.** The shipped `resolve` template finds a list record of any kind (a customer, a
+job under its parent, a vendor, an item, an account) by the `list_id` you stored, then by name. It asks your
+app about near matches, or for a detail when too many are alike, and reads the record whole before it's
+used. `ensure` creates what `resolve` doesn't find, asking when the name is held elsewhere in its name
+space. `add_transaction` makes sure of every record a transaction names before adding it. See
+[Pick a template](/workflows#pick-a-template).
+
+The state's keys, its events and what the run records are under
+[Match states](/workflow-authoring#match-states), and
+[Matching names in a chart](/workflow-authoring#matching-names-in-a-chart) has this chart whole.
+
+## Turning it on
+
+Each connection's index is built the first time something needs it. QuBe Sync reads the names in the
+company file's lists from QuickBooks itself, a step at a time, as the Web Connector checks in. Your own
+requests always go first, and those reads never appear among your requests. It takes a few Web Connector
+sessions, more on a large company file.
+
+<Steps>
+  <Step title="Opt in, with a webhook_url">
+    Opting in starts the build ahead of your first match:
+
+    <Request
+      method="POST"
+      path="/api/v2/connections/{connection_id}/name-index"
+      body={{ webhook_url: "https://your-app.example/webhooks/qube" }}
+    />
+
+    {/* agent-block:start */}
+    <Visibility for="agents">
+
+    ```http
+    POST /api/v2/connections/{connection_id}/name-index
+
+    {"webhook_url": "https://your-app.example/webhooks/qube"}
+    ```
+
+    ```bash
+    curl -u "$QUBE_API_KEY:" \
+      -X POST \
+      "https://qubesync.com/api/v2/connections/$CONN_ID/name-index" \
+      -H "Content-Type: application/json" \
+      -d '{"webhook_url": "https://your-app.example/webhooks/qube"}'
+    ```
+
+    </Visibility>
+    {/* agent-block:end */}
+
+    It answers `202` with the connection's `name_index` while the index builds, or `200` if it's already
+    ready, and then nothing is sent. Opting in again while it builds replaces the `webhook_url`, so it's
+    safe to repeat. A first match does the same as opting in, without the webhook: it's refused with
+    `name_index_building`, and starts the build.
+  </Step>
+  <Step title="Get name_index.ready">
+    When every list is in, QuBe Sync sends your `webhook_url` this, signed like every other
+    [webhook](/webhooks#name-index-events):
+
+    ```json name_index.ready
+    {
+      "event": "name_index.ready",
+      "timestamp": 1792764130,
+      "app_id": "98f339a4-32e8-424a-987e-ccaf5bcaa620",
+      "sandbox": true,
+      "connection_id": "3f9c2a71-5d4e-4b8a-9c1f-7e2d6a5b8c90",
+      "name_index": { "state": "ready", "as_of": "2026-10-11T14:02:10Z", "records": 1240 }
+    }
+    ```
+
+    If QuickBooks' answers to one step are lost three times in a row (the session ended, or the Web
+    Connector reported an error), the build gives up and you get `name_index.failed` instead. It starts
+    again on its own a day later while the connection is matching, or at your next match or opt-in.
+  </Step>
+  <Step title="Match">
+    Every match from then on is answered from the index.
+  </Step>
+</Steps>
+
+You can also read where an index stands on the connection itself (`GET /connections/{connection_id}`):
+
+<ResponseField name="name_index" type="object">
+  `state` is `ready`, `building`, `not_built` (nothing has needed matching yet) or `unavailable` (a
+  standard connection). `as_of` is when it last caught up with QuickBooks, and `records` how many records
+  it holds.
+</ResponseField>
+
+## How current it is
+
+`index.as_of` in every answer says when the index last caught up with QuickBooks. A record added, renamed
+or deleted in QuickBooks after that isn't reflected yet.
+
+| While | What happens |
+| --- | --- |
+| The connection is matching (a match or an opt-in in the last 7 days) | The index catches up after each Web Connector session that brings your requests, at most every 5 minutes: only what changed and what was deleted since. Never from an idle check-in. |
+| Nothing has matched for 7 days | It isn't kept current. Your next match answers from it as it stands, and the next session with your requests catches it up. |
+| Nothing has matched for 30 days | It's deleted. The next match or opt-in builds it again. |
+| The connection is pointed at another company file, or the index hasn't caught up for 90 days | It's built again from the start when it's next used: QuickBooks only keeps deletions for 90 days. |
+| The connection is downgraded to standard, or deleted | It's deleted with it. |
+
+## Errors
+
+| Answer | `code` | What happened | What to do |
+| --- | --- | --- | --- |
+| `409` | `name_index_building` | The index isn't in yet. `detail` says whether this call started the build. | Opt in with a `webhook_url` and match once `name_index.ready` arrives, or read the connection's `name_index.state`. |
+| `422` | `matching_requires_realtime` | The connection is `standard`. (A [workflow's `match` state](#in-a-workflow) falls back instead.) | Upgrade it to realtime. In your sandbox, that's free. |
+| `422` | | A field it can't take, listed field by field: an unknown `kind`, a blank `name`, `fields` for a kind other than a customer, vendor, employee or other name, a field the kind's records don't have, a `min_score` outside 0.3 to 1.0, or the match sent in the query string. | Fix the request: it was never answered. |
+| `404` | | No such connection, or it belongs to another app. | Check the `connection_id` and the API key. |
+
+See [Error handling](/error_handling#when-matching-is-refused) for the shapes, and the
+[API reference](/api-reference/introduction) for both endpoints.

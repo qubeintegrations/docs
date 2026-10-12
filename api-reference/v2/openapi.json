@@ -14532,6 +14532,56 @@
           }
         ]
       },
+      "MatchRecord": {
+        "description": "A record a match found: enough to show it, and its `list_id` to use it by. The index can be a few minutes behind QuickBooks (`index.as_of`), so read the record by its `list_id` before a change depends on it: one renamed since comes back with its new name, and one deleted since is a 3120 (or an empty answer).",
+        "properties": {
+          "full_name": {
+            "description": "Its full name: a job's or a sub-item's starts with its parent's, `Smith:Kitchen`.",
+            "example": "Acme Inc",
+            "type": "string"
+          },
+          "is_active": {
+            "description": "`false` for an inactive record. QuickBooks hides those from most lists, but they keep their names: adding another with the same name is a 3100.",
+            "type": "boolean"
+          },
+          "list": {
+            "description": "The list it's in: `customer`, `vendor`, `employee` or `other_name`, an item type such as `item_service`, or the list you matched in, such as `account`.",
+            "example": "customer",
+            "type": "string"
+          },
+          "list_id": {
+            "description": "The record's ListID: what a reference (`customer_ref`, `item_ref`...) names it by.",
+            "example": "80000011-1712345678",
+            "type": "string"
+          },
+          "reasons": {
+            "description": "Why it matched, as phrases you can show: first how the name compares (`same name`, `same after removing punctuation and suffixes`, `same words in a different order`, `same apart from spacing`, `two letters swapped`, `similar name`, or `different name` for a record found by its account number alone), then `same number` when the numbers in the names agree (or `the number asked, and more` when the record's name has every number sent and others too), then what else is the same (`same account number`, `same email`, `same phone`, `same postal code`, `same city`, `same company name`), and, for a job or sub-item matched without a `parent`, whose it is (`a job under Smith`).",
+            "example": [
+              "same after removing punctuation and suffixes"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "score": {
+            "description": "How alike the names are, from 0 to 1: the trigram similarity of the two names once case, accents, punctuation and company suffixes are set aside. `1.0` for an exact match. A candidate has at least 0.44 (or the `min_score` you sent), unless it's there for another reason.",
+            "example": 0.86,
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "list_id",
+          "full_name",
+          "list",
+          "is_active",
+          "score",
+          "reasons"
+        ],
+        "type": "object"
+      },
       "updatePayrollItemTax_response_json": {
         "description": "QuBe Sync's summary of QuickBooks' answer. Only an `Error` severity from QuickBooks is `status: \"error\"` (and makes the request's `state` `error`), so a query that matched nothing is still `success`. A `Warn` severity is a `success` with `warning` beside it.",
         "oneOf": [
@@ -19874,6 +19924,79 @@
             "type": "object"
           }
         ]
+      },
+      "Match": {
+        "description": "A match's answer: the tier, and the record or the candidates.",
+        "properties": {
+          "candidates": {
+            "description": "For `candidates`: up to 10 records, best first (exact or strong ones that weren't alone, those with your `account_number` first; then those with the same numbers in their name, then those with your numbers and more; then the most fields in common; then the highest `score`), for a person to choose from. Empty otherwise. `candidates_total` says how many qualified.",
+            "items": {
+              "$ref": "#/components/schemas/MatchRecord"
+            },
+            "maxItems": 10,
+            "type": "array"
+          },
+          "candidates_total": {
+            "description": "For `candidates`: how many records qualified, of which `candidates` lists the first 10; `0` for any other tier. More than 10 means the name alone doesn't pick out a record, as in a file of numbered locations (`Subway #1201`, `Subway #1202`...). Rather than show a long list of near-identical names, ask for what tells them apart (the number, a city, a postal code, an account number) and match again with it.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "candidates_total_complete": {
+            "description": "`false` when `candidates_total` is a lower bound: a match reads at most 50 records, the most alike first, and it read that many, so more may qualify. `true` otherwise, and always for `exact`, `strong` and `none`.",
+            "type": "boolean"
+          },
+          "index": {
+            "description": "The index the answer came from.",
+            "properties": {
+              "as_of": {
+                "description": "When the index last caught up with QuickBooks: a record added, renamed or deleted in QuickBooks since then isn't reflected yet.",
+                "format": "date-time",
+                "type": "string"
+              },
+              "state": {
+                "enum": [
+                  "ready"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "state",
+              "as_of"
+            ],
+            "type": "object"
+          },
+          "match": {
+            "description": "The first tier that applies. `exact`: one record has this full name, as QuickBooks compares names (case and the spaces at either end don't count, and a run of spaces matches one). `strong`: exactly one record is the same once punctuation, accents, `&`, a leading `the`, company suffixes (Inc, LLC, Co...), spacing or word order are set aside; or has the same number in its name and a name at least 0.4 alike (`Subway #1234` for `Subway Store 1234`); or (customers, vendors, employees and other names) has the `account_number` you sent, or shares the `email`, `phone` or `postal_code` you sent and has a name at least 0.4 alike. Two or more like that are `candidates` instead. `candidates`: records whose names are like this one, best first. `none`: nothing like it. A name's numbers must agree: when both names have words with a digit (leading zeros aside), the record must have every one you sent. One with a different number instead is neither strong nor a candidate, unless it's exact or has the `account_number` you sent. One with your numbers and more (`7-Eleven #42` for `7-Eleven`) can be a candidate, never strong. With `exact_only`, only `exact` or `none`.",
+            "enum": [
+              "exact",
+              "strong",
+              "candidates",
+              "none"
+            ],
+            "type": "string"
+          },
+          "record": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MatchRecord"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The record, for `exact` and `strong`; `null` otherwise. Use an `exact` match as it is. Confirm a `strong` one first, as you would a candidate: `Acme Inc` and `Acme LLC` are a strong match, and can be two companies."
+          }
+        },
+        "required": [
+          "match",
+          "record",
+          "candidates",
+          "candidates_total",
+          "candidates_total_complete",
+          "index"
+        ],
+        "type": "object"
       },
       "updateToDo_response_json": {
         "description": "QuBe Sync's summary of QuickBooks' answer. Only an `Error` severity from QuickBooks is `status: \"error\"` (and makes the request's `state` `error`), so a query that matched nothing is still `success`. A `Warn` severity is a `success` with `warning` beside it.",
@@ -46385,6 +46508,58 @@
           }
         ]
       },
+      "NameIndexWebhookPayload": {
+        "description": "The body QuBe Sync POSTs to the `webhook_url` an opt-in gave (`POST /connections/{connection_id}/name-index`), signed with `X-QUBE-Signature` like every other QuBe Sync webhook, once the build it was waiting for ends. It says where the index stands, never what's in it.",
+        "example": {
+          "app_id": "98f339a4-32e8-424a-987e-ccaf5bcaa620",
+          "connection_id": "3f9c2a71-5d4e-4b8a-9c1f-7e2d6a5b8c90",
+          "event": "name_index.ready",
+          "name_index": {
+            "as_of": "2026-10-11T14:02:10Z",
+            "records": 1240,
+            "state": "ready"
+          },
+          "sandbox": true,
+          "timestamp": 1792764130
+        },
+        "properties": {
+          "app_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "connection_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "event": {
+            "description": "`name_index.ready`: every list is in, and matches are answered. `name_index.failed`: the build gave up, after QuickBooks' answers to one step were lost three times in a row (the session ended, or the Web Connector reported an error). Matching is refused while the index is `building`; QuBe Sync starts the build again a day later while the connection is matching, or at the next match or opt-in.",
+            "enum": [
+              "name_index.ready",
+              "name_index.failed"
+            ],
+            "type": "string"
+          },
+          "name_index": {
+            "$ref": "#/components/schemas/NameIndex"
+          },
+          "sandbox": {
+            "type": "boolean"
+          },
+          "timestamp": {
+            "description": "Unix seconds; also the `t=` in the signature header.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "event",
+          "timestamp",
+          "app_id",
+          "sandbox",
+          "connection_id",
+          "name_index"
+        ],
+        "type": "object"
+      },
       "updateItemGroup_response_json": {
         "description": "QuBe Sync's summary of QuickBooks' answer. Only an `Error` severity from QuickBooks is `status: \"error\"` (and makes the request's `state` `error`), so a query that matched nothing is still `success`. A `Warn` severity is a `success` with `warning` beside it.",
         "oneOf": [
@@ -49950,6 +50125,13 @@
             },
             "type": "array"
           },
+          "matches": {
+            "description": "Every match state the workflow can look a record up by name from, including those of workflows it calls (their `state` is prefixed by the calling state): `state`, `leaf_state` and `workflow` (where it is), `in_child`, `kind` (the list it looks in, as the chart writes it: a kind such as `customer`, or a template), `description`, `refresh` (whether it refreshes the connection's name index from QuickBooks first: `true`, `false`, or the template that says), `exact_only` and `error_handled` (whether the workflow handles a match it can't ask; otherwise the run fails). Each raises `success` whatever it finds, with `response.data` the answer the matches endpoint gives -- `match` (`exact`, `strong`, `candidates` or `none`), `record`, `candidates`, `candidates_total`, `candidates_total_complete` and `index` -- with `index.state` `unavailable` (and no scores) when a standard connection answered from QuickBooks' own filters. No QuickBooks status codes. Empty when it matches nothing.",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
           "notifications": {
             "description": "Every notify state the workflow can send the app data from, including those of workflows it calls (their `state` is prefixed by the calling state): `name` (what the app routes on), `description`, `state` (the webhook's `state`, its path from the run), `leaf_state` and `workflow` (where it is, in the workflow that sends it), `sent_by_child`, `per_item_of` (the calling state that runs once per item, when it is sent from inside one; null otherwise), `error_handled` (whether the workflow handles it not being delivered; otherwise the run fails), `data_example` (what `data` carries, from the chart: a record's identifying fields where it sends a request's response, placeholders for what only exists mid-run) and `webhook_example`, the whole `workflow_run.notification` it arrives in. A run of a workflow with any must be started with a `webhook_url`. Empty when it sends none.",
             "items": {
@@ -51115,7 +51297,7 @@
         "additionalProperties": {
           "$ref": "#/components/schemas/WorkflowChartTransitionList"
         },
-        "description": "Event name -> transitions. Request states raise success/error, compounds raise done, wait states raise the chosen option id, notify states raise success/error.",
+        "description": "Event name -> transitions. Request states raise success/error, compounds raise done, wait states raise the chosen option id, notify states raise success/error, match states raise success (response.data is the answer: match is exact, strong, candidates or none; record; candidates; candidates_total; candidates_total_complete; index) or error (its fields refused once rendered: invalid_match; or QuickBooks failing the fallback queries on a connection without a name index).",
         "propertyNames": {
           "allOf": [
             {
@@ -54459,6 +54641,138 @@
                 "data"
               ]
             }
+          },
+          {
+            "if": {
+              "properties": {
+                "type": {
+                  "const": "match"
+                }
+              },
+              "required": [
+                "type"
+              ]
+            },
+            "then": {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "operation"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "requests"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "params"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "prompt"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "workflow"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "input"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "data"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "url"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "webhook_url"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "always"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "paginate"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "page_size"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "settle"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "on_conflict"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "qbxml_version"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "each"
+                    ]
+                  }
+                ]
+              },
+              "properties": {
+                "exact_only": {
+                  "$ref": "#/components/schemas/WorkflowChartTemplate",
+                  "description": "Optional, true or false (or a template): with true the answer is exact or none."
+                },
+                "fields": {
+                  "$ref": "#/components/schemas/WorkflowChartTemplate",
+                  "description": "Optional, for customer, vendor, employee, other_name and entity: an object of company_name, email, phone, account_number, city and postal_code (each a template; an employee has no company_name) to match on as well as the name. One that renders to nothing is left out."
+                },
+                "kind": {
+                  "$ref": "#/components/schemas/WorkflowChartTemplate",
+                  "description": "The list to look in: customer, vendor, employee, other_name, entity (those four together, one name space), item (every item type), account, class, or another reference list a transaction names (standard_terms, date_driven_terms, sales_tax_code, payment_method, ship_method, price_level, customer_type, vendor_type, job_type, sales_rep, customer_msg); or a template that renders to one, such as \\${input.kind}."
+                },
+                "min_score": {
+                  "$ref": "#/components/schemas/WorkflowChartTemplate",
+                  "description": "Optional: a number from 0.3 to 1.0 (or a template), this match's candidate threshold in place of 0.44. Not with exact_only."
+                },
+                "name": {
+                  "$ref": "#/components/schemas/WorkflowChartTemplate",
+                  "description": "The record's own name, without its parent's: a template such as \\${input.name}. At most 255 characters once rendered."
+                },
+                "parent": {
+                  "$ref": "#/components/schemas/WorkflowChartTemplate",
+                  "description": "Optional: the parent's full name or ListID, for a job (kind customer) or a sub-item (kind item), or another kind whose records have parents. With one, name has no colon. A template that renders to nothing, or a blank one, is left out."
+                },
+                "refresh": {
+                  "$ref": "#/components/schemas/WorkflowChartTemplate",
+                  "description": "Optional, default true: refresh the connection's name index from QuickBooks first, the run waiting until it is in -- unless the last refresh finished less than a minute ago, when it matches at once, so the matches of one burst share a refresh (one already on its way is waited on). false matches the index as it stands (response.data.index.as_of says how current)."
+                }
+              },
+              "required": [
+                "kind",
+                "name"
+              ]
+            }
           }
         ],
         "properties": {
@@ -54483,7 +54797,8 @@
               "choice",
               "compound",
               "final",
-              "notify"
+              "notify",
+              "match"
             ]
           },
           "ui": {
@@ -80903,6 +81218,7 @@
                 "type": "string"
               },
               "decisions": {
+                "description": "Where to answer. While the run is `awaiting_input`, it carries the current prompt's `token` as `?prompt_token=`, so an answer POSTed to it can only answer that question: once the run has asked again it is refused with `409 prompt_changed`.",
                 "format": "uri",
                 "type": "string"
               },
@@ -84524,6 +84840,9 @@
           "name": {
             "nullable": true,
             "type": "string"
+          },
+          "name_index": {
+            "$ref": "#/components/schemas/NameIndex"
           },
           "next_check_in_expected_at": {
             "description": "When the Web Connector is next expected to check in and pick up queued requests, worked out from its last check-in, its schedule and any wait QuBe Sync gave it: every 10 seconds for `realtime`, every 5 minutes for `standard`, up to 30 minutes apart while `backing_off`, and slower while a sandbox app's `realtime` connection has nothing to do (`next_check_in_reason`). A request queued now is picked up then. `null` before the first check-in, and for a `simulated` connection that isn't backing off, since it runs as soon as a request is queued. A time more than a minute past means the check-in is late: a long session is still running (one of your requests is `sent`), or the Web Connector isn't running on the QuickBooks computer.",
@@ -90491,7 +90810,7 @@
             "type": "integer"
           },
           "kind": {
-            "description": "`call_started` and `call_finished` begin and end a workflow this one calls; `run_started` and `run_completed`/`run_failed`/`run_cancelled` with a `state` are that workflow's own start and end, at the calling state. `notification_queued`, `notification_delivered` and `notification_failed` are a notify state's `workflow_run.notification`: sent, answered with a 2xx, or never delivered.",
+            "description": "`call_started` and `call_finished` begin and end a workflow this one calls; `run_started` and `run_completed`/`run_failed`/`run_cancelled` with a `state` are that workflow's own start and end, at the calling state. `notification_queued`, `notification_delivered` and `notification_failed` are a notify state's `workflow_run.notification`: sent, answered with a 2xx, or never delivered. `match_waiting` and `match_answered` are a match state's: waiting for the connection's name index to be built or refreshed, and what it found (its tier and counts, never a name).",
             "enum": [
               "run_started",
               "state_entered",
@@ -90512,6 +90831,8 @@
               "notification_queued",
               "notification_delivered",
               "notification_failed",
+              "match_waiting",
+              "match_answered",
               "webhook_sent",
               "run_completed",
               "run_failed",
@@ -90520,7 +90841,7 @@
             "type": "string"
           },
           "payload": {
-            "description": "What the kind carries: `response` (the whole response) on response_received -- except a paginated query's last one, which has `count` and `pages` in place of `data`, the records being on each page_delivered, `owner`/`event`/`index`/`description`/`target`/`to`/`considered` on transition_taken, `assigned` on assigns_applied, `option`/`data`/`by` on decision_received, `page`/`count`/`queued_request_id`/`response` on page_delivered (a paginated query's page, raised as `page`; `response` is that page's, as on response_received), `workflow` (and `item_index`/`item_count`) on call_started and call_finished, `delivery_id`/`name`/`seq`/`bytes` on notification_queued, notification_delivered (with `attempts`) and notification_failed (with `attempts` and `error`, whose `type` is `not_delivered` or `too_large`; one too large was never sent and has no `seq`) -- never what was sent, and so on. A `response` that succeeded but that QuickBooks warned about has `warning` with its `code` and `message` (530, for one: a field it does not support, which it saved the record without). A `response` that is an error has `error` with `code`, `type` and `message`; when `type` is `no_response` (QuickBooks never answered) it also has `reason`, why: `timed_out` or `connector_error` (sent, so QuickBooks may have applied it), `rejected` (QuickBooks could not read it), `withdrawn` (withdrawn before it was sent) or `page_expired` (a later page never fetched), and, for an add, `external_guid`, the GUID it was sent with. Response bodies are removed 7 days after the run ends.",
+            "description": "What the kind carries: `response` (the whole response) on response_received -- except a paginated query's last one, which has `count` and `pages` in place of `data`, the records being on each page_delivered, `owner`/`event`/`index`/`description`/`target`/`to`/`considered` on transition_taken, `assigned` on assigns_applied, `option`/`data`/`by` on decision_received, `page`/`count`/`queued_request_id`/`response` on page_delivered (a paginated query's page, raised as `page`; `response` is that page's, as on response_received), `workflow` (and `item_index`/`item_count`) on call_started and call_finished, `delivery_id`/`name`/`seq`/`bytes` on notification_queued, notification_delivered (with `attempts`) and notification_failed (with `attempts` and `error`, whose `type` is `not_delivered` or `too_large`; one too large was never sent and has no `seq`) -- never what was sent, `for` (`build` or `refresh`) on match_waiting, `match` (the tier), `candidates`, `candidates_total`, `candidates_total_complete` and `index` (`ready`, or `unavailable` when it asked QuickBooks' own filters) on match_answered -- never a name, and so on. A `response` that succeeded but that QuickBooks warned about has `warning` with its `code` and `message` (530, for one: a field it does not support, which it saved the record without). A `response` that is an error has `error` with `code`, `type` and `message`; when `type` is `no_response` (QuickBooks never answered) it also has `reason`, why: `timed_out` or `connector_error` (sent, so QuickBooks may have applied it), `rejected` (QuickBooks could not read it), `withdrawn` (withdrawn before it was sent) or `page_expired` (a later page never fetched), and, for an add, `external_guid`, the GUID it was sent with. Response bodies are removed 7 days after the run ends.",
             "type": "object"
           },
           "seq": {
@@ -93186,6 +93507,56 @@
           "ended_at": {
             "format": "date-time",
             "type": "string"
+          },
+          "matches": {
+            "description": "Only when the run's match states answered, the workflows it called included, in order: what each one found -- its tier and counts, never a name.",
+            "items": {
+              "properties": {
+                "candidates": {
+                  "description": "How many candidates the answer listed (at most 10).",
+                  "type": "integer"
+                },
+                "candidates_total": {
+                  "description": "How many qualified as candidates.",
+                  "type": "integer"
+                },
+                "candidates_total_complete": {
+                  "description": "`false` when `candidates_total` is a lower bound.",
+                  "type": "boolean"
+                },
+                "index": {
+                  "description": "`ready`: answered from the connection's name index. `unavailable`: the connection has none (it isn't realtime), so QuickBooks' own filters answered.",
+                  "enum": [
+                    "ready",
+                    "unavailable"
+                  ],
+                  "type": "string"
+                },
+                "item_index": {
+                  "description": "Inside a state that runs a workflow once per item: which element (0-based).",
+                  "type": "integer"
+                },
+                "match": {
+                  "enum": [
+                    "exact",
+                    "strong",
+                    "candidates",
+                    "none"
+                  ],
+                  "type": "string"
+                },
+                "state": {
+                  "description": "The match state's path from the run you started.",
+                  "type": "string"
+                },
+                "workflow": {
+                  "description": "The key of the workflow whose state it is.",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
           },
           "notifications": {
             "description": "Only when the run's notify states sent the app anything, the workflows it called included: how many `workflow_run.notification` webhooks were delivered (`sent`) and how many never were (`failed`: every attempt failed, or the data was over 4 MB).",
@@ -100590,7 +100961,7 @@
         ]
       },
       "WorkflowChartTemplate": {
-        "description": "Any JSON value. Strings may hold \\${...} references; a map may hold the reserved \"\\$from\" key, whose rendered map the rest of the map is deep-merged onto. A map holding \"\\$map\" is a list built from another: {\"\\$map\": \"\\${vars.items}\", \"as\": \"item\", \"template\": ...} renders template once per element, with the element at each.\\<as>, its position at each.index and the length at each.count. {\"\\$add\": [a, b, ...]} is the sum of its operands and {\"\\$default\": [a, b, ...]} the first candidate that renders to something. {\"\\$merge\": [a, b, ...]} deep-merges each object onto the ones before it, as \"\\$from\" does (objects merge key by key; lists and scalars replace; an operand that renders to nothing is skipped). {\"\\$find\": \"\\${vars.items}\", \"as\": \"item\", \"where\": condition} is the first element the condition holds for, with the element at each.\\<as>, or nothing. No other \\$-prefixed key is allowed.",
+        "description": "Any JSON value. Strings may hold \\${...} references; a map may hold the reserved \"\\$from\" key, whose rendered map the rest of the map is deep-merged onto. A map holding \"\\$map\" is a list built from another: {\"\\$map\": \"\\${vars.items}\", \"as\": \"item\", \"template\": ...} renders template once per element, with the element at each.\\<as>, its position at each.index and the length at each.count. {\"\\$add\": [a, b, ...]} is the sum of its operands and {\"\\$default\": [a, b, ...]} the first candidate that renders to something. {\"\\$merge\": [a, b, ...]} deep-merges each object onto the ones before it, as \"\\$from\" does (objects merge key by key; lists and scalars replace; an operand that renders to nothing is skipped). {\"\\$find\": \"\\${vars.items}\", \"as\": \"item\", \"where\": condition} is the first element the condition holds for, with the element at each.\\<as>, or nothing. {\"\\$refs\": \"\\${input.params}\", \"operation\": \"invoice.create\"} lists an add's references, or with \"list_ids\" puts their ListIDs back. No other \\$-prefixed key is allowed.",
         "if": {
           "type": "object"
         },
@@ -100620,11 +100991,18 @@
               "description": "Objects, or templates that render to objects, each deep-merged onto the ones before it: objects merge key by key, lists and scalars replace. An operand that renders to nothing is skipped. Alone in its object.",
               "minItems": 1,
               "type": "array"
+            },
+            "$refs": {
+              "description": "An add's params (an object, or a template for one). With \"operation\" (the add's operation id, or a template; required): the distinct references the params make, in the order they first appear -- every *_ref field the operation has, its kind derived from the field's name (customer_ref is customer, ar_account_ref account, item_group_ref item_group), one entry per kind and full name with every path it appears at: {kind, field, full_name, name, parent, list_id, paths}. A kind with no full-name lookup (template) is left out. With \"adds\" (a list of {kind, add}, as ensure takes them) and \"rules\" (an object of kind to ensure, create or must_exist; ensure by default), each also has \"rule\", \"ensure\": {kind, add}, the add from adds that makes it, one of its name alone under create, or none, and \"pick\", true when there is no add. With \"list_ids\" instead (one per reference, in that order), it is the params, every reference replaced by {\"list_id\": ...}. \"unresolved\": true keeps only the references sent without a ListID, in either. Only \\$refs, operation, adds, rules, list_ids and unresolved.",
+              "type": [
+                "string",
+                "object"
+              ]
             }
           },
           "propertyNames": {
             "not": {
-              "pattern": "^\\$(?!(from|map|add|default|merge|find)$)"
+              "pattern": "^\\$(?!(from|map|add|default|merge|find|refs)$)"
             }
           }
         }
@@ -103296,6 +103674,38 @@
             "type": "object"
           }
         ]
+      },
+      "NameIndex": {
+        "description": "QuBe Sync's index of the names in this connection's company file, for finding records by name (see Match a name): customers, vendors, employees and other names, items, accounts, classes, and the other lists a transaction names (terms, sales tax codes, payment and ship methods, price levels, customer, vendor and job types, sales reps and customer messages). Only `realtime` and `simulated` connections can have one, and it is built the first time something on the connection needs matching: a match, or opting in (`POST /connections/{connection_id}/name-index`). QuBe Sync then reads the lists from QuickBooks itself, a step at a time, and your requests always go first; those reads never appear among your requests and never send a webhook. An index unused for 30 days is deleted, and built again the next time it's needed.",
+        "properties": {
+          "as_of": {
+            "description": "When the index last caught up with QuickBooks: changes made in QuickBooks since then aren't in it yet. While it's used, it catches up after a Web Connector session that brought your requests, at most every 5 minutes. `null` unless `ready`.",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "records": {
+            "description": "How many records the index holds; while `building`, how many are in so far. `null` when `not_built` or `unavailable`.",
+            "nullable": true,
+            "type": "integer"
+          },
+          "state": {
+            "description": "`ready`: every list is in. `building`: QuBe Sync is reading the lists from QuickBooks, the first time, or again after the connection was pointed at another company file, went 90 days without your requests, or a build gave up. `not_built`: nothing on the connection has needed matching yet, or the index went unused for 30 days and was deleted. `unavailable`: the connection is `standard`, which can't have one.",
+            "enum": [
+              "ready",
+              "building",
+              "not_built",
+              "unavailable"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "as_of",
+          "records"
+        ],
+        "type": "object"
       },
       "listPaychecks_response_json": {
         "description": "QuBe Sync's summary of QuickBooks' answer. Only an `Error` severity from QuickBooks is `status: \"error\"` (and makes the request's `state` `error`), so a query that matched nothing is still `success`. A `Warn` severity is a `success` with `warning` beside it.",
@@ -108472,6 +108882,7 @@
                 "type": "string"
               },
               "decisions": {
+                "description": "Where to answer. While the run is `awaiting_input`, it carries the current prompt's `token` as `?prompt_token=`, so an answer POSTed to it can only answer that question: once the run has asked again it is refused with `409 prompt_changed`.",
                 "format": "uri",
                 "type": "string"
               },
@@ -118806,6 +119217,510 @@
         ]
       }
     },
+    "/connections/{connection_id}/matches": {
+      "post": {
+        "description": "Finds the records in the connection's company file a name could mean, ranked, from QuBe Sync's index of the file's names (the connection's `name_index`). QuickBooks itself only looks a name up exactly, or by \"contains\" on one list at a time. A match also ignores case, accents, punctuation, company suffixes such as Inc and LLC, spacing and word order, ranks near matches, and can compare an account number, email, phone, city and postal code. It's answered at once, from the index as it stands: `index.as_of` says how current that is.\n\n`match` is the first tier that applies: `exact`, `strong`, `candidates` or `none` (see the response). Use an `exact` match as it is, and confirm anything else with a person, or with what your app knows. A strong match is likely, not certain: `Acme Inc` and `Acme LLC` are strong for each other. Inactive records are matched too, with `is_active: false`.\n\nNumbers in names count: `Subway #1235` is never offered for `Subway #1234`, and `Subway Store 1234` finds `Subway #1234`. In a file of near-identical names, such as numbered locations, `candidates_total` says how many records qualified: when that's more than a person can choose from, ask for what tells them apart (the number, a city, a postal code, an account number) and match again with it. `exact_only` answers only `exact` or `none`, and `min_score` moves the candidate threshold for one call.\n\nMatch a record once. When it's confirmed, keep its `list_id` on your own record and refer to it by that from then on (`customer_ref: {list_id}`): a `list_id` survives renames. Match again only when a stored `list_id` stops working, because the record was deleted or merged.\n\nOnly `realtime` and `simulated` connections can match (422 `matching_requires_realtime`). The first match on a connection starts building its index, and until it's in every match is refused with 409 `name_index_building`. To have it ready ahead of time, and be told when it is, opt in with `POST /connections/{connection_id}/name-index` and a `webhook_url`. Every match counts as a use: an index is kept current while it was used in the last 7 days, and deleted after 30 days unused.\n\nSend the names in the JSON body: a match in the query string is refused, since URLs end up in logs. QuBe Sync doesn't log them either. A match changes nothing, so it takes no `Idempotency-Key`.",
+        "operationId": "matchRecords",
+        "parameters": [
+          {
+            "description": "The connection to act on.",
+            "in": "path",
+            "name": "connection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "examples": {
+                "a_customer": {
+                  "summary": "A customer, with its email",
+                  "value": {
+                    "fields": {
+                      "email": "ap@acme.example"
+                    },
+                    "kind": "customer",
+                    "name": "ACME, Inc."
+                  }
+                },
+                "a_job": {
+                  "summary": "A job under a customer",
+                  "value": {
+                    "kind": "customer",
+                    "name": "Kitchen",
+                    "parent": "Smith"
+                  }
+                },
+                "a_store": {
+                  "summary": "A numbered location, with its city",
+                  "value": {
+                    "fields": {
+                      "city": "Austin"
+                    },
+                    "kind": "customer",
+                    "name": "Subway Store 1234"
+                  }
+                },
+                "any_name": {
+                  "summary": "Any customer, vendor, employee or other name",
+                  "value": {
+                    "kind": "entity",
+                    "name": "Riverbend Electric"
+                  }
+                },
+                "by_account_number": {
+                  "summary": "By your own id, kept in the account number",
+                  "value": {
+                    "fields": {
+                      "account_number": "crm-1001"
+                    },
+                    "kind": "customer",
+                    "name": "ACME, Inc."
+                  }
+                },
+                "exact_only": {
+                  "summary": "Only an exact match",
+                  "value": {
+                    "exact_only": true,
+                    "kind": "item",
+                    "name": "Consulting"
+                  }
+                }
+              },
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "exact_only": {
+                    "default": false,
+                    "description": "`true` answers only `exact` or `none`: the one record with this full name, as QuickBooks compares names, or nothing. Never a fuzzy match, so its answer can be used without asking. `fields` are ignored.",
+                    "nullable": true,
+                    "type": "boolean"
+                  },
+                  "fields": {
+                    "additionalProperties": false,
+                    "description": "For customers, vendors, employees and other names (`customer`, `vendor`, `employee`, `other_name` and `entity`): what else your app knows about the record. The same `account_number` makes a strong match whatever the name. The same `email`, `phone` or `postal_code`, with a name at least 0.4 alike, makes a strong match. Each one in common is a reason and ranks a candidate higher; `company_name` and `city` do only that. An email's or account number's case doesn't count, nor a phone's punctuation, country code or extension, nor a postal code's spaces or a US ZIP+4's last four digits. The `city` and `postal_code` are compared with the record's billing address (a vendor's, employee's or other name's own address).",
+                    "nullable": true,
+                    "properties": {
+                      "account_number": {
+                        "description": "The record's account number in QuickBooks. An app that creates the records can set it to its own id, and match on it later, if the company doesn't use the field for something else.",
+                        "maxLength": 255,
+                        "nullable": true,
+                        "type": "string"
+                      },
+                      "city": {
+                        "maxLength": 255,
+                        "nullable": true,
+                        "type": "string"
+                      },
+                      "company_name": {
+                        "description": "Compared once punctuation and suffixes are set aside. Not for `employee`: QuickBooks employees have no company name.",
+                        "maxLength": 255,
+                        "nullable": true,
+                        "type": "string"
+                      },
+                      "email": {
+                        "maxLength": 1023,
+                        "nullable": true,
+                        "type": "string"
+                      },
+                      "phone": {
+                        "maxLength": 50,
+                        "nullable": true,
+                        "type": "string"
+                      },
+                      "postal_code": {
+                        "maxLength": 50,
+                        "nullable": true,
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "kind": {
+                    "description": "Which lists to look in. `entity` is customers, vendors, employees and other names together, which share one name space in QuickBooks; `item` is every item type. Any other kind is its own list.",
+                    "enum": [
+                      "customer",
+                      "vendor",
+                      "employee",
+                      "other_name",
+                      "entity",
+                      "item",
+                      "account",
+                      "class",
+                      "standard_terms",
+                      "date_driven_terms",
+                      "sales_tax_code",
+                      "payment_method",
+                      "ship_method",
+                      "price_level",
+                      "customer_type",
+                      "vendor_type",
+                      "job_type",
+                      "sales_rep",
+                      "customer_msg"
+                    ],
+                    "type": "string"
+                  },
+                  "min_score": {
+                    "description": "This call's candidate threshold, in place of 0.44: raise it to list only close names, lower it (down to 0.3, the least alike a match reads) to list more. A record that's a candidate for another reason (two letters swapped, or strong but not alone) stays one, and `exact` and `strong` don't change. Not taken with `exact_only: true`.",
+                    "maximum": 1.0,
+                    "minimum": 0.3,
+                    "nullable": true,
+                    "type": "number"
+                  },
+                  "name": {
+                    "description": "The name your app has for the record: its own name, without its parent's when you send `parent`. Without a `parent`, a full name such as `Smith:Kitchen` is matched exactly too. Its words with a digit (a store, unit or job number, such as `1234` in `Subway #1234`) must agree with a record's, leading zeros aside.",
+                    "example": "ACME, Inc.",
+                    "maxLength": 255,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "parent": {
+                    "description": "For a job, a sub-item, a subaccount or the like: its parent's full name or ListID, so only that parent's children are matched. Without one, children match on their own name too, with a reason naming the parent. Taken for `customer`, `entity`, `item`, `account`, `class`, `customer_type`, `vendor_type` and `job_type`. A parent the index doesn't hold matches nothing.",
+                    "example": "Smith",
+                    "maxLength": 255,
+                    "nullable": true,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "name"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "candidates": {
+                    "summary": "Candidates",
+                    "value": {
+                      "candidates": [
+                        {
+                          "full_name": "Acme Inc",
+                          "is_active": true,
+                          "list": "customer",
+                          "list_id": "80000011-1712345678",
+                          "reasons": [
+                            "same after removing punctuation and suffixes"
+                          ],
+                          "score": 1.0
+                        },
+                        {
+                          "full_name": "Acme LLC",
+                          "is_active": false,
+                          "list": "customer",
+                          "list_id": "80000012-1712345678",
+                          "reasons": [
+                            "same after removing punctuation and suffixes"
+                          ],
+                          "score": 1.0
+                        }
+                      ],
+                      "candidates_total": 2,
+                      "candidates_total_complete": true,
+                      "index": {
+                        "as_of": "2026-10-11T14:02:10Z",
+                        "state": "ready"
+                      },
+                      "match": "candidates",
+                      "record": null
+                    }
+                  },
+                  "exact": {
+                    "summary": "An exact match",
+                    "value": {
+                      "candidates": [],
+                      "candidates_total": 0,
+                      "candidates_total_complete": true,
+                      "index": {
+                        "as_of": "2026-10-11T14:02:10Z",
+                        "state": "ready"
+                      },
+                      "match": "exact",
+                      "record": {
+                        "full_name": "Smith:Kitchen",
+                        "is_active": true,
+                        "list": "customer",
+                        "list_id": "80000027-1712345678",
+                        "reasons": [
+                          "same name"
+                        ],
+                        "score": 1.0
+                      }
+                    }
+                  },
+                  "strong": {
+                    "summary": "A strong match, by its number",
+                    "value": {
+                      "candidates": [],
+                      "candidates_total": 0,
+                      "candidates_total_complete": true,
+                      "index": {
+                        "as_of": "2026-10-11T14:02:10Z",
+                        "state": "ready"
+                      },
+                      "match": "strong",
+                      "record": {
+                        "full_name": "Subway #1234",
+                        "is_active": true,
+                        "list": "customer",
+                        "list_id": "80000042-1712345678",
+                        "reasons": [
+                          "similar name",
+                          "same number"
+                        ],
+                        "score": 0.71
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Match"
+                }
+              }
+            },
+            "description": "The answer, from the index as it stands."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "errors": {
+                    "code": "name_index_building",
+                    "detail": "This call started building the connection's name index: QuBe Sync is reading the names in its lists from QuickBooks, a step at a time, the next times the Web Connector checks in. Matching answers once it's in. To be told when it is, POST /api/v2/connections/3f9c2a71-5d4e-4b8a-9c1f-7e2d6a5b8c90/name-index with a webhook_url: QuBe Sync sends name_index.ready there when the build finishes (or name_index.failed if it gives up). Or read the connection's name_index.state until it is ready."
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`name_index_building`: the connection's name index isn't in yet. The first match, or opt-in, starts it; it takes a few Web Connector sessions. `detail` says whether this call started it, and how to be told when it's ready."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "invalid": {
+                    "summary": "A body it can't take",
+                    "value": {
+                      "errors": {
+                        "name": [
+                          "can't be blank"
+                        ]
+                      }
+                    }
+                  },
+                  "matching_requires_realtime": {
+                    "summary": "A standard connection",
+                    "value": {
+                      "errors": {
+                        "code": "matching_requires_realtime",
+                        "detail": "Matching needs a realtime or simulated connection, and this one is standard. Upgrade it to realtime from its page in the dashboard; in a sandbox app that costs nothing, since sandbox apps aren't billed. A simulated connection matches against the simulator's company file."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`matching_requires_realtime`: the connection is `standard`, which has no name index. Or the body was refused field by field: a `kind` that isn't one of the list, a blank `name`, a value that's too long, `fields` for a kind that isn't a customer, vendor, employee or other name, a field the kind's records don't have (`company_name` for an employee), a `parent` for a kind whose records have none, an `exact_only` that isn't `true` or `false`, a `min_score` outside 0.3 to 1.0 or sent with `exact_only: true`, a parameter it doesn't take, or the match sent in the query string."
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Match a name",
+        "tags": [
+          "Matching"
+        ]
+      }
+    },
+    "/connections/{connection_id}/name-index": {
+      "post": {
+        "callbacks": {
+          "name_index": {
+            "{$request.body#/webhook_url}": {
+              "post": {
+                "description": "Sent once, when the build this opt-in waited for ends: `name_index.ready` or `name_index.failed`. Signed with `X-QUBE-Signature` like every other webhook (see the Webhooks guide). It names the connection and where its index stands, never a record.",
+                "requestBody": {
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/NameIndexWebhookPayload"
+                      }
+                    }
+                  },
+                  "required": true
+                },
+                "responses": {
+                  "2XX": {
+                    "description": "Received. Anything else is retried, up to 5 attempts; after the last, your organization's owners are emailed."
+                  }
+                },
+                "summary": "The name index is ready, or its build gave up"
+              }
+            }
+          }
+        },
+        "description": "Has QuBe Sync build the connection's name index now, so it's ready before your first match, and tells you when it is. QuBe Sync reads the names in the connection's lists from QuickBooks itself, a step at a time, as the Web Connector checks in, and your own requests always go first. That takes a few Web Connector sessions, more on a large company file.\n\nWhile it builds the answer is `202`. Pass a `webhook_url` to be sent `name_index.ready` once it's in, or `name_index.failed` if the build gives up (see the callback). Calling this again while it builds replaces the `webhook_url`, and starts nothing more. On an index that's already `ready` the answer is `200`, and nothing is sent. So it's safe to repeat, and takes no `Idempotency-Key`.\n\nOnly `realtime` and `simulated` connections can have an index (422 `matching_requires_realtime`). An index is kept current while it was used in the last 7 days, and deleted after 30 days unused: a match counts as a use, and so does this.",
+        "operationId": "buildNameIndex",
+        "parameters": [
+          {
+            "description": "The connection to act on.",
+            "in": "path",
+            "name": "connection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "webhook_url": "https://your-app.example/webhooks/qube"
+              },
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "webhook_url": {
+                    "description": "Where to send `name_index.ready` or `name_index.failed` when the build ends. It must be an absolute http or https URL. It may not contain a username or password, and in production it may not point at localhost or a private, loopback or link-local address.",
+                    "example": "https://your-app.example/webhooks/qube",
+                    "format": "uri",
+                    "maxLength": 2048,
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "name_index": {
+                    "as_of": "2026-10-11T14:02:10Z",
+                    "records": 1240,
+                    "state": "ready"
+                  }
+                },
+                "schema": {
+                  "properties": {
+                    "name_index": {
+                      "$ref": "#/components/schemas/NameIndex"
+                    }
+                  },
+                  "required": [
+                    "name_index"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The index is ready: match away. Nothing is sent to `webhook_url`."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "name_index": {
+                    "as_of": null,
+                    "records": 0,
+                    "state": "building"
+                  }
+                },
+                "schema": {
+                  "properties": {
+                    "name_index": {
+                      "$ref": "#/components/schemas/NameIndex"
+                    }
+                  },
+                  "required": [
+                    "name_index"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The index is being built: this call started it, or it was already under way. `webhook_url`, if you sent one, will be told when it ends."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "invalid_webhook_url": {
+                    "summary": "A webhook_url webhooks can't go to",
+                    "value": {
+                      "errors": {
+                        "webhook_url": [
+                          "may not contain a username or password"
+                        ]
+                      }
+                    }
+                  },
+                  "matching_requires_realtime": {
+                    "summary": "A standard connection",
+                    "value": {
+                      "errors": {
+                        "code": "matching_requires_realtime",
+                        "detail": "Matching needs a realtime or simulated connection, and this one is standard. Upgrade it to realtime from its page in the dashboard; in a sandbox app that costs nothing, since sandbox apps aren't billed. A simulated connection matches against the simulator's company file."
+                      }
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`matching_requires_realtime`: the connection is `standard`, which has no name index. Or the body was refused field by field: a `webhook_url` that isn't an absolute http or https URL, carries a username or password, is longer than 2048 characters, or (in production) points at localhost or a private address, or a parameter it doesn't take."
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Opt in to matching",
+        "tags": [
+          "Matching"
+        ]
+      }
+    },
     "/connections/{connection_id}/workflow-runs": {
       "get": {
         "description": "Runs you started, newest first. A workflow a run calls runs as part of that run: it is never listed on its own, and what it does is reported on the run you started.",
@@ -119201,7 +120116,7 @@
     },
     "/connections/{connection_id}/workflow-runs/{run_id}/decisions": {
       "post": {
-        "description": "`option` is one of the ids the run's `prompt.options` listed; `data` carries whatever that option declared `fields` for. A question asked by a workflow this one calls (`prompt.from`) is part of this run, and is answered here the same way. A conflict prompt (`prompt.kind` is `conflict`: an update met a record someone changed after the run read it) is answered here too, with one of its two fixed options: `{\"option\": \"overwrite\"}` re-sends the update with the current edit sequence and the fields it sent, `{\"option\": \"overwrite\", \"data\": {\"params\": {...}}}` sends those fields instead (a merge worked out from `prompt.data`: an object of fields the update takes, like `prompt.data.sent`; one it does not take is refused with a 422, `invalid_data`, naming the field, and the run keeps waiting), and `{\"option\": \"keep\"}` leaves QuickBooks as it is and carries on with its record.\n\nSend `prompt_token`, the prompt's `token`, so an answer you send again because the first got no response can't be taken for the run's next question: `token` is new every time the run asks, the same question asked again included (a `wait` in a loop, a workflow called once per item), and an answer naming a question the run is no longer asking is refused with `409 prompt_changed`, changing nothing. Without it, an answer is taken for whatever the run is asking when it arrives.",
+        "description": "`option` is one of the ids the run's `prompt.options` listed; `data` carries whatever that option declared `fields` for. A question asked by a workflow this one calls (`prompt.from`) is part of this run, and is answered here the same way. A conflict prompt (`prompt.kind` is `conflict`: an update met a record someone changed after the run read it) is answered here too, with one of its two fixed options: `{\"option\": \"overwrite\"}` re-sends the update with the current edit sequence and the fields it sent, `{\"option\": \"overwrite\", \"data\": {\"params\": {...}}}` sends those fields instead (a merge worked out from `prompt.data`: an object of fields the update takes, like `prompt.data.sent`; one it does not take is refused with a 422, `invalid_data`, naming the field, and the run keeps waiting), and `{\"option\": \"keep\"}` leaves QuickBooks as it is and carries on with its record.\n\nPOST to the run's `links.decisions`: while the run is asking, it carries the prompt's `token` as `?prompt_token=`, so an answer you send again because the first got no response can't be taken for the run's next question. `token` is new every time the run asks, the same question asked again included (a `wait` in a loop, a workflow called once per item), and an answer naming a question the run is no longer asking is refused with `409 prompt_changed`, changing nothing. Building the URL yourself, send the token as `prompt_token` in the query or the body (the body's wins); without one, an answer is taken for whatever the run is asking when it arrives.",
         "parameters": [
           {
             "description": "ID of the connection",
@@ -119222,6 +120137,15 @@
               "format": "uuid",
               "type": "string"
             }
+          },
+          {
+            "description": "The `token` of the prompt this answers, as `links.decisions` carries it while the run is asking. Refused with `409 prompt_changed` once the run has asked again. A `prompt_token` in the body wins over this one.",
+            "in": "query",
+            "name": "prompt_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -119238,7 +120162,7 @@
                     "type": "string"
                   },
                   "prompt_token": {
-                    "description": "The `token` of the prompt this answers (`prompt.token` on the run or the webhook). When the run has asked again since -- the same question from a loop, or the next item's -- the answer is refused with `409 prompt_changed` and nothing changes. Leave it out (or null) to answer whatever the run is asking when the answer arrives.",
+                    "description": "The `token` of the prompt this answers (`prompt.token` on the run or the webhook), when the URL you POST to doesn't already carry it (`links.decisions` does) or to override the one it carries. When the run has asked again since -- the same question from a loop, or the next item's -- the answer is refused with `409 prompt_changed` and nothing changes. Leave it out (or null), with no `prompt_token` in the query either, to answer whatever the run is asking when it arrives.",
                     "nullable": true,
                     "type": "string"
                   }
@@ -256562,6 +257486,10 @@
     {
       "description": "Queueing qbXML you wrote yourself, listing the requests queued on a connection, and discarding one the app no longer wants. A `webhook_url` on each request is the integration path (see the Webhooks guide): the listing is for a dashboard, a script, or catching up after downtime.",
       "name": "Queued Requests"
+    },
+    {
+      "description": "Finding the record in a customer's company file that a name means, even written differently: ranked matches from QuBe Sync's index of the file's names, on realtime and simulated connections. See the Matching guide.",
+      "name": "Matching"
     },
     {
       "description": "Endpoints for publishing workflow definitions, starting runs, and answering a run that is waiting on a decision from your app. A workflow is one JSON statechart document; see the schema at /api/v2/workflows/schema.json.",

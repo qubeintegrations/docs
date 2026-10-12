@@ -76,8 +76,12 @@ for the server to leak.
   </Card>
 </CardGroup>
 
-A fifth hand-written tool, `report_confusion`, lets an agent tell us when a tool, guide or API response
-confused it, without sending any keys or customer data. We read those reports to improve the tools.
+Two more are hand-written. `match_records` builds a [match](/matching): the request that finds the record a
+name means in a customer's company file, `POST /api/v2/connections/{connection_id}/matches`, checked the way
+the API checks it, with the answer's schema and what each tier means. Like the operation tools it never
+touches a connection, so the agent sends the request with your key. And `report_confusion` lets an agent tell
+us when a tool, guide or API response confused it, without sending any keys or customer data. We read those
+reports to improve the tools.
 
 ## What an operation tool returns
 
@@ -224,9 +228,9 @@ curl -X POST \
 </Visibility>
 {/* agent-block:end */}
 
-`tools/list` returns 100 tools per page. The first page starts with the workflow tools and
-`report_confusion`, then the operations in alphabetical order. Pass `nextCursor` back as `params.cursor`
-for the rest.
+`tools/list` returns 100 tools per page. The first page starts with the workflow tools,
+`report_confusion` and `match_records`, then the operations in alphabetical order. Pass `nextCursor` back as
+`params.cursor` for the rest.
 
 <Note>
   The server is public, so don't send it real customer data. Use it to explore and build requests, then send

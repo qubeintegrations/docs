@@ -347,3 +347,31 @@ request's `id`.
 
 [Workflows → What your app receives](/workflows#what-your-app-receives) has the events, their payloads and
 the `WorkflowRunEventJob` the controller above hands them to.
+
+## Name index events
+
+When you opt in to [matching](/matching#turning-it-on) with a `webhook_url`, QuBe Sync tells that URL once
+the connection's name index is built. It's signed the same way, needs the same quick `2xx` and is retried
+the same way, but it's about the connection, not a request: it has an `event` and a `connection_id`, and
+no `id`.
+
+| `event` | What happened | What to do |
+| --- | --- | --- |
+| `name_index.ready` | Every list is in. | **Match.** Matches on this connection are answered from now on. |
+| `name_index.failed` | The build gave up: QuickBooks' answers to one step were lost three times in a row. | **Wait, or opt in again later.** It starts again on its own a day later while the connection is matching, or at the next match or opt-in. |
+
+```json name_index.ready
+{
+  "event": "name_index.ready",
+  "timestamp": 1792764130,
+  "app_id": "98f339a4-32e8-424a-987e-ccaf5bcaa620",
+  "sandbox": true,
+  "connection_id": "3f9c2a71-5d4e-4b8a-9c1f-7e2d6a5b8c90",
+  "name_index": { "state": "ready", "as_of": "2026-10-11T14:02:10Z", "records": 1240 }
+}
+```
+
+`name_index` is the connection's own `name_index`, as `GET /connections/{connection_id}` shows it. The payload
+never carries a name or a record. The controller above sends anything without a `workflow_run.` event to
+`QuickbooksAnswerJob`, which finds no request for it and returns, so route on `event` first if you opt in
+with the same endpoint.

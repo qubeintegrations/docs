@@ -289,6 +289,27 @@ checking in, and requests wait in `waiting`.
   </Step>
 </Steps>
 
+## When matching is refused
+
+[Matching](/matching) answers at once, so its refusals come back on the call itself, never as a webhook.
+Both carry a `code` to branch on:
+
+```json 409 {3}
+{
+  "errors": {
+    "code": "name_index_building",
+    "detail": "This call started building the connection's name index: QuBe Sync is reading the names in its lists from QuickBooks, a step at a time, the next times the Web Connector checks in. Matching answers once it's in. ..."
+  }
+}
+```
+
+| Answer | `code` | Meaning | What to do |
+| --- | --- | --- | --- |
+| `409` | `name_index_building` | The connection's name index isn't in yet. The first match (or opt-in) starts it, and it takes a few Web Connector sessions. | Opt in with a `webhook_url` and match once `name_index.ready` arrives. See [Turning it on](/matching#turning-it-on). |
+| `422` | `matching_requires_realtime` | The connection is `standard`, which has no name index. | Upgrade it to `realtime`. In a sandbox app, that costs nothing. |
+
+A body matching can't take is a `422` too, field by field, such as `{"errors": {"kind": ["must be one of: ..."]}}`.
+
 ## In a workflow
 
 A [workflow run](/workflows) meets the same endings, but its chart receives them, not your app:

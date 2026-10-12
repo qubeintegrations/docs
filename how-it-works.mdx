@@ -24,7 +24,8 @@ production connection.
 **Connection.** One QuickBooks company file, usually one per customer. It carries the Web Connector's
 credentials and knows when it last checked in (`last_connected_at`). It is `standard` (the Web Connector
 checks in every 5 minutes), `realtime` (every 10 seconds) or `simulated` (a fake QuickBooks hosted by QuBe
-Sync, for development).
+Sync, for development). A realtime or simulated connection can also [match names](/matching) against an
+index of its company file's lists, and its `name_index` says where that index stands.
 
 **Queued request.** One QuickBooks operation, such as listing customers or adding an invoice, queued
 against a connection. You queue it with JSON, and its answer is delivered to your `webhook_url`.

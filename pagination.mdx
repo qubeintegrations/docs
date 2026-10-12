@@ -164,10 +164,17 @@ different fields, or even run each page through a workflow of its own. See
     query (`customers`) takes `from_modified_date` directly; a transaction query (`invoices`) takes
     `modified_date_range_filter[from_modified_date]`. See [Making requests](/making-requests#query).
 
+    For the next sync's starting point, keep the newest `time_modified` you received, exactly as it came,
+    and send it back as the filter. QuickBooks includes that second, so that record arrives again. Don't
+    convert it to UTC. During daylight saving time QuickBooks labels local times with the standard offset
+    (`-08:00` for Pacific daylight time) and reads the filter the same way. So its own value finds what it
+    should, while a UTC time from your own clock reaches up to an hour further back and repeats some records.
+
     The `pull_changes` [workflow](/workflows) does all this for you, including which records were deleted
     (which a modified-date filter can't find). QuickBooks reports deletions only for the record types you ask
     about, so list every type your app keeps: a pull that names `invoice` and `sales_order` won't tell you
-    about a deleted payment.
+    about a deleted payment. A record merged into another in QuickBooks arrives as deleted. The one it was
+    merged into keeps its `list_id`, and isn't reported as changed.
   </Accordion>
   <Accordion title="Key transactions by txn_id, not by their number" icon="key">
     QuickBooks doesn't keep invoice numbers (`ref_number`) unique. It accepts a new invoice with a number
