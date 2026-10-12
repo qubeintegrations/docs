@@ -206,7 +206,7 @@ you see a question and its answer.
     A run can wait as long as it needs to. Your user can answer tomorrow.
 
     <Accordion title="The whole awaiting_input webhook" icon="code">
-      ```json workflow_run.awaiting_input {10-27}
+      ```json workflow_run.awaiting_input {10-29}
       {
         "event": "workflow_run.awaiting_input",
         "timestamp": 1790470628,
@@ -224,8 +224,10 @@ you see a question and its answer.
           "data": {
             "kind": "customer",
             "name": "Lone Star Supply Co",
-            "existing": { "list": "vendor", "list_id": "80000022-1790470623", "full_name": "Lone Star Supply Co",
-                          "is_active": true, "score": 1.0, "reasons": ["same name"] }
+            "existing": { "list": "vendor", "list_id": "80000022-1790470623", "edit_sequence": "1790470623",
+                          "name": "Lone Star Supply Co", "company_name": "Lone Star Supply Co",
+                          "email": "orders@lonestar.example", "is_active": true, "balance": 0.0,
+                          "time_created": "2026-09-22T09:30:23", "time_modified": "2026-09-22T09:30:23" }
           },
           "options": [
             { "id": "rename", "label": "Add it under another name",
@@ -243,15 +245,15 @@ you see a question and its answer.
       }
       ```
 
-      `data.existing` is the record that has the conflicting name, as the connection's [name index](/matching)
-      holds it, and its `list` says which list it's on (`vendor`, `customer`, `employee`, ...). Each option has
-      a `label`, and a `description` when it needs one.
+      `data.existing` is the record that has the conflicting name, read whole from QuickBooks by its ListID, as
+      its own list's query answers it, and its `list` says which list it's on (`vendor`, `customer`, `employee`,
+      ...). Each option has a `label`, and a `description` when it needs one.
     </Accordion>
 
     You can use the app to test workflow runs: open the `links.ui` field to answer the question in the app, or just find the running workflow on the **Workflow Runs** page.
     
     <Frame caption="The same question on the run's page (links.ui). Answering here is the same as POSTing to links.decisions.">
-      <img src="/images/workflows/run-waiting.png" alt="A run's question, under Your answer is needed: Lone Star Supply Co already belongs to a vendor, the existing vendor's name and active flag, and two answers, each saying where it leads (Add it under another name, picked, with Lone Star Supply Co (customer) typed as the new name, which continues at try_add or ends renames_exhausted; Cancel, which ends cancelled), and a Send answer button" />
+      <img src="/images/workflows/run-waiting.png" alt="A run's question, under Your answer is needed: Lone Star Supply Co already belongs to a vendor, the existing vendor record (its name, email, open balance, active flag and last change, and all 10 fields a click away), and two answers, each saying where it leads (Add it under another name, picked, with Lone Star Supply Co (customer) typed as the new name, which continues at try_add or ends renames_exhausted; Cancel, which ends cancelled), and a Send answer button" />
     </Frame>
   </Step>
   <Step title="Get the result">
@@ -498,7 +500,9 @@ kinds are answered at `links.decisions`.
       "data": {
         "kind": "customer",
         "name": "Riverbend Electric",
-        "existing": { "list": "customer", "list_id": "8000001F-1790470623", "full_name": "Riverbend Electric", "is_active": true }
+        "existing": { "list": "customer", "list_id": "8000001F-1790470623", "edit_sequence": "1790470623",
+                      "full_name": "Riverbend Electric", "company_name": "Riverbend Electric LLC",
+                      "email": "ap@riverbend.example", "phone": "512-555-0142", "is_active": true }
       },
       "options": [
         { "id": "use_existing", "label": "Use the existing record",
@@ -542,7 +546,8 @@ kinds are answered at `links.decisions`.
     ```
     </CodeGroup>
 
-    In the decision, `data.existing` is the record `find_holder` found, and its `type` says which list it's on.
+    In the decision, `data.existing` is the record that holds the name, which `find_holder` found and
+    `read_holder` read whole by its ListID, and its `list` says which list it's on.
     In the conflict, the run was changing Riverbend Electric's phone and email. Since it read the record, someone
     in QuickBooks changed the phone too, and the last name. The email isn't in `conflicts`, because nobody else
     touched it. The last name is in `theirs`, because the update doesn't send it.
