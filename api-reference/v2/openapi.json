@@ -50147,7 +50147,7 @@
             "type": "array"
           },
           "per_item": {
-            "description": "One entry per `workflow` state that runs once per element of a list: `state` (its path), `workflow` (the key it calls), `each` (the list, as the chart writes it), `as` (the name each element is bound to; `item` unless the state names another), `on_item_error` (`stop` or `continue`), and `sentence`, the same said in one sentence. Empty when nothing in the workflow runs once per item.",
+            "description": "One entry per `workflow` state that runs once per element of a list: `state` (its path), `workflow` (the key it calls), `each` (the list, as the chart writes it), `as` (the name each element is bound to; `item` unless the state names another), `on_item_error` (`stop` or `continue`), `stop_on` (the called workflow's endings that end the loop at the element that ends in one, starting none after it; `[]` for none), and `sentence`, the same said in one sentence. Empty when nothing in the workflow runs once per item.",
             "items": {
               "type": "object"
             },
@@ -54431,6 +54431,15 @@
                     "stop",
                     "continue"
                   ]
+                },
+                "stop_on": {
+                  "description": "Endings of the called workflow, such as [\"cancelled\"], that end the loop: the first element whose run ends in one of them is the last, and the elements after it never start -- no requests, no questions. The state then raises success with the outputs up to and including that element in response.data, their endings in response.outcomes, and response.stopped: {index, outcome}, which element ended the loop and how (absent when every element ran). Not a failure, which on_item_error decides; each name must be an outcome the called workflow declares, or completed.",
+                  "items": {
+                    "$ref": "#/components/schemas/WorkflowChartIdentifier"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
                 },
                 "workflow": {
                   "description": "The key of another workflow of the same app to run as this step.",
@@ -90841,7 +90850,7 @@
             "type": "string"
           },
           "payload": {
-            "description": "What the kind carries: `response` (the whole response) on response_received -- except a paginated query's last one, which has `count` and `pages` in place of `data`, the records being on each page_delivered, `owner`/`event`/`index`/`description`/`target`/`to`/`considered` on transition_taken, `assigned` on assigns_applied, `option`/`data`/`by` on decision_received, `page`/`count`/`queued_request_id`/`response` on page_delivered (a paginated query's page, raised as `page`; `response` is that page's, as on response_received), `workflow` (and `item_index`/`item_count`) on call_started and call_finished, `delivery_id`/`name`/`seq`/`bytes` on notification_queued, notification_delivered (with `attempts`) and notification_failed (with `attempts` and `error`, whose `type` is `not_delivered` or `too_large`; one too large was never sent and has no `seq`) -- never what was sent, `for` (`build` or `refresh`) on match_waiting, `match` (the tier), `candidates`, `candidates_total`, `candidates_total_complete` and `index` (`ready`, or `unavailable` when it asked QuickBooks' own filters) on match_answered -- never a name, and so on. A `response` that succeeded but that QuickBooks warned about has `warning` with its `code` and `message` (530, for one: a field it does not support, which it saved the record without). A `response` that is an error has `error` with `code`, `type` and `message`; when `type` is `no_response` (QuickBooks never answered) it also has `reason`, why: `timed_out` or `connector_error` (sent, so QuickBooks may have applied it), `rejected` (QuickBooks could not read it), `withdrawn` (withdrawn before it was sent) or `page_expired` (a later page never fetched), and, for an add, `external_guid`, the GUID it was sent with. Response bodies are removed 7 days after the run ends.",
+            "description": "What the kind carries: `response` (the whole response) on response_received -- except a paginated query's last one, which has `count` and `pages` in place of `data`, the records being on each page_delivered, `owner`/`event`/`index`/`description`/`target`/`to`/`considered` on transition_taken, `assigned` on assigns_applied, `option`/`data`/`by` on decision_received, `page`/`count`/`queued_request_id`/`response` on page_delivered (a paginated query's page, raised as `page`; `response` is that page's, as on response_received), `workflow` (and `item_index`/`item_count`) on call_started and call_finished, with `stops: true` on the call_finished of the element whose ending (one of the state's `stop_on`) ended the loop, `delivery_id`/`name`/`seq`/`bytes` on notification_queued, notification_delivered (with `attempts`) and notification_failed (with `attempts` and `error`, whose `type` is `not_delivered` or `too_large`; one too large was never sent and has no `seq`) -- never what was sent, `for` (`build` or `refresh`) on match_waiting, `match` (the tier), `candidates`, `candidates_total`, `candidates_total_complete` and `index` (`ready`, or `unavailable` when it asked QuickBooks' own filters) on match_answered -- never a name, and so on. A `response` that succeeded but that QuickBooks warned about has `warning` with its `code` and `message` (530, for one: a field it does not support, which it saved the record without). A `response` that is an error has `error` with `code`, `type` and `message`; when `type` is `no_response` (QuickBooks never answered) it also has `reason`, why: `timed_out` or `connector_error` (sent, so QuickBooks may have applied it), `rejected` (QuickBooks could not read it), `withdrawn` (withdrawn before it was sent) or `page_expired` (a later page never fetched), and, for an add, `external_guid`, the GUID it was sent with. Response bodies are removed 7 days after the run ends.",
             "type": "object"
           },
           "seq": {

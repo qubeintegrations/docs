@@ -402,6 +402,7 @@ stateDiagram-v2
     | `$default` | `{"$default": [a, b]}` is the first candidate that renders to something other than nothing or an empty string: `{"$default": ["${vars.record.full_name}", "${vars.record.name}"]}` is a list record's name whatever list it came from. |
     | `$merge` | `{"$merge": [a, b]}` deep-merges objects, each onto the ones before it, the way `$from` merges a map's own keys: objects merge key by key, and lists and plain values replace. An operand that renders to nothing is skipped. `{"$merge": ["${input.invoice}", "${vars.overrides}"]}` merges two objects the run holds, where `$from` would need the second one's keys written out. |
     | `$find` | `{"$find": "${response.data}", "as": "invoice", "where": <condition>}` is the first element for which the condition holds, with the element at `each.invoice`, or nothing: `{"$find": "${response.data}", "as": "invoice", "where": {"path": "each.invoice.external_guid", "op": "eq", "value": "${vars.guid}"}}` picks out the invoice carrying a GUID, which is how a chart that looks for a lost add itself recognises the one it sent. |
+    | `$refs` | `{"$refs": "${input.params}", "operation": "invoice.create"}` lists the references an add's params make, one per distinct record, each with its `kind` (`customer`, `item`, `account`, ...), `full_name`, `name`, `parent`, `list_id` and `paths`. With `"list_ids"` beside it (one per reference, in that order), it is the params with each reference replaced by its ListID. `add_transaction` is built on it. |
   </Accordion>
   <Accordion title="Outcomes" description="kind, output" icon="flag-checkered">
     `completed` and `failed` always exist. Declare more under `outcomes`: your app branches on the run's
@@ -735,9 +736,13 @@ order, at most 200.
 | `as` | Where each element is: `each.<as>`, `item` by default. Its position is `each.index` and the length `each.count`. |
 | `input` | Rendered per element. |
 | `on_item_error` | `stop`, the default: the first failure raises `error` instead ("item 2 of 3: ..."). `continue`: the others go ahead. |
+| `stop_on` | Endings of the called workflow, such as `["cancelled"]`, that end the loop: the first element whose run ends in one is the last, and the elements after it never start, so your app isn't asked about them. Each must be an outcome the called workflow declares (or `completed`), and not a failure, which `on_item_error` decides. |
 
 The state raises one `success` with the outputs in `response.data`, how each ended in `response.outcomes`, and
-failures in `response.errors`.
+failures in `response.errors`. When a `stop_on` ending ended the loop, `response.data` and `response.outcomes`
+stop at that element, and `response.stopped` says which and how: `{"index": 0, "outcome": "cancelled"}`.
+Branch on it to your own ending, as `add_transaction` does when your app cancels at one of its references:
+`{"if": {"path": "response.stopped", "op": "present"}, "target": "cancelled"}`.
 
 <Note>
   **A `workflow` state takes no `always`, `params`, `operation` or `prompt`.**
