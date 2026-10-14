@@ -7,7 +7,7 @@ icon: "plug"
 import { Request } from "/snippets/request.jsx";
 
 <Frame caption="The onboarding page your customer sees, with your app's name.">
-  <img src="/images/quickstart/onboarding-ready.png" alt="The onboarding page for My App Dev: the checklist with No selected for a QuickBooks server and all three items checked, beside a green message saying the customer is ready, then two steps, Download QWC File and Generate Password, each with screenshots of the Web Connector" />
+  <img src="/images/quickstart/onboarding-ready.png" alt="The onboarding page for My App Dev: step 1, Get QuickBooks ready, done, and step 2, Add My App Dev to the Web Connector, open with Download setup file and the Web Connector's two prompts, each a screenshot beside the answer to give" />
 </Frame>
 
 
@@ -80,7 +80,7 @@ import { Request } from "/snippets/request.jsx";
     | `state` | What happened | What to do |
     | --- | --- | --- |
     | `connected` | The Web Connector checked in for the first time. | Start syncing. |
-    | `cancelled` | Your customer chose "Cancel and return" on the onboarding page. | Offer to try again, or delete the connection. |
+    | `cancelled` | Your customer chose "Cancel and go back" on the onboarding page. | Offer to try again, or delete the connection. |
     | `expired` | The onboarding link was more than 48 hours old. | [Regenerate the link](/api-reference/v2/connections/regenerate-the-onboarding-url) and send them again. |
 
     <Visibility for="agents">
@@ -137,6 +137,19 @@ app.get("/quickbooks/callback", (req, res) => {
 A connection's `last_connected_at` is the last time its Web Connector checked in. Displaying it to your user can help them self-diagnose why they're still waiting on a request. If it's hours or days old, the computer running QuickBooks is probably off, the Web Connector
 isn't running, or the company file has moved. Requests keep waiting in the queue in the meantime. If they
 wait a week, QuBe Sync emails your organization's owners.
+
+## Setting a connection up again
+
+If QuickBooks moves to another computer, or your customer's Web Connector entry was removed, send them to the
+connection's onboarding link again ([regenerate it](/api-reference/v2/connections/regenerate-the-onboarding-url)
+if it's more than 48 hours old). The page tells them the connection is already set up, and offers
+**Set up again**.
+
+Choosing it changes the connection's password straight away, so the Web Connector entry already installed is
+turned away ("Invalid password for username") and can't be mistaken for the new one. Until your customer
+finishes the new setup, requests wait in the queue and `last_connected_at` stays at the old entry's last
+check-in. When the new entry checks in, they're sent back to your `redirect_url` with `state=connected`, as the
+first time.
 
 ## When a customer leaves
 
