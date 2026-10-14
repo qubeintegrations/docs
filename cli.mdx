@@ -99,12 +99,22 @@ qube requests list --connection <id>              # another connection, this onc
     qube connections qwc <connection> --output riverbend.qwc  # the file the Web Connector adds
     qube connections password <connection>                    # a new Web Connector password
     qube connections delete <connection>                      # asks first; --yes in a script
+    qube connections name-index <connection> --webhook-url https://your-app.example/webhooks/qube   # build it before the first match
+    qube match <connection> customer "ACME, Inc." --email ap@acme.example   # the records a name could mean
+    qube match <connection> item Consulting --exact-only      # exact or none, never a fuzzy match
     qube requests list <connection> --state error --page-size 50   # 20 per page by default
     qube requests show <connection> <id>                      # one request, as JSON
     qube requests pages <connection> <id>                     # every page of an iterated query
     qube requests tail <connection>                           # watch requests as they're answered
     qube requests discard <connection> <id>                   # withdraw one the Web Connector hasn't taken
     ```
+    `qube match` asks a realtime or simulated connection's name index which records a name could mean
+    ([Match names](/matching)). A customer, vendor, employee or other name can be matched on more than
+    its name: `--account-number`, `--email`, `--phone` and `--postal-code` can make a strong match, and
+    `--city` and `--company-name` rank the candidates. `--parent` matches under a parent (a job under a
+    customer), and `qube match -h` lists the kinds and flags. The first match on a connection starts
+    building its index and is refused until it's in (exit `1`); `qube connections name-index` starts the
+    build ahead of time, and `--webhook-url` is told when it's ready.
   </Accordion>
   <Accordion title="QuickBooks operations" icon="book">
     ```bash
@@ -214,14 +224,57 @@ Exit codes: `0` ok, `1` the command failed, `2` wrong usage, `130` interrupted.
   when it's answered ([Webhooks](/webhooks)).
 </Note>
 
+## Receive webhooks locally
+
+`qube listen` gives you a `webhook_url` that reaches the app on your laptop, with no tunnel. It works for
+sandbox apps:
+
+```bash
+qube listen --forward-to http://localhost:3000/webhooks/qube --write-env .env
+```
+
+```
+Webhook URL for My App Dev (the same every time on this machine):
+  https://qubesync.com/relay/rl_4f7k2m9q8t3w6x1z5c0v7b2n4h
+Forwarding to http://localhost:3000/webhooks/qube. Ctrl-C to stop.
+14:02:11  request 1f0c2a3b…  response_received  → POST /webhooks/qube  200  41 ms
+14:02:19  workflow_run.notification  customers_page #3  → POST /webhooks/qube  200  58 ms
+14:03:02  request 1f0c2a3b…  response_received  → POST /webhooks/qube  500  12 ms  (QuBe will retry)
+```
+
+Pass the URL it prints as the `webhook_url` of your requests and workflow runs, and every delivery to it
+is sent on to the `--forward-to` URL: the body and `X-QUBE-Signature` byte for byte, so your app
+[verifies the signature](/webhooks#securing-your-endpoints) as it will in production. A path or query you
+add to the URL is added to the `--forward-to` URL too. Your app's answer is the delivery's outcome, so a
+non-`2xx` is retried and the dashboard shows each attempt, as for any `webhook_url`.
+
+| Flag | |
+| --- | --- |
+| `--forward-to URL` | Required. Where deliveries go; `localhost:3000` means `http://localhost:3000`. |
+| `--write-env FILE` | Writes the URL into `FILE` as `QUBE_WEBHOOK_URL`, changing no other line. Without it, `qube listen` prints the line to add when `./.env` lacks it. |
+| `--forget` | Asks, then deletes this machine's URL for the app, so the next `qube listen` gets a new one. With `--forward-to`, it then listens on the new URL. |
+| `--json` | One JSON line with the app and URL, then one per delivery: `at`, `ms`, `path`, `summary`, and `status` or `error`. |
+
+- **One URL per machine.** The URL stays the same for an app on this machine, so it goes into `.env` once.
+  The machine is identified by a random id in the CLI's config folder, shared by every config on it. You can
+  have URLs on up to 10 machines per app; an 11th takes over the one unused longest, which then stops
+  working, and `qube listen` says so.
+- **One listener per URL.** Starting `qube listen` again, in another terminal, takes over: the older one stops
+  and says why.
+- **When it isn't running,** deliveries fail and are retried a few times like any other, and **Resend
+  webhook** in the dashboard sends one again. It reconnects by itself when the network drops.
+- Ctrl-C stops it (exit `130`).
+
+See [Receive webhooks in development](/ngrok) for a tunnel instead.
+
 ## Production apps
 
 In a production app, every request that changes something asks before it's sent, and names the app.
 That covers every `qube qb` operation except `list`, since each one writes to the customer's real
-company file. It also covers creating or changing a connection (its password and onboarding link
-too), discarding a request, driving the simulator, every workflow change, run or answer, and
+company file. It also covers creating or changing a connection (its password, onboarding link and
+name index too), discarding a request, driving the simulator, every workflow change, run or answer, and
 `qube api` with any method but `GET`. Reads never ask. Removing something (a connection, a workflow,
-a run) asks in any app.
+a run, a `qube listen` URL) asks in any app.
 
 A script answers with `--yes`. Without a terminal, or under `--json`, a request that would ask is refused
 until `--yes` is given, so nothing reaches a production company file by accident.
@@ -244,7 +297,7 @@ A session belongs to you, in one organization.
 | --- | --- | --- |
 | **Sandbox** scope (the default) | List the organization's sandbox apps, read their API keys and webhook secrets, and act on their connections. | See production apps, or change billing, members or your account. |
 | **Every app** scope | The same, in production apps too. | Change billing, members or your account. |
-| **Read-only** access | List and show what its scope reaches, run QuickBooks queries, [match names](/matching), validate charts and download a connection's QWC file. | Create, change, delete, discard, run or answer anything, or read an app's API key or webhook secret, so `qube env` isn't available to it. |
+| **Read-only** access | List and show what its scope reaches, run QuickBooks queries, [match names](/matching), validate charts, download a connection's QWC file and [receive webhooks](#receive-webhooks-locally) with `qube listen`. | Create, change, delete, discard, run or answer anything, or read an app's API key or webhook secret, so `qube env` isn't available to it. |
 
 The server enforces read-only access. `qube status` and `qube sessions` show each session's access.
 

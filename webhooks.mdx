@@ -343,7 +343,7 @@ one `v1=` per secret, so you can rotate without dropping a delivery:
 
 ## Receiving webhooks in development
 
-QuBe Sync needs a publicly available URL (localhost doesn't work) to send to, so [use a tunnel](/ngrok) while you develop. You can also open the request’s `links.ui` to see the answer in the dashboard.
+QuBe Sync needs a URL it can reach to send to, and `localhost` doesn't work. For a sandbox app, `qube listen --forward-to http://localhost:3000/webhooks/qube` from the [CLI](/cli#receive-webhooks-locally) gives you a `webhook_url` that forwards every delivery to your local app, signature and all; a tunnel works too. See [Receive webhooks in development](/ngrok). You can also open the request’s `links.ui` to see the answer in the dashboard.
 
 ## Workflow runs
 

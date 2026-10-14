@@ -1,13 +1,77 @@
 ---
 title: "Receive webhooks in development"
-description: "QuBe Sync delivers answers to a public URL. Here's how to point one at the app on your laptop."
+description: "QuBe Sync delivers answers to a URL it can reach. `qube listen` forwards them to the app on your laptop."
 icon: "tower-broadcast"
 ---
 
 import { Request } from "/snippets/request.jsx";
 
 Answers from QuickBooks arrive as a `POST` to the `webhook_url` you pass with each request, so QuBe Sync has
-to be able to reach it. On your laptop, a tunnel gives your local server a public HTTPS address.
+to be able to reach it, and `localhost` isn't reachable. For a sandbox app, the [CLI](/cli) forwards them to
+your local app:
+
+```bash
+qube listen --forward-to http://localhost:3000/webhooks/qube --write-env .env
+```
+
+It prints your webhook URL, writes it into `.env` as `QUBE_WEBHOOK_URL`, and then prints a line for each
+delivery with your app's answer:
+
+```
+Webhook URL for My App Dev (the same every time on this machine):
+  https://qubesync.com/relay/rl_4f7k2m9q8t3w6x1z5c0v7b2n4h
+Forwarding to http://localhost:3000/webhooks/qube. Ctrl-C to stop.
+14:02:11  request 01JA…  response_received  → POST /webhooks/qube  200  41 ms
+```
+
+Pass that URL as your `webhook_url`. Your app reads it from `QUBE_WEBHOOK_URL`, so the same code sends your
+real endpoint in production:
+
+<Request
+  path="/api/v2/connections/{connection_id}/customers"
+  query={{
+    max_returned: 5,
+    webhook_url: "https://qubesync.com/relay/rl_4f7k2m9q8t3w6x1z5c0v7b2n4h",
+  }}
+/>
+
+{/* agent-block:start */}
+<Visibility for="agents">
+
+```http
+GET /api/v2/connections/{connection_id}/customers?max_returned=5&webhook_url=https://qubesync.com/relay/rl_4f7k2m9q8t3w6x1z5c0v7b2n4h
+```
+
+```bash
+curl -u "$QUBE_API_KEY:" \
+  -G \
+  "https://qubesync.com/api/v2/connections/$CONN_ID/customers" \
+  --data-urlencode "max_returned=5" \
+  --data-urlencode "webhook_url=https://qubesync.com/relay/rl_4f7k2m9q8t3w6x1z5c0v7b2n4h"
+```
+
+</Visibility>
+{/* agent-block:end */}
+
+- **The URL stays the same** for this app on this machine, so it goes into `.env` once.
+- **It's delivered as in production.** The body and the `X-QUBE-Signature` header reach your app byte for
+  byte, so you [verify the signature](/webhooks#securing-your-endpoints) with the same
+  `QUBE_WEBHOOK_SECRET` that `qube env` wrote.
+- **Every webhook comes through:** request answers, a [workflow run](/workflows)'s webhooks and
+  notifications, and [name index](/matching) events.
+- **A path you add is kept.** A `webhook_url` of `$QUBE_WEBHOOK_URL/runs` goes to the `--forward-to` URL
+  plus `/runs`.
+- **Nothing else on your machine is exposed.** Only QuBe Sync's deliveries for this app come through, not
+  requests from the internet, as a tunnel would let in.
+- **When it isn't running,** a delivery fails and is retried like any other, and the request's page in the
+  dashboard has **Resend webhook**.
+- `qube listen` works for sandbox apps only, and `--json` prints one line per delivery for a script or an
+  agent. See [the CLI](/cli#receive-webhooks-locally) for its flags.
+
+## Without the CLI: a tunnel
+
+A tunnel gives your local server a public HTTPS address. Set `QUBE_WEBHOOK_URL` to its URL plus your
+webhook route.
 
 <CodeGroup>
 ```bash Cloudflare Tunnel
@@ -21,50 +85,23 @@ ngrok http 3000   # your app's port
 ```
 </CodeGroup>
 
-Both print a public URL. Use it as the base of your `webhook_url`:
-
-<Request
-  path="/api/v2/connections/{connection_id}/customers"
-  query={{
-    max_returned: 5,
-    webhook_url: "https://abc123.trycloudflare.com/webhooks/qube",
-  }}
-/>
-
-{/* agent-block:start */}
-<Visibility for="agents">
-
-```http
-GET /api/v2/connections/{connection_id}/customers?max_returned=5&webhook_url=https://abc123.trycloudflare.com/webhooks/qube
-```
-
-```bash
-curl -u "$QUBE_API_KEY:" \
-  -G \
-  "https://qubesync.com/api/v2/connections/$CONN_ID/customers" \
-  --data-urlencode "max_returned=5" \
-  --data-urlencode "webhook_url=https://abc123.trycloudflare.com/webhooks/qube"
-```
-
-</Visibility>
-{/* agent-block:end */}
-
 Tips:
 
 <CardGroup cols={2}>
-  <Card title="Set up a permanent tunnel" icon="link">
-    Use [Cloudflare Tunnels](https://developers.cloudflare.com/tunnel/get-started/).
-  </Card>
   <Card title="Keep the URL in configuration" icon="sliders">
-    Put it in an `APP_HOST` environment variable, say, and build every `webhook_url` from it, because a free
-    tunnel's address changes each time it starts.
+    Build every request's `webhook_url` from `QUBE_WEBHOOK_URL`: the `qube listen` URL in development,
+    your real endpoint in production. A free tunnel's address changes each time it starts, so update it
+    then.
   </Card>
   <Card title="Verify signatures in development too" icon="shield-check">
     Your sandbox app has its own webhook secret, so the code path is the same as in production.
     [Verify the signature](/webhooks#securing-your-endpoints).
   </Card>
-  <Card title="Missed one while the tunnel was down?" icon="arrows-rotate">
+  <Card title="Missed one while it was down?" icon="arrows-rotate">
     QuBe Sync retries each delivery several times, and any request's page in the dashboard has
     **Resend webhook**.
+  </Card>
+  <Card title="Set up a permanent tunnel" icon="link">
+    Use [Cloudflare Tunnels](https://developers.cloudflare.com/tunnel/get-started/).
   </Card>
 </CardGroup>
