@@ -116,7 +116,7 @@ qube requests list --connection <id>              # another connection, this onc
     qube qb invoices create --example > invoice.json          # the API's example body, to edit
     qube qb invoices create <connection> --data @invoice.json
     qube qb txn-void execute <connection> --txn-id 1A2B-3C --txn-void-type Invoice
-    qube qb items list <connection> --iterator --max-returned 100 --wait    # every page
+    qube qb items list <connection> --wait    # every page, 100 items at a time
     ```
     `qube qb` runs every QuickBooks operation in the [API reference](/api-reference/introduction). It
     reads them from the API's own OpenAPI document, so the CLI offers the flags and body fields your

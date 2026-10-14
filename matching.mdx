@@ -69,8 +69,7 @@ curl -u "$QUBE_API_KEY:" \
 {/* agent-block:end */}
 
 The answer comes back at once, a `200`. This file has both `Acme LLC` and `Acme Corp`. Both are the same
-name once punctuation and suffixes are set aside, so neither is certain, and the one with your email comes
-first:
+name once punctuation and suffixes are set aside, so neither is certain, and the one with the email you specified comes first:
 
 ```json Response {2,4-23}
 {
@@ -135,7 +134,7 @@ first:
 </ParamField>
 
 <ParamField body="min_score" type="number">
-  This call's candidate threshold, from 0.3 to 1.0, in place of 0.44. Raise it to list only close names;
+  This call's candidate threshold, from 0.3 to 1.0, in place of the default 0.44. Raise it to list only close names;
   lower it to list more. Not taken with `exact_only`.
 </ParamField>
 
@@ -197,7 +196,8 @@ And the answer says how many records qualified:
 
 <Tip>
   Before a change depends on a matched record, read it by its `list_id` (`GET /customers?list_id=...`).
-  The index can be a few minutes behind QuickBooks: a record renamed since comes back with its new name.
+  The index can be a few minutes behind QuickBooks for what someone did in QuickBooks itself: a record renamed
+  there since comes back with its new name.
 </Tip>
 
 ## Numbered locations and crowded files
@@ -210,7 +210,7 @@ tells records apart.
 **Numbers must agree.** A word with a digit in it is a number to a match: `1234` in `Subway #1234`, `4B`
 in `Unit 4B`. Leading zeros don't count, so `#01234` is `1234`. When your name and a record's both have
 numbers, the record must have every number you sent. One with a different number instead is never
-offered, however alike the rest is. When exactly one record has the same numbers and a name at least 0.4
+offered, no matter the other similarities. When exactly one record has the same numbers and a name at least 0.4
 alike, it's a strong match, with the reason `same number`. A record with your numbers and more can be a
 candidate, with the reason `the number asked, and more`, but never a strong match.
 
@@ -353,7 +353,7 @@ app which one is meant. The same rule as everywhere: [only use `exact` without a
 
 | | The endpoint | A `match` state |
 | --- | --- | --- |
-| How current | The index as it stands, with `index.as_of`. | Refreshes the index from QuickBooks first, unless the state says `"refresh": false` or the last refresh finished less than a minute ago, so a run that matches several names (an invoice's customer and items) waits for one refresh, not one each. |
+| How current | The index as it stands, with `index.as_of`. | Refreshes the index from QuickBooks first, unless the state says `"refresh": false` or the last refresh finished less than a minute ago, so a run that matches several names (an invoice's customer and items) waits for one refresh, not one each. A `3100` (name in use) since then makes the next match refresh anyway. |
 | How it answers | At once, a `200`. | Not at once: the run waits, holding nothing, until the refresh is in, and your app hears what came of it through the run's webhooks. |
 | The first match | Refused with `name_index_building`, and starts the build. | A run whose chart, or a workflow it calls, has a `match` state starts the build as the run starts, so it overlaps the earlier steps. The run waits while the index builds. |
 | A standard connection | Refused with `matching_requires_realtime`. | Falls back to QuickBooks' own filters, below. |
@@ -454,7 +454,14 @@ You can also read where an index stands on the connection itself (`GET /connecti
 ## How current it is
 
 `index.as_of` in every answer says when the index last caught up with QuickBooks. A record added, renamed
-or deleted in QuickBooks after that isn't reflected yet.
+or deleted in QuickBooks itself after that isn't reflected yet.
+
+What you add, rename or delete through QuBe Sync is. When QuickBooks answers one of your requests, or a
+workflow run's, that adds or changes a record in a list the index holds (`POST /customers`, an
+`ItemServiceAddRq`, a `ListDelRq`), the record goes into the index before the answer reaches your webhook or
+the run's next step. So a run that creates an item, followed seconds later by one that names it, finds it as
+`exact`. A request that asks for some fields only (`include_ret_element`) isn't taken this way; the next
+match refreshes instead.
 
 | While | What happens |
 | --- | --- |

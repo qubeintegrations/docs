@@ -20,6 +20,7 @@ Find the webhook you got. The last column says who fixes it, what to do, and whe
 | <Badge color="red">`error`</Badge><br />`quickbooks_business_error` | QuickBooks refused it on its own terms: a name in use, a stale `edit_sequence`. | **Your app.** Branch on `error_code`; show `user_message`. [QuickBooks said no](#quickbooks-said-no) |
 | <Badge color="red">`error`</Badge><br />`xml_error` | QuickBooks couldn't parse the request. | **Your app.** Fix the request: sent again as-is, it fails again. [Other endings](#other-endings) |
 | <Badge color="red">`error`</Badge><br />`unexpected_error` | QuickBooks failed without saying why. | **Support.** Read the Web Connector's log; ask support if it repeats. [Other endings](#other-endings) |
+| <Badge color="red">`error`</Badge><br />`response_too_large` | QuickBooks answered, but with more than one answer may hold, so the answer wasn't kept. | **Your app.** Page the query, or narrow it. [Too large](#when-the-answer-is-too-large) |
 | <Badge color="orange">`retryable`</Badge> | QuickBooks wasn't running, the wrong company file was open, or a dialog was. | **Your customer.** Show them `user_message`, and don't resend. [Out of reach](#when-quickbooks-is-out-of-reach) |
 | <Badge color="purple">`timed_out`</Badge> | The answer was lost: the connection dropped, or QuickBooks/the Web Connector was closed, mid-request. | **Check first.** Queue a query again; query before resending a change. [The answer is lost](#when-the-answer-is-lost) |
 | <Badge color="gray">`discarded`</Badge> | Your app discarded it before the Web Connector took it. | **Nobody.** QuickBooks never saw it. [Discarding](#discarding-a-request) |
@@ -27,7 +28,7 @@ Find the webhook you got. The last column says who fixes it, what to do, and whe
 
 ## The error object
 
-When `state` is <Badge color="red">`error`</Badge> or <Badge color="orange">`retryable`</Badge>, the webhook's `error` says what happened. Here QuickBooks refused a
+Every webhook but <Badge color="green">`response_received`</Badge> carries an `error` saying what happened. Here QuickBooks refused a
 new customer because the name is taken:
 
 ```json {3-10}
@@ -50,12 +51,28 @@ new customer because the name is taken:
 
 | Field | What it's for |
 | --- | --- |
-| `error_type` | Where it failed: [`quickbooks_business_error`](#quickbooks-said-no), [`quickbooks_connection_error`](#when-quickbooks-is-out-of-reach), [`xml_error`](#other-endings) or [`unexpected_error`](#other-endings). |
+| `error_type` | Where it failed: [`quickbooks_business_error`](#quickbooks-said-no), [`quickbooks_connection_error`](#when-quickbooks-is-out-of-reach), [`xml_error`](#other-endings), [`unexpected_error`](#other-endings), [`timed_out`](#when-the-answer-is-lost) or [`discarded`](#discarding-a-request). |
 | `error_code` | QuickBooks' status code for a business error. A stable thing to branch on. |
 | `user_message` | Plain language for your end user: what went wrong and what to do. |
-| `message` | The raw message from QuickBooks or the Web Connector. |
+| `message` | The raw message from QuickBooks or the Web Connector. For `timed_out` and `discarded`, which neither sent, QuBe Sync's own. |
 | `debug_message` | QB error messages are cryptic and lack enough information to act on, so QuBe Sync analyzes your request and augments them when it can. |
 | `hresult` | The Web Connector's error code, for a connection or XML error. |
+
+### Where each key lives
+
+When QuickBooks refuses a request, the webhook has two error objects with different keys: the top-level
+`error`, which QuBe Sync sets for every failure, and `response_json.error`, QuickBooks' own answer.
+
+| | Top-level `error` | `response_json.error` |
+| --- | --- | --- |
+| **Set when** | `state` is <Badge color="red">`error`</Badge>, <Badge color="orange">`retryable`</Badge>, <Badge color="purple">`timed_out`</Badge> or <Badge color="gray">`discarded`</Badge> | QuickBooks answered with an error (`response_json.status` is `"error"`) |
+| **What kind** | `error_type`: where it failed, such as `quickbooks_business_error` or `timed_out` | `type`: QuickBooks' code by name, such as `name_in_use` |
+| **The status code** | `error_code`, such as `3100` | `code`, the same number |
+| **The text** | `user_message` for your customer, and `message`, the raw text | `message`, QuickBooks' raw text |
+| **Also** | `debug_message`, `hresult` | `current`, after a [stale `edit_sequence`](#when-the-record-changed-after-you-read-it) |
+
+Branch on `error.error_type` first. For a business error, branch on the code (`error.error_code` or
+`response_json.error.code`), and show your customer `error.user_message`.
 
 ## QuickBooks said no
 
@@ -216,7 +233,9 @@ open. Nothing was applied, and only your customer can fix it.
 ### Discarding a request
 
 If you no longer want a request that hasn't already been processed, discard it. It
-becomes <Badge color="gray">`discarded`</Badge>, is never sent, and a <Badge color="gray">`discarded`</Badge> webhook follows.
+becomes <Badge color="gray">`discarded`</Badge>, is never sent, and a <Badge color="gray">`discarded`</Badge> webhook follows. Its
+`error.error_type` is `discarded`, unless the request was <Badge color="orange">`retryable`</Badge>: then `error` is still the
+connection error that held it up.
 
 <Request method="POST" path="/api/v2/connections/{connection_id}/queued-requests/{request_id}/discard" />
 
@@ -246,7 +265,8 @@ curl -u "$QUBE_API_KEY:" \
 
 <Badge color="purple">`timed_out`</Badge> means **QuickBooks received the request but its answer never came back**: the customer's computer
 lost its connection, or QuickBooks/the Web Connector was closed, while the request was being processed.
-QuickBooks may or may not have applied it.
+QuickBooks may or may not have applied it. The webhook's `error.error_type` is `timed_out`, and its
+`user_message` tells your customer to check QuickBooks before trying again.
 
 | It was | What to do |
 | --- | --- |
@@ -258,6 +278,22 @@ An [`Idempotency-Key`](/making-requests#retrying-a-call-safely) doesn't help her
 <Tip>
   A [workflow](/workflows#lost-answers) automatically reconciles lost requests for you. Mutations are fingerprinted before sending, so they can be reconciled later if needed. See [In a workflow](#in-a-workflow).
 </Tip>
+
+## When the answer is too large
+
+One answer can be at most **4 MB as the Web Connector sends it, about 3 MB of qbXML**. QuickBooks' answer
+over that isn't kept: the request ends <Badge color="red">`error`</Badge> with `error.error_type`
+`response_too_large`, and `response_xml` is null. QuickBooks did run the request, so this isn't a lost
+answer, and asking again the same way gets the same answer.
+
+| It was | What to do |
+| --- | --- |
+| A list query | Ask for smaller [pages](/pagination): a lower `max_returned`. A list query is paged by default, so this mostly happens with `iterator=false`, `max_returned` alone or a large page of records with many lines. |
+| A query QuickBooks doesn't page | Narrow it: a shorter date range, a modified-date filter or a name filter. Reports and lists like accounts, terms and employees always answer in one go. |
+| A create or update | QuickBooks ran it, so query before sending it again. This only happens to a large [batch](/making-requests#a-batch) of qbXML you send yourself. |
+
+`user_message` says which applies. In a [workflow](#in-a-workflow), the step sees `no_response` with
+reason `too_large`.
 
 ## Other endings
 

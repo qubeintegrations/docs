@@ -1,6 +1,6 @@
 ---
 title: "Auto-Pagination"
-description: "Import thousands of records with `iterator=true`."
+description: "List queries arrive a page at a time, each page its own webhook."
 icon: "layer-group"
 ---
 
@@ -9,13 +9,12 @@ import { Request } from "/snippets/request.jsx";
 QuickBooks frequently needs to paginate responses to avoid timeouts and other issues. Usually this would require tracking iterator metadata and making multiple requests to QuickBooks.
 
 # Auto-pagination to the rescue
-Add `iterator=true` to any query that supports it, and `max_returned` becomes the page size:
+A list query QuickBooks can page is paged for you. Send it with no paging parameters, and QuBe Sync asks
+QuickBooks for 100 records at a time (25 when you ask for `include_line_items` or `include_linked_txns`):
 
 <Request
   path="/api/v2/connections/{connection_id}/customers"
   query={{
-    iterator: true,
-    max_returned: 100,
     webhook_url: "https://your-app.example/webhooks/qube",
   }}
 />
@@ -24,23 +23,39 @@ Add `iterator=true` to any query that supports it, and `max_returned` becomes th
 <Visibility for="agents">
 
 ```http
-GET /api/v2/connections/{connection_id}/customers?iterator=true&max_returned=100&webhook_url=https://your-app.example/webhooks/qube
+GET /api/v2/connections/{connection_id}/customers?webhook_url=https://your-app.example/webhooks/qube
 ```
 
 ```bash
 curl -u "$QUBE_API_KEY:" \
-  -G \
-  "https://qubesync.com/api/v2/connections/$CONN_ID/customers" \
-  --data-urlencode "iterator=true" \
-  --data-urlencode "max_returned=100" \
-  --data-urlencode "webhook_url=https://your-app.example/webhooks/qube"
+  "https://qubesync.com/api/v2/connections/$CONN_ID/customers?webhook_url=https://your-app.example/webhooks/qube"
 ```
 
 </Visibility>
 {/* agent-block:end */}
 
 Every page QuickBooks returns is immediately sent to your
-`webhook_url` as it arrives.
+`webhook_url` as it arrives, all with the same `id`.
+
+What you send decides how the answer comes back:
+
+| You send | You get |
+| --- | --- |
+| No paging parameters | Pages of 100 records, or 25 with `include_line_items` or `include_linked_txns`. |
+| `iterator=true` and `max_returned` | Pages of `max_returned` records. |
+| `max_returned` alone | At most that many records, in one answer. QuickBooks doesn't say whether more matched. |
+| `iterator=false` | Every match, in one answer. |
+| A lookup by `list_id`, `full_name`, `txn_id` or `ref_number` | Every match, in one answer. QuickBooks doesn't page a lookup by id or name. |
+
+<Note>
+  One answer can be at most 4 MB as the Web Connector sends it, about 3 MB of qbXML. A larger one isn't
+  kept: the request ends <Badge color="red">`error`</Badge> with `error_type` `response_too_large`
+  ([why](/error_handling#when-the-answer-is-too-large)). Pages keep answers well under that. If a page
+  of records with many lines still reaches it, ask for a smaller `max_returned`.
+</Note>
+
+Some lists QuickBooks doesn't page at all, such as accounts, terms, classes and employees. Those always
+answer in one go. A large one is best narrowed with its filters, such as a modified-date range.
 
 <Tip>
     Using the `stream_query` [workflow](/workflows) guarantees pages get delivered in the correct order, even when there are

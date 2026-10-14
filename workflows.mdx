@@ -101,6 +101,7 @@ you see a question and its answer.
           kind: "customer",
           add: { name: "Lone Star Supply Co", email: "orders@lonestarsupply.example" },
         },
+        reference: "contact-381",
         webhook_url: "https://your-app.example/webhooks/qube",
       }}
     />
@@ -120,6 +121,7 @@ you see a question and its answer.
           "email": "orders@lonestarsupply.example"
         }
       },
+      "reference": "contact-381",
       "webhook_url": "https://your-app.example/webhooks/qube"
     }
     ```
@@ -138,6 +140,7 @@ you see a question and its answer.
             "email": "orders@lonestarsupply.example"
           }
         },
+        "reference": "contact-381",
         "webhook_url": "https://your-app.example/webhooks/qube"
       }'
     ```
@@ -145,7 +148,10 @@ you see a question and its answer.
     </Visibility>
     {/* agent-block:end */}
 
-    This returns `201` with the run object as JSON. Store its `id` for reference. `webhook_url` is optional, but
+    This returns `201` with the run object as JSON. `reference` is your own label for the run, such as the id
+    of the record it's about (up to 255 characters, and a new one for every run: `contact-381-2` for the next
+    run about this contact). The run and every webhook it sends carry it, so save your record before you start
+    the run, and a webhook that arrives before this response still finds it. `webhook_url` is optional, but
     a run started without one sends no webhooks, and a workflow that [sends your app data](#sending-your-app-data)
     can't start without one (`422 webhook_url_required`).
   </Step>
@@ -206,7 +212,7 @@ you see a question and its answer.
     A run can wait as long as it needs to. Your user can answer tomorrow.
 
     <Accordion title="The whole awaiting_input webhook" icon="code">
-      ```json workflow_run.awaiting_input {10-29}
+      ```json workflow_run.awaiting_input {13-32}
       {
         "event": "workflow_run.awaiting_input",
         "timestamp": 1790470628,
@@ -216,6 +222,9 @@ you see a question and its answer.
         "workflow": "ensure",
         "workflow_id": "01a0e05a-3c52-7a8e-b1f4-6d2e9c0a7b31",
         "run_id": "fb1951a1-25b9-4fb2-98c7-c988988ecdf7",
+        "reference": "contact-381",
+        "revision": 6,
+        "run_state": "awaiting_input",
         "prompt": {
           "id": "ask_rename",
           "token": "Vq3kT9xRb2LmW8sZ",
@@ -265,12 +274,16 @@ you see a question and its answer.
       {
         "event": "workflow_run.completed",
         "run_id": "fb1951a1-25b9-4fb2-98c7-c988988ecdf7",
+        "reference": "contact-381",
+        "revision": 11,
+        "run_state": "completed",
         "workflow": "ensure",
         "outcome": "created_renamed",
         "output": {
           "record": { "list_id": "80000024-1790470634", "full_name": "Lone Star Supply Co (customer)",
                       "email": "orders@lonestarsupply.example", "is_active": true, … },
-          "how": null
+          "how": null,
+          "list": "customer"
         },
         "error": null,
         "summary": {
@@ -329,10 +342,10 @@ the query to send, such as `{"operation": "customer.query", "params": {"active_s
 
 | Template | What it does |
 | --- | --- |
-| `ensure` | Finds a list record of any kind as `resolve` does, and creates it from your add when nothing is it. On a name clash, asks your app what to do. |
+| `ensure` | Finds a list record of any kind as `resolve` does, and creates it from your add when nothing is it. A record of the same list with exactly the name is used without asking; a near match, or the name held by another list, is your app's to decide. |
 | `upsert` | Updates a list record if it finds one, as `resolve` does, and creates it if not. |
 | `push_records` | Runs `upsert` for up to 200 records, in order, in one run. |
-| `add_transaction` | Makes sure every customer, item, class and account a transaction names exists, then adds it. Any transaction. |
+| `add_transaction` | Makes sure every customer, item, class and account a transaction names exists, then adds it, and says for each how it was found or made. Any transaction. |
 | `record_payment` | Finds an invoice and records a payment against it. |
 | `void_transaction` | Finds a transaction, then voids or deletes it. |
 
@@ -355,10 +368,10 @@ the query to send, such as `{"operation": "customer.query", "params": {"active_s
     | Template | What it does | Asks your app | Ends |
     | --- | --- | --- | --- |
     | `resolve` | Finds a list record of `kind` (`customer`, `vendor`, `employee`, `other_name`, `entity` for those four, `item` or one item type, `account`, `class`, `terms`, `sales_tax_code` and the other lists a transaction names) by the `list_id` your app stored, then by `name`, under `parent` (full name or ListID) for a job or a sub-item. The name is [matched](/matching) by rank on a realtime or simulated connection, with `fields` such as `email` or `account_number` for a customer, vendor, employee or other name, and through QuickBooks' own exact and "contains" filters on a standard one. Only an exact match is used without asking, or a strong one with `accept: "strong"`. What it finds is read whole by its ListID before it's used, and matched once more if it was deleted since. With `pick: true`, nothing found asks your app to pick one of the active records instead of ending `not_found`. It only finds: `ensure` and `upsert` write. | `ask` for a strong match or near matches: `use` (with `list_id`), `none` (ends `not_found`) or `cancel`. `ask_detail` (or `ask_name`, for a list without an address) when more than 10 are alike: `narrow` (with an `account_number`, `city`, `postal_code` or fuller `name`), `none` or `cancel`, three times at most. With `pick`, `ask_pick`: `use` (with `list_id`) or `cancel` | `found`, `picked`, `not_found`, `cancelled` |
-    | `ensure` | Runs `resolve`, then sends your `add` (the body `POST /<kind>` takes; `kind` is the list it goes to, such as `customer` or `item_service`) when nothing is the record. A name already held in its name space (customers, vendors, employees and other names share one; every item type another) is a 3100: it finds what holds the name and asks. Allows five renames. Without an `add`, it creates nothing, and `resolve` asks your app to pick one of the active records instead. With `lookup: false` it sends the add without looking, for a caller that already did. | Through `resolve` (`ask_pick` without an `add`). `ask_use`: `use_existing`, `rename` (with `name`), `cancel`. `ask_rename` when another list holds the name: `rename`, `cancel` | `found`, `picked`, `created`, `created_renamed`, `used_existing`, `cancelled`; fails as `renames_exhausted` |
+    | `ensure` | Runs `resolve`, then sends your `add` (the body `POST /<kind>` takes; `kind` is the list it goes to, such as `customer` or `item_service`) when nothing is the record. A record of the add's own list with exactly the name is found and used without asking (on a realtime or simulated connection, before the add goes out); only a near match asks. A name already held in its name space (customers, vendors, employees and other names share one; every item type another) is a 3100: it finds what holds the name and asks. Allows five renames. Without an `add`, it creates nothing, and `resolve` asks your app to pick one of the active records instead. With `lookup: false` it sends the add without looking, for a caller that already did. | Through `resolve` (`ask_pick` without an `add`). `ask_use`: `use_existing`, `rename` (with `name`), `cancel`. `ask_rename` when another list holds the name: `rename`, `cancel` | `found`, `picked`, `created`, `created_renamed`, `used_existing`, `cancelled`; fails as `renames_exhausted` |
     | `upsert` | Finds a list record as `resolve` does (`kind`, the name and parent in your `add`, optional `list_id`, `fields` and `accept`) and sends your `update` to it with its ListID filled in; the engine reads the edit sequence first and asks before overwriting a record someone changed since. Nothing is the record: sends your `add` instead, looking once more if the name was taken in between. | `resolve / ask`: `use` (with `list_id`), `none` (then the add goes out) or `cancel`. And the [conflict prompt](#conflicts) when the record changed after it was read | `updated`, `created`, `cancelled`; fails as `name_taken` when the update renames it to a name in use |
     | `push_records` | Runs `upsert` once per entry of `records` -- at most 200, each the `kind`, `add`, `update`, `list_id`, `fields` and `accept` that `upsert` takes, records of different lists mixed -- one at a time, in order, in one run. A record QuickBooks refuses, or one that isn't a valid `upsert` input, is listed in `errors` and the next one goes. For a webhook per record, run `upsert` once per record instead. | Through `upsert`, for each record that asks | `completed` |
-    | `add_transaction` | Sends any transaction add (`operation`, such as `invoice.create`, and its `params`, lines included) once every list record it names exists, in two passes over its distinct references (the same item on five lines is one). First it finds each with `resolve`, writing nothing: every question comes here, and a cancel ends the run with nothing created and nothing more asked. An account, sales tax code, terms, price level or sales tax item that isn't there, or any record your app sent no add for, is your app's to pick. Then it creates what's still missing with `ensure`: a customer, vendor, employee or item from the add your app sent for it in `adds` (each `{"kind": "item_service", "add": {...}}`, matched by full name), a class, payment method, ship method or customer message from its name alone. `references` changes those rules by kind (`ensure`, `create` or `must_exist`). A cancel at a name clash there stops the rest. Then the add goes out with every reference as its ListID, and a lost answer is [settled by the run](#lost-answers). | Through `resolve` in the first pass, and `ensure`'s name clash questions in the second, for each reference that asks. And `ask_about_add` when the run could not settle whether the add went in: `use_existing` (with `txn_id`), `add_again`, `cancel` | `added`, `cancelled`; fails as `unanswered_twice` |
+    | `add_transaction` | Sends any transaction add (`operation`, such as `invoice.create`, and its `params`, lines included) once every list record it names exists, in two passes over its distinct references (the same item on five lines is one). First it finds each with `resolve`, writing nothing: every question comes here, and a cancel ends the run with nothing created and nothing more asked. An account, sales tax code, terms, price level or sales tax item that isn't there, or any record your app sent no add for, is your app's to pick. Then it creates what the first pass didn't find, a reference sent with a stored ListID that names nothing any more included, with `ensure`: a customer, vendor, employee or item from the add your app sent for it in `adds`, a class, payment method, ship method or customer message from its name alone. Each entry of `adds` is `{"kind": "item_service", "add": {...}}`, matched to a reference by full name, and may carry `fields` (`email`, `phone`, `account_number`, `city`, `postal_code`, `company_name`) and `accept` (`strong`), which `resolve` matches that reference with in the first pass; a reference without an entry is matched on its name alone, and only an exact match is used without asking. `references` changes those rules by kind (`ensure`, `create` or `must_exist`). A cancel at a name clash there stops the rest. Then the add goes out with every reference as its ListID, and a lost answer is [settled by the run](#lost-answers): the run stamps the add with a GUID, and looks for it by the reference number your app sent, which QuickBooks answers whole, or else among the transactions for the same customer or vendor and date, at most 50. One carrying the GUID is the add, and the run uses it. A whole answer without it (by reference number, or fewer than 50) means the add didn't go in, and the run sends it again. | Through `resolve` in the first pass, and `ensure`'s name clash questions in the second, for each reference that asks. And `ask_about_add` when the run could not settle whether the add went in either way: `use_existing` (with `txn_id`), `add_again`, `cancel`. Its `data.why` says which: `unsettled`, the `candidates` the check found could be it (`candidates_complete` is true when they're every transaction that could be, so if none is it, it wasn't added); `no_response`, the check went unanswered too, so there are no candidates and nothing is known | `added`, `cancelled`; fails as `unanswered_twice` |
     | `resolve_transaction` | Finds a transaction by the `txn_id` your app stored, then by its `ref_number`, then by the filters your `query` carries (a customer, a date range), picking out the one carrying the `external_guid` your app kept from the add. One transaction with the number and no GUID to check is it; anything less sure is offered to your app. Without line items: read it whole by `txn_id` when you need them. | `ask`: `use` (with `txn_id`), `none` (ends `not_found`) or `cancel` | `found`, `picked`, `not_found`, `cancelled` |
     | `void_transaction` | Finds a transaction of `kind` as `resolve_transaction` does, then voids it, or deletes it when `action` is `delete`. QuickBooks voids sixteen types (invoice, bill, check, journal_entry and the others `kind` lists) and deletes those and nine more (sales_order, estimate, purchase_order, receive_payment, time_tracking and four others), so a delete takes kinds a void does not; asking to void one of those nine fails at once, before anything is sent, and says to pass `action` `delete`. An invoice that payments paid can be voided: the payments stay, with what they had applied to it now their `unused_payment`. Nothing is voided or deleted until the transaction is identified. | Through `resolve_transaction` | `voided`, `deleted`, `not_found`, `cancelled` |
     | `record_payment` | Finds an invoice as `resolve_transaction` does and records a `payment` (a `receive_payment.create` body: how it was paid) for the invoice's own customer, applied to that invoice; the amount defaults to what the invoice still owes. An invoice already paid in full is reported, not paid again. | Through `resolve_transaction` | `applied`, `already_paid`, `not_found`, `cancelled` |
@@ -382,7 +395,7 @@ the query to send, such as `{"operation": "customer.query", "params": {"active_s
     | Template | `output` |
     | --- | --- |
     | `resolve` | `{record, how, list}`: the record read whole, `how` it was found (`id`, `exact`, `strong` or `picked`) and the `list` it's in (`customer`, `item_service`, ...); all null when nothing was found |
-    | `ensure` | `{record, how}`: the record found, picked, created or used; `how` as `resolve` gives it when `resolve` found it |
+    | `ensure` | `{record, how, list}`: the record found, picked, created or used; `how` as `resolve` gives it when `resolve` found it; and the `list` it's in: the `kind` it was added to, or the list of the record found or used (for an item, maybe another type than `kind`) |
     | `upsert` | `{outcome, matched, how, record}`: `matched` is `found` or `picked` after an update, null after a create |
     | `push_records` | `{results, outcomes, errors}`, in the order of `records`: each one's `upsert` output (null for one that failed), how it ended (`updated`, `created`, `cancelled`, `failed`, `name_taken`, or null when it wasn't a valid `upsert` input) and an `{index, message}` entry for each that failed, with its `outcome` when it ran |
     | `resolve_transaction` | `{outcome, record, ref: {txn_id, ref_number, external_guid}}`: the header, without lines |
@@ -390,7 +403,7 @@ the query to send, such as `{"operation": "customer.query", "params": {"active_s
     | `record_payment` | `{outcome, payment, invoice: {txn_id, ref_number, balance_before, applied}}` |
     | `stream_query` | `{kind, records, pages, passes}`: how many records were sent, over how many pages, and how many times the query was started from page 1 |
     | `pull_changes` | `{since, lists, transactions, deleted: {lists, transactions}}`: `lists` and `transactions` hold `stream_query`'s output for each kind, in the order given, and `deleted` how many deleted records of each were sent (0 without `since`) |
-    | `add_transaction` | `{record, references, resolved, missing, created}`: what QuickBooks answered the add with (the header, without lines, when its answer was lost and the run found it by its GUID), each distinct reference (`kind`, `full_name`, `name`, `parent`, `list_id`, `paths`) and what the first pass found for each, in the same order, then the references the second pass made and what `ensure` ended with for each. On `cancelled`, `created` lists what was made before the cancel |
+    | `add_transaction` | `{record, references}`: what QuickBooks answered the add with (the header, without lines, when its answer was lost and the run found it by its GUID), and one entry per distinct reference, in the order they first appear: `field`, `kind` and `paths` (where it is in the add), `sent` (the `full_name` and `list_id` your app sent), `outcome`, `how` (`id`, `exact`, `strong` or `picked`, when the first pass found it) and `record`, the record the add used, read whole, whose `type` is always its list (`customer`, `item_service`, ...), however it was found or made. Store `record.list_id`: it differs from `sent.list_id` when the one your app stored was stale. `outcome` is `found` or `picked` (the first pass), `created`, `created_renamed` or `used_existing` (the second), or `cancelled`. On `cancelled`, a reference the second pass didn't get to is still `not_found`, and one the run never looked for has a null `outcome` |
     | `company_profile` | `{company, preferences, host}`, each as its query answers it |
   </Accordion>
 </AccordionGroup>
@@ -431,19 +444,19 @@ any `2xx` within 5 seconds.
 
 <Visibility for="agents">
 Every event has `event`, `timestamp`, `app_id`, `sandbox`, `connection_id`, `workflow` (the key),
-`workflow_id` (`null` once the workflow is deleted), `run_id` and `links` (`run`, `decisions`, `cancel`,
-`ui`). All three endings carry `outcome`, `output`, `error` and `summary`, and `workflow_run.cancelled` adds
+`workflow_id` (`null` once the workflow is deleted), `run_id`, `reference` (yours, as you sent it; `null`
+without one), `revision`, `run_state` (the run's `state` when the body was built) and `links` (`run`,
+`decisions`, `cancel`, `ui`). All three endings carry `outcome`, `output`, `error` and `summary`, and `workflow_run.cancelled` adds
 `cancel_reason`. A run's `error` is a sentence, not the error object a request's webhook carries.
 `GET links.run` returns the whole run, including its input, vars and trace.
 </Visibility>
 
-Deliveries can fail, repeat, or arrive early:
+Deliveries can fail, repeat, or arrive early and out of order:
 
 | Delivery | What happens | What to do |
 | --- | --- | --- |
 | **Retries** | A failed delivery is retried with backoff, up to 5 attempts, each logged in the run's event log as `webhook_sent`. If they all fail, your organization's owners get an email. Notifications are retried for longer ([below](#sending-your-app-data)). | There's no **Resend** for a run: read it with `GET links.run` instead. |
-| **Repeats** | Deliveries can repeat and arrive out of order. A run ends only once. Each delivery is built when it's sent, from the run as it is then: a retried `workflow_run.awaiting_input` that arrives after the question was answered has no `prompt`. | Key endings on `run_id`. |
-| **Before the `201`** | A run that ends as it starts, such as a chart that fails before it sends anything, comes back from `POST /workflow-runs` already `failed` or `completed`, and its webhook can reach you before that response does. | Store the run's id from the response, and retry an event whose `run_id` you haven't stored yet instead of dropping it. |
+| **Early and out of order** | Deliveries can repeat, cross each other, and reach you before the response to the call that caused them. A run that asks or ends as it starts can send `workflow_run.awaiting_input` or its ending before `POST /workflow-runs` answers `201` (a match answered from the [name index](/matching) asks within milliseconds), and a decision that ends the run, such as a cancel, can send its ending before your POST is answered. Each delivery is built when it's sent, from the run as it is then: `run_state` says where the run is, and a retried `workflow_run.awaiting_input` that arrives after the question was answered has no `prompt`. Every body of a run, a webhook, the `201`, a decision's response or a `GET`, carries its `revision`, which goes up with every change. A run ends only once. | Save your record with a `reference` before you start the run, a new one for every run, and find it by `reference`, not `run_id`. Keep the highest `revision` you've applied, and skip a body whose `revision` isn't higher. A notification is data, not the run's state: deduplicate it on `delivery_id`, and never skip one by revision. |
 
 <Accordion title="Handle them in a job" description="WorkflowRunEventJob, in Ruby" icon="code">
   If one endpoint takes both request and run webhooks, [route on `event`](/webhooks#handle-it-in-a-job)
@@ -452,30 +465,53 @@ Deliveries can fail, repeat, or arrive early:
   ```ruby
   # app/jobs/workflow_run_event_job.rb
   class WorkflowRunEventJob < ApplicationJob
-    class UnknownRun < StandardError; end
-    # An ending can arrive before the 201 that gave you the run's id.
-    retry_on UnknownRun, wait: 5.seconds, attempts: 5
-
     def perform(event)
-      run = OrderSync.find_by(qube_run_id: event["run_id"]) or raise UnknownRun # where you stored the run's id
-      return if run.finished? # a repeat, or a question retried after the end
+      # Saved with its reference before the run started, so an event that beats the 201 finds it.
+      sync = event["reference"] && OrderSync.find_by(qube_reference: event["reference"])
+      return unless sync # a run your app didn't start, such as one from the dashboard
 
-      case event["event"]
-      when "workflow_run.notification"
-        # Already handled if this delivery_id was seen: a retry repeats it.
-        return if run.deliveries.exists?(delivery_id: event["delivery_id"])
+      if event["event"] == "workflow_run.notification"
+        # Data, not the run's state: a retry repeats its delivery_id. Never skip one by revision.
+        return if sync.deliveries.exists?(delivery_id: event["delivery_id"])
 
-        ImportPage.call(run, event["name"], event["data"]) # e.g. page, with data["kind"]
-        run.deliveries.create!(delivery_id: event["delivery_id"])
-      when "workflow_run.awaiting_input"
-        run.update!(status: "waiting", question: event["prompt"]) if event["prompt"]
-      when "workflow_run.completed"
-        run.update!(status: "done", outcome: event["outcome"], output: event["output"])
-      when "workflow_run.failed", "workflow_run.cancelled"
-        run.update!(status: "stopped", outcome: event["outcome"], error: event["error"] || event["cancel_reason"])
+        ImportPage.call(sync, event["name"], event["data"]) # e.g. page, with data["kind"]
+        sync.deliveries.create!(delivery_id: event["delivery_id"])
+      else
+        ApplyRun.call(sync, event)
       end
     end
   end
+
+  # Any body of the run: a webhook, the 201's or a decision's response `data` (which
+  # names the id and state `id` and `state`), or a GET.
+  class ApplyRun
+    def self.call(sync, body)
+      sync.with_lock do
+        # Older than what you have: a repeat, or one that crossed a response.
+        next if body["revision"] <= sync.qube_revision
+
+        sync.update!(
+          qube_run_id: body["run_id"] || body["id"],
+          qube_revision: body["revision"],
+          status: body["run_state"] || body["state"],
+          question: body["prompt"], # nil once it's answered
+          outcome: body["outcome"],
+          output: body["output"],
+          error: body["error"] || body["cancel_reason"]
+        )
+      end
+    end
+  end
+
+  # Starting it: the record first, then the run (Qube.api is the small client in Making requests).
+  # A reference of its own for every run, not the order's id: revisions count per run, so a second
+  # run for this order, found by a shared reference, would land on the first run's row and be skipped.
+  sync = OrderSync.create!(order: order, qube_reference: "order-#{order.id}-#{SecureRandom.uuid}",
+                           qube_revision: 0)
+  run = Qube.api(:post, "/connections/#{connection_id}/workflow-runs",
+                 { workflow: "add_transaction", input: input,
+                   reference: sync.qube_reference, webhook_url: webhook_url })
+  ApplyRun.call(sync, run)
   ```
 </Accordion>
 
@@ -709,7 +745,7 @@ isn't held up: the pages keep being fetched while your app takes them. **The run
   | `delivery_id` | The same on every retry of this notification. Deduplicate on it. |
   | `seq` | 1, 2, 3… across the run, the workflows it calls included. |
   | `name` | The notify state's `name`, such as `page`. Route on it. |
-  | `state` | The path of the state that sent it, such as `pull_lists / send` when a workflow the run calls sent it. |
+  | `state` | The path of the state that sent it, such as `pull_lists / send` when a workflow the run calls sent it. The run's own state is `run_state`. |
   | `from` | `null` when the run's own workflow sent it. Otherwise the called workflow and its state, `{"workflow", "state"}`, plus `item_index` and `item_count` in a state that runs once per item. |
   | `data` | The state's `data`, filled in. |
 
@@ -723,6 +759,9 @@ isn't held up: the pages keep being fetched while your app takes them. **The run
     "workflow": "pull_changes",
     "workflow_id": "018f0000-0000-7000-8000-000000000004",
     "run_id": "018f0000-0000-7000-8000-000000000000",
+    "reference": "nightly-sync-2026-10-11",
+    "revision": 5,
+    "run_state": "running",
     "links": {"run": "https://qubesync.com/api/v2/connections/…/workflow-runs/…", "decisions": "…", "cancel": "…", "ui": "…"},
     "delivery_id": "018f0000-0000-7000-8000-000000000005",
     "seq": 1,
@@ -826,7 +865,7 @@ Click into a run to see its details
 </Frame>
 
 From your app, `GET /connections/{id}/workflow-runs?state=awaiting_input` lists the runs waiting on your
-users.
+users, and `?reference=` the runs you started with a reference.
 
 ## The API at a glance
 
@@ -835,10 +874,10 @@ All under `https://qubesync.com/api/v2/connections/{connection_id}`, with your a
 
 | Call | What it does |
 | --- | --- |
-| `POST /workflow-runs` | Starts a run: `workflow` (the key), `input`, optional `webhook_url`. On a sandbox or simulated connection, `version` picks the chart ([versions](/workflow-authoring#versions-and-publishing)). `201` with the run. Input the workflow doesn't accept is `422`, with the path of each problem, before anything is queued. |
-| `GET /workflow-runs/{run_id}` | The whole run: `state`, `current_state`, `outcome`, `input`, `vars`, `prompt`, `output`, `error`, `summary`, `cancel_reason`, `trace` and `links`. |
-| `GET /workflow-runs` | The 100 most recent runs your app started on the connection, newest first. `?state=` and `?outcome=` (the exact key) filter them. |
-| `POST /workflow-runs/{run_id}/decisions` | Answers the question: `option`, plus `data` with the option's fields. `links.decisions` names the question (`?prompt_token=`, the prompt's `token`; or send `prompt_token` in the body) so a retry can't answer the next one. `422` for an option it doesn't offer, a missing field, a conflict's `params` with a field the update doesn't take (`invalid_data`), or a `prompt_token` that isn't a string. `409 prompt_changed` when the run has asked again since the question the token names. `400 not_awaiting_input` when the run isn't waiting. Both are safe to ignore on a repeat. |
+| `POST /workflow-runs` | Starts a run: `workflow` (the key), `input`, optional `reference` (your own label for the run, 1 to 255 characters, on the run and every webhook) and `webhook_url`. On a sandbox or simulated connection, `version` picks the chart ([versions](/workflow-authoring#versions-and-publishing)). `201` with the run. Input the workflow doesn't accept is `422`, with the path of each problem, before anything is queued. |
+| `GET /workflow-runs/{run_id}` | The whole run: `reference`, `revision`, `state`, `current_state`, `outcome`, `input`, `vars`, `prompt`, `output`, `error`, `summary`, `cancel_reason`, `trace` and `links`. |
+| `GET /workflow-runs` | The 100 most recent runs your app started on the connection, newest first. `?state=`, `?outcome=` (the exact key) and `?reference=` (exactly as you sent it) filter them. |
+| `POST /workflow-runs/{run_id}/decisions` | Answers the question: `option`, plus `data` with the option's fields. `links.decisions` names the question (`?prompt_token=`, the prompt's `token`; or send `prompt_token` in the body) so a retry can't answer the next one. `422` for an option it doesn't offer, a missing field, a conflict's `params` with a field the update doesn't take (`invalid_data`), or a `prompt_token` that isn't a string. `409 prompt_changed` when the run has asked again since the question the token names. `400 not_awaiting_input` when the run isn't waiting. Both are safe to ignore on a repeat. Every refusal is `{"errors": {"code": "prompt_changed", "detail": "..."}}`: branch on `code`, not on `detail`'s words. |
 | `POST /workflow-runs/{run_id}/cancel` | Stops the run, with an optional `reason`. `409 already_finished` once it has ended. |
 | `GET /workflow-runs/{run_id}/events` | The event log, oldest first, the workflows it calls included. Page with `?after=` (the previous page's `next_after`, or the last `seq` you have) and `?limit=` (up to 500, default 100). |
 | `DELETE /workflow-runs/{run_id}` | Deletes a finished run before retention does. `409 run_not_finished` while it's running or waiting. |
@@ -851,10 +890,17 @@ part of the run you started.
 <AccordionGroup>
   <Accordion title="Starting a run twice runs it twice" description="unless both calls carry the same Idempotency-Key" icon="key">
     Use an `Idempotency-Key` to make sure you're not starting duplicate runs. See [Retrying a call safely](/making-requests#retrying-a-call-safely).
+    A `reference` doesn't do that: it's your label for the run, and two runs can have the same one. When you
+    start another run for the same record, give it a reference of its own (`order-1042-2`, or one with a
+    UUID in it), so the first run's webhooks can't be taken for the second's. Revisions count per run, so
+    the second run's bodies, starting again at revision 1, would also be skipped against the first run's. A
+    retry of the same start, with its `Idempotency-Key`, sends the same reference.
   </Accordion>
   <Accordion title="Answer at links.decisions, and a retry is safe" icon="ticket">
     Each question a run asks has a `prompt.token` to distinguish between questions that look the same (e.g. a `wait` in a loop, or a workflow called once per item), and `links.decisions` carries it (`?prompt_token=…`). It serves as an idempotency key of its own: if your answer gets no response, you can safely send it again to the same link without accidentally answering the run's next question. Once the run has asked again, it's refused with `409 prompt_changed` and nothing changes. On a retry, a `409` or a `400 not_awaiting_input` means your first answer landed or someone answered on the run's page. If you build the URL yourself, send the token as `prompt_token` in the body; without one, an answer is taken for whatever the run is
     asking when it arrives.
+
+    The run goes on as soon as your answer lands, so the webhook it sends next (the next question, or `workflow_run.completed` after a cancel) can arrive before your POST is answered. The response carries the run's `revision` as webhooks do: apply whichever is newer ([early and out of order](#what-your-app-receives)).
   </Accordion>
   <Accordion title="Workflows are composable" icon="diagram-project">
     A `workflow` state runs another workflow as one step, optionally once per item in a list (`each`). When building complex flows, prefer combining simpler workflows rather than shoving everything into one chart.

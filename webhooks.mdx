@@ -69,14 +69,19 @@ their own webhooks, about the run rather than each request.
 | <Badge color="green">`response_received`</Badge> | QuickBooks answered. | **Apply it.** Use `response_json.data`. |
 | <Badge color="red">`error`</Badge> | It failed for good. Usually QuickBooks refused it (a duplicate name, a stale `edit_sequence`). | **Show the error.** Branch on `response_json.error.code`; show your customer `error.user_message`. |
 | <Badge color="orange">`retryable`</Badge> | The Web Connector couldn't get it into QuickBooks: QuickBooks wasn't running, a dialog was open, or the wrong company file was. Nothing was applied. | **Wait. Don't resend.** QuBe Sync keeps trying. Show your customer `error.user_message` so they can fix it. |
-| <Badge color="purple">`timed_out`</Badge> | QuickBooks received it, but the session ended without an answer. | **Check, then resend.** Queries are safe to queue again. For a create or update, check whether it was applied first: a [workflow](/workflows#lost-answers) does this for you. |
-| <Badge color="gray">`discarded`</Badge> | Your app [discarded](/error_handling#when-quickbooks-is-out-of-reach) it before the Web Connector took it. | **Nothing.** QuickBooks never saw it. |
+| <Badge color="purple">`timed_out`</Badge> | QuickBooks received it, but its answer never came back: the customer's computer lost its connection, or QuickBooks or the Web Connector was closed, mid-request. `error.error_type` is `timed_out`. | **Check, then resend.** Queries are safe to queue again. For a create or update, check whether it was applied first: a [workflow](/workflows#lost-answers) does this for you. |
+| <Badge color="gray">`discarded`</Badge> | Your app [discarded](/error_handling#discarding-a-request) it before the Web Connector took it. `error.error_type` is `discarded` (or, if it was <Badge color="orange">`retryable`</Badge>, still the connection error it was waiting on). | **Nothing.** QuickBooks never saw it. |
 
 <Note>
   A <Badge color="orange">`retryable`</Badge> webhook arrives when the error first appears, and again only if it changes. It isn't
   final: the next webhook for that page is usually the answer, with the same `id` and `page_request_id`
   and a different `state`. That's why you key on `page_request_id` plus `state`, never on the id alone.
 </Note>
+
+Every webhook but <Badge color="green">`response_received`</Badge> carries an `error`. Its keys aren't the ones in
+`response_json.error`, QuickBooks' own answer when it refused the request: the top-level one has
+`error_type`, `error_code` and `user_message`, and QuickBooks' has `code`, `type` and `message`. See
+[where each key lives](/error_handling#where-each-key-lives).
 
 ## Handle it in a job
 
@@ -149,8 +154,8 @@ The four fields you act on, from the example at the top of this page. The rest a
   [When the record changed after you read it](/error_handling#when-the-record-changed-after-you-read-it).
 </ResponseField>
 <ResponseField name="error" type="object | null">
-  Set when `state` is <Badge color="red">`error`</Badge> or <Badge color="orange">`retryable`</Badge>: `error_type`, `error_code`, `message`, `user_message` (safe
-  to show your customer), `hresult` and `debug_message`. See [Error handling](/error_handling).
+  Set when `state` is <Badge color="red">`error`</Badge>, <Badge color="orange">`retryable`</Badge>, <Badge color="purple">`timed_out`</Badge> or <Badge color="gray">`discarded`</Badge>: `error_type`, `error_code`, `message`, `user_message` (safe
+  to show your customer), `hresult` and `debug_message`. See [Error handling](/error_handling#where-each-key-lives).
 </ResponseField>
 
 <Accordion title="Paging, app and delivery fields" description="page, page_request_id, iteration_state, app_id, app_name, sandbox, timestamp, response_xml" icon="list">
@@ -158,7 +163,8 @@ The four fields you act on, from the example at the top of this page. The rest a
     For [paginated](/pagination) answers. Each page has its own `page_request_id`; `iteration_state` is
     `continue` until the last page, which is `done`. Pages can arrive in any order, so count the pages
     instead of waiting for the `done` one ([how](/pagination#handling-far-edge-cases)). It's `not_applicable`
-    for a single-page answer. A <Badge color="orange">`retryable`</Badge> and the final webhook for the same page share its
+    for an answer that wasn't paged: a create or an update, a lookup by id or name, or a query sent with
+    `max_returned` alone or `iterator=false`. A list query whose matches fit in one page is page 1, `done`. A <Badge color="orange">`retryable`</Badge> and the final webhook for the same page share its
     `page_request_id`: tell them apart by `state`.
     <Tip>
       Need the pages in order? A [workflow](/workflows#sending-your-app-data) sends them one at a time and
@@ -172,7 +178,9 @@ The four fields you act on, from the example at the top of this page. The rest a
     Unix seconds when this delivery was signed. It's also the `t=` in the signature header.
   </ResponseField>
   <ResponseField name="response_xml" type="string | null">
-    The raw qbXML QuickBooks sent back, if you ever need it.
+    The raw qbXML QuickBooks sent back, if you ever need it. With `response_json` beside it, a webhook
+    comes to about 1.7 times QuickBooks' answer: a page of 100 records is typically a few hundred KB. It's
+    null when the answer was over the [size limit](/error_handling#when-the-answer-is-too-large).
   </ResponseField>
 </Accordion>
 
@@ -344,6 +352,15 @@ your app data, and when it ends. The QuickBooks requests it makes don't send any
 `webhook_url` the run was started with, are signed the same way and need the same quick `2xx`, but the
 body is different: it has an `event`, such as `workflow_run.completed`, and a `run_id` instead of a
 request's `id`.
+
+Any run webhook, a question as well as an ending, can arrive before the response to the call that caused
+it: the `201` that starts the run, or the answer to a decision. So start a run with a `reference`, your own
+label for the run, such as the id of the record it's about, saved before you send the call: every run
+webhook carries it, so find your record by `reference` rather than `run_id`. Every webhook and response
+also carries the run's `revision`, which goes up with every change: skip a body whose `revision` isn't
+higher than the last you applied (except a notification, which you deduplicate on `delivery_id`).
+Revisions count per run, so give every run a new reference (`contact-381-2` for the next run about the
+same record).
 
 [Workflows → What your app receives](/workflows#what-your-app-receives) has the events, their payloads and
 the `WorkflowRunEventJob` the controller above hands them to.

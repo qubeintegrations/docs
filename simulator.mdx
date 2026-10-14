@@ -362,6 +362,7 @@ curl -u "$QUBE_API_KEY:" \
 | `next_status` | `{"code": 3100}`, or any QuickBooks status code, with an optional `message` | QuickBooks refusing the next request with that code. | One request |
 | `next_response_error` | `"xml_error"`, or `{"hresult", "message"}` | QuickBooks failing to parse the next request. | One request |
 | `next_lost_response` | `true` | QuickBooks applying the next request, whatever it is, then the Web Connector dying before it answers. The request ends <Badge color="purple">`timed_out`</Badge>; a workflow that sent it [settles it](/workflows#lost-answers). | One request |
+| `next_response_too_large` | `true` | QuickBooks applying the next request, then answering it with more than the [size limit](/error_handling#when-the-answer-is-too-large) for one answer. The request ends <Badge color="red">`error`</Badge> with `error_type` `response_too_large`; a workflow that sent it sees `no_response` with reason `too_large`. Sandbox companies are too small to reach the limit otherwise. | One request |
 | `latency_ms` | `0` to `60000` | QuickBooks taking its time over each answer. | Until a `PUT` leaves it out |
 
 `GET /connections/{id}/simulator` shows the current faults and a summary of the company file, and

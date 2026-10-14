@@ -442,7 +442,7 @@ stateDiagram-v2
     | `$default` | `{"$default": [a, b]}` is the first candidate that renders to something other than nothing or an empty string: `{"$default": ["${vars.record.full_name}", "${vars.record.name}"]}` is a list record's name whatever list it came from. |
     | `$merge` | `{"$merge": [a, b]}` deep-merges objects, each onto the ones before it, the way `$from` merges a map's own keys: objects merge key by key, and lists and plain values replace. An operand that renders to nothing is skipped. `{"$merge": ["${input.invoice}", "${vars.overrides}"]}` merges two objects the run holds, where `$from` would need the second one's keys written out. |
     | `$find` | `{"$find": "${response.data}", "as": "invoice", "where": <condition>}` is the first element for which the condition holds, with the element at `each.invoice`, or nothing: `{"$find": "${response.data}", "as": "invoice", "where": {"path": "each.invoice.external_guid", "op": "eq", "value": "${vars.guid}"}}` picks out the invoice carrying a GUID, which is how a chart that looks for a lost add itself recognises the one it sent. |
-    | `$refs` | `{"$refs": "${input.params}", "operation": "invoice.create"}` lists the references an add's params make, one per distinct record, each with its `kind` (`customer`, `item`, `account`, ...), `full_name`, `name`, `parent`, `list_id` and `paths`. With `"list_ids"` beside it (one per reference, in that order), it is the params with each reference replaced by its ListID. `add_transaction` is built on it. |
+    | `$refs` | `{"$refs": "${input.params}", "operation": "invoice.create"}` lists the references an add's params make, one per distinct record, each with its `kind` (`customer`, `item`, `account`, ...), `full_name`, `name`, `parent`, `list_id` and `paths`. With `"found"` beside it (the `response` of a for-each over them), each also has its `outcome`, `how` and `record`; with `"made"` too (the `response` of a for-each over the ones `found` answered `not_found`), those take its outcome and record; `"missing": true` keeps the ones still `not_found`. With `"list_ids"` instead (one per reference, in that order), it is the params with each reference replaced by its ListID. `add_transaction` is built on it. |
   </Accordion>
   <Accordion title="Outcomes" description="kind, output" icon="flag-checkered">
     `completed` and `failed` always exist. Declare more under `outcomes`: your app branches on the run's
@@ -490,7 +490,7 @@ Click a step to open it:
 | **Request** | **Which request** it sends: one you pick there, or one **From a reference** such as `${input.find.operation}`. Then its parameters, filled in there or taken from the app's input. A query says what it returns and has **Page through results**. |
 | A query that pages | **Send each page to the app**, under **On each page**: one click adds a **Send to the app** step sending the page (its number, whether more follow, and its records) and the way back to the query for the next. |
 | An add or update | A **Settle a lost answer** switch. A query has it under **More options**, since asking a query again is always safe. An update also has **If someone changed it since it was read**: ask the app with the diff, apply your changes anyway, or fail with error 3200 for the chart to handle. |
-| An error branch | Can test for **QuickBooks never answered**, and why (`timed_out`, `connector_error`, `rejected`, `withdrawn` or `page_expired`), or, for an add or update that settles a lost answer, **QuickBooks may have applied it**. |
+| An error branch | Can test for **QuickBooks never answered**, and why (`timed_out`, `connector_error`, `rejected`, `withdrawn`, `page_expired` or `too_large`), or, for an add or update that settles a lost answer, **QuickBooks may have applied it**. |
 | **Send to the app** | Its name and **What to send**. Its error branch offers **the app could not be reached** and **what it sends is too large**. |
 | **Match a name** | The kind of record (pick one, or take it from a reference such as `${input.kind}`), the name, the parent, the fields to compare, exact only, a minimum score and whether to refresh the index first. |
 | **Wait for decision** | The question and its answers. |
@@ -743,12 +743,13 @@ other workflows, each once per reference its add makes:
   "as": "ref",
   "stop_on": ["cancelled"],
   "input": { "kind": "${each.ref.kind}", "name": "${each.ref.name}", "parent": "${each.ref.parent}",
-             "list_id": "${each.ref.list_id}", "pick": "${each.ref.pick}" },
+             "list_id": "${each.ref.list_id}", "pick": "${each.ref.pick}",
+             "fields": "${each.ref.fields}", "accept": "${each.ref.accept}" },
   "on": {
     "success": [
       { "description": "the app stopped at one of the questions", "if": { "path": "response.stopped", "op": "present" },
-        "target": "cancelled", "assign": { "resolved": "${response.data}" } },
-      { "description": "every reference looked for", "target": "still_missing", "assign": { "resolved": "${response.data}", … } }
+        "target": "cancelled", "assign": { "found": "${response}", … } },
+      { "description": "every reference looked for", "target": "still_missing", "assign": { "found": "${response}", … } }
     ]
   }
 },
@@ -762,8 +763,9 @@ other workflows, each once per reference its add makes:
   "on": {
     "success": [
       { "description": "the app stopped at a name clash", "if": { "path": "response.stopped", "op": "present" },
-        "target": "cancelled", "assign": { "created": "${response.data}" } },
-      { "description": "every record exists", "target": "add", "assign": { "created": "${response.data}", … } }
+        "target": "cancelled", "assign": { "references": { "$refs": "${input.params}", "operation": "${input.operation}",
+                                                         "found": "${vars.found}", "made": "${response}" } } },
+      { "description": "every record exists", "target": "add", "assign": { "references": … } }
     ]
   }
 }
@@ -1109,7 +1111,7 @@ Two endings are left for the chart to handle, both as `error` with `code` `null`
 
 | `response.error.type` | What happened |
 | --- | --- |
-| `unsettled` | The run can't tell. Usually it found records that might be the one it sent and nothing to tell them apart, as with a transaction type that has no `external_guid`, and `response.error.candidates` lists them. It's also `unsettled` when the check itself can't be trusted: the record an update was for no longer exists, a list add's parent is gone, the check came back full with none carrying the GUID sent (so there may be more), or QuickBooks answered the check with an error. Then `candidates` may be empty. `response.error.message` says which. Unhandled, `unsettled` fails the run with that message. |
+| `unsettled` | The run can't tell. Usually it found records that might be the one it sent and nothing to tell them apart, as with a transaction type that has no `external_guid`, and `response.error.candidates` lists them. It's also `unsettled` when the check itself can't be trusted: the record an update was for no longer exists, a list add's parent is gone, the check came back full with none carrying the GUID sent (so there may be more), or QuickBooks answered the check with an error. Then `candidates` may be empty. `response.error.candidates_complete` is `true` only when the candidates are every record the check could have found (a transaction add's check by reference number, which answers whole, or one that came back with fewer than its cap of 50): then if none of them is it, it wasn't added. `response.error.message` says which. Unhandled, `unsettled` fails the run with that message. |
 | `no_response` | QuickBooks didn't answer the checks and re-sends either. The run sends at most five more requests for one that was lost, re-sending it at most twice, then gives up. |
 
 <AccordionGroup>
@@ -1119,7 +1121,8 @@ Two endings are left for the chart to handle, both as `error` with `code` `null`
       "error": { "code": null, "type": "unsettled",
                  "message": "QuickBooks never answered transfer.create, and 2 candidates match what was sent, and it carried no GUID to tell them apart",
                  "candidates": [ { "txn_id": "1B-1790470702", "txn_date": "2026-09-28", "amount": 250.0, "...": "..." },
-                                 { "txn_id": "1C-1790470744", "txn_date": "2026-09-28", "amount": 250.0, "...": "..." } ] } }
+                                 { "txn_id": "1C-1790470744", "txn_date": "2026-09-28", "amount": 250.0, "...": "..." } ],
+                 "candidates_complete": true } }
     ```
 
     ```json no_response
@@ -1142,6 +1145,7 @@ Two endings are left for the chart to handle, both as `error` with `code` `null`
     | `rejected` | QuickBooks couldn't read the request (`xml_error`). | No |
     | `withdrawn` | Your app withdrew it before the Web Connector took it. | No |
     | `page_expired` | A later page of a paginated query, whose session ended before it was fetched. | No, it's a query |
+    | `too_large` | QuickBooks answered, but over the [size limit](/error_handling#when-the-answer-is-too-large) for one answer, so the answer wasn't kept. A query isn't sent again: it would answer the same. | Yes: QuickBooks ran it. An add or update is settled as for `timed_out` |
   </Accordion>
   <Accordion title="Where settling shows up" icon="magnifying-glass">
     | Where | What it shows |
@@ -1166,8 +1170,9 @@ Two endings are left for the chart to handle, both as `error` with `code` `null`
 saying why and, for an add, `response.error.external_guid`, the GUID it was sent with. That makes the looking
 part of the chart, where the diagram and the run's log show it.
 
-No shipped template does it any more: `add_transaction` leaves its add to settling and handles only
-`unsettled`, with a question.
+No shipped template does it any more: `add_transaction` leaves its add to settling, and asks your app at
+`ask_about_add` about an `unsettled` add or a `no_response` that reached QuickBooks, with `why` in the
+question's data saying which, and `candidates_complete` whether the candidates are all there could be.
 
 A chart that looks for itself:
 

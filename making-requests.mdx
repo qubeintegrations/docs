@@ -17,7 +17,7 @@ every feature native qbXML offers. All behave the same way:
   <Step title="Send JSON">
     You send JSON to `https://qubesync.com/api/v2/connections/{connection_id}/{resource}`.
   </Step>
-  <Step title="Queue">
+  <Step title="Save the queued request's ID">
     Your request is validated against QuickBooks' schema. A valid request is queued, and you get `201 Created` with the queued request.
   </Step>
   <Step title="Receive the answer">
@@ -132,8 +132,9 @@ curl -u "$QUBE_API_KEY:" \
 </Visibility>
 {/* agent-block:end */}
 
-A query's answer is always a **list** in `response_json.data`, even when one record or none matches. For
-large result sets, add `iterator=true` and each page arrives as its own webhook. See [Pagination](/pagination).
+A query's answer is always a **list** in `response_json.data`, even when one record or none matches. A list
+query QuickBooks pages arrives a page at a time, each page as its own webhook, unless you look records up by
+id or name or send `max_returned` alone. See [Pagination](/pagination).
 
 <Tip>
   Ask only for what changed, so a full import becomes a cheap incremental sync. The two kinds of query
@@ -412,8 +413,15 @@ curl -u "$QUBE_API_KEY:" \
   Where the answer goes. It stays in the query string, as on every other call.
 </ParamField>
 
-The answer arrives at your `webhook_url` like any other request. You can still [auto-paginate](/pagination) a single query 
-(with `iterator="Start"` and `MaxReturned`), receiving one webhook per page of results.
+The answer arrives at your `webhook_url` like any other request. qbXML you send yourself is sent as you wrote
+it, so it isn't [paged](/pagination) for you. To page a single query, give it `iterator="Start"` and a
+`MaxReturned` page size, and you get one webhook per page of results.
+
+The `201` carries `warnings` beside `data`, a list that is empty when there's nothing to say. A query
+QuickBooks pages that has neither an `iterator` nor `MaxReturned`, and doesn't look records up by id or
+name, gets an `unpaged_query` warning: QuickBooks will answer it with every match at once, and one answer
+over the [size limit](/error_handling#when-the-answer-is-too-large) isn't kept. Warnings are only in that
+`201`; `links.self` doesn't return them.
 
 ### A batch
 
