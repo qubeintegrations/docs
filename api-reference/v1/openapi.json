@@ -332,6 +332,7 @@
                 "sent",
                 "response_received",
                 "error",
+                "timed_out",
                 "discarded"
               ]
             },
@@ -604,12 +605,12 @@
                         ],
                         "webhook_error": "Failed to deliver webhook after 3 attempts",
                         "error": {
-                          "message": "Invalid request: Unknown request type 'InvalidRequestRq'",
-                          "code": "invalid_request",
-                          "details": {
-                            "line": 1,
-                            "column": 50
-                          }
+                          "error_type": "xml_error",
+                          "error_code": null,
+                          "message": "QuickBooks found an error when parsing the provided XML text stream.",
+                          "hresult": "0x80040400",
+                          "user_message": "The request sent to QuickBooks was invalid. Please let us know what you were trying to do when this error occurred.",
+                          "debug_message": null
                         },
                         "links": {
                           "self": "/api/v1/queued_requests/550e8400-e29b-41d4-a716-446655440002",
@@ -3932,9 +3933,10 @@
               "sent",
               "response_received",
               "error",
+              "timed_out",
               "discarded"
             ],
-            "description": "Current state of the queued request"
+            "description": "Current state of the queued request. `timed_out`: no answer came back (the customer's computer lost its connection, or QuickBooks or the Web Connector was closed, mid-request), so QuickBooks may still have applied it. `discarded`: it was discarded before the Web Connector picked it up, so QuickBooks never got it."
           },
           "webhook_state": {
             "type": "string",
@@ -3975,7 +3977,7 @@
             "type": "string",
             "nullable": true,
             "example": "<QBXML><QBXMLMsgsRs statusCode='0' statusSeverity='Info' statusMessage='Status OK'><CustomerQueryRs requestID='1' statusCode='0' statusSeverity='Info' statusMessage='Status OK'><CustomerRet><ListID>80000001-1234567890</ListID><Name>Sample Customer</Name></CustomerRet></CustomerQueryRs></QBXMLMsgsRs></QBXML>",
-            "description": "The QBXML response from QuickBooks"
+            "description": "The QBXML response from QuickBooks. One answer can be at most 4 MB as the Web Connector sends it, about 3 MB of qbXML; QuickBooks' answer over that isn't kept: this is null and `error.error_type` is `response_too_large`."
           },
           "response_json": {
             "type": "array",
@@ -3990,7 +3992,7 @@
             "format": "uri",
             "nullable": true,
             "example": "https://example.com/webhook",
-            "description": "URL to receive a webhook when the request is completed"
+            "description": "URL to receive a webhook when the request is completed. The webhook carries the request as it then is, `response_xml` and `response_json` included, so it is at most about twice the size limit on one answer (see `response_xml`)."
           },
           "webhook_attempts": {
             "type": "array",
@@ -4043,17 +4045,54 @@
             "type": "object",
             "nullable": true,
             "properties": {
+              "error_type": {
+                "type": "string",
+                "enum": [
+                  "xml_error",
+                  "quickbooks_connection_error",
+                  "quickbooks_business_error",
+                  "unexpected_error",
+                  "response_too_large",
+                  "timed_out",
+                  "discarded"
+                ],
+                "description": "Where it failed. `timed_out`: no answer came back, and QuickBooks may still have applied the request, so look before sending it again. `discarded`: QuickBooks never got it. `response_too_large`: QuickBooks answered, but with more than QuBe Sync accepts for one answer (4 MB as the Web Connector sends it, about 3 MB of qbXML), so `response_xml` and `response_json` are null. QuickBooks ran the request: page the query (`iterate`, or `iterator=\"Start\"` with `<MaxReturned>` in `request_xml`) or narrow it, and for a write, look before sending it again."
+              },
               "message": {
-                "type": "string"
+                "type": "string",
+                "description": "The raw message from QuickBooks or the Web Connector; for `timed_out` and `discarded`, which neither sent, QuBe Sync's own"
+              },
+              "user_message": {
+                "type": "string",
+                "description": "A friendly message for the end user"
+              },
+              "error_code": {
+                "type": "integer",
+                "nullable": true,
+                "description": "QuickBooks' statusCode, for a business error"
+              },
+              "hresult": {
+                "type": "string",
+                "nullable": true,
+                "description": "The Web Connector's HRESULT, for a connection or XML error"
+              },
+              "debug_message": {
+                "type": "string",
+                "nullable": true,
+                "description": "Which element of the request the value came from, when known"
               },
               "code": {
-                "type": "string"
+                "type": "string",
+                "description": "Not sent: QuickBooks' status code is `error_code`",
+                "deprecated": true
               },
               "details": {
-                "type": "object"
+                "type": "object",
+                "description": "Not sent",
+                "deprecated": true
               }
             },
-            "description": "Error details if the request failed processing"
+            "description": "Set when `state` is `error`, `retryable`, `timed_out` or `discarded`. A `timed_out` request's `error_type` is `timed_out`, and a `discarded` one's `discarded`, unless the request was `retryable` when it was discarded: then it keeps the connection error that held it up."
           },
           "links": {
             "type": "object",
@@ -4137,7 +4176,7 @@
             "type": "string",
             "format": "uri",
             "example": "https://your-webhook-url.com/endpoint",
-            "description": "Optional absolute http or https URL to receive a webhook when the request is completed. It may not contain a username or password, and in production it may not point at localhost or a private, loopback or link-local address.",
+            "description": "Optional absolute http or https URL to receive a webhook when the request is completed. It may not contain a username or password, and in production it may not point at localhost or a private, loopback or link-local address. A `qube listen` URL must be one of this app's.",
             "maxLength": 2048
           }
         }
@@ -4191,11 +4230,11 @@
       "webhook_url": {
         "type": "string",
         "format": "uri",
-        "description": "Optional absolute http or https URL to receive a webhook when the request is completed. It may not contain a username or password, and in production it may not point at localhost or a private, loopback or link-local address.",
+        "description": "Optional absolute http or https URL to receive a webhook when the request is completed. It may not contain a username or password, and in production it may not point at localhost or a private, loopback or link-local address. A `qube listen` URL must be one of this app's.",
         "maxLength": 2048
       },
       "Error": {
-        "description": "What a refused request answers with. The one key is errors, and its shape says what went wrong: a sentence when the endpoint explains the refusal in words (a parameter the operation does not take, a key already taken, a run that has already ended); an object with detail, and a code when there is one, when the request named nothing that exists or may not do what it asked (403, 404, and a CLI session's 401); an object of fields, each a list of messages, when a record failed validation and nothing was saved; a list of {path, message} problems when a submitted document or input fails validation. A request without a usable API key gets a 401 Basic challenge with the plain-text body Unauthorized, not JSON.",
+        "description": "What a refused request answers with. The one key is errors, and its shape says what went wrong: a sentence when the endpoint explains the refusal in words (a parameter the operation does not take, a key already taken, a run that has already ended); an object with detail, and a code when there is one, when the request named nothing that exists or may not do what it asked (403, 404, and a CLI session's 401), or an answer to a run's question was refused (the decisions endpoint's 400, 409 and 422, which always carry a code to branch on); an object of fields, each a list of messages, when a record failed validation and nothing was saved; a list of {path, message} problems when a submitted document or input fails validation. A request without a usable API key gets a 401 Basic challenge with the plain-text body Unauthorized, not JSON.",
         "properties": {
           "errors": {
             "oneOf": [
