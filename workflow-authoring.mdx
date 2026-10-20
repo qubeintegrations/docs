@@ -643,7 +643,7 @@ Walk the unhappy paths too:
 
 | To see | Do this |
 | --- | --- |
-| A 3100 on the create, QuickBooks closed halfway through, or an answer lost on its way back | Arm one of the simulator's faults: **Next request** on the connection's page, or `next_lost_response` through the API. |
+| A 3100 on the create, QuickBooks closed halfway through, or an answer lost on its way back | Arm one of the simulator's faults: **Next request** on the connection's page, or `next_lost_response` through the API (it waits for the run's first add, change or delete). |
 | A conflict prompt | Give your chart an update state, change the record through the API, then run the update with the `edit_sequence` from before. |
 
 <Note>

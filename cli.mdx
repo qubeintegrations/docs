@@ -151,7 +151,7 @@ qube requests list --connection <id>              # another connection, this onc
     ```bash
     qube simulator show <connection>                  # the fake company file and its faults
     qube simulator faults <connection> --next 3100    # one-shot: xml | 3100 | 3120 | 3140 | 3180 | 3200 | ok
-    qube simulator faults <connection> --next lost    # one-shot: applied, then its answer is lost; --next ok clears it
+    qube simulator faults <connection> --next lost    # one-shot: the next add, change or delete is applied, then its answer is lost; --next ok clears it
     qube simulator faults <connection> --qb closed    # sticky: closed | modal | mismatch | unexpected | ok
     qube simulator faults <connection> --latency 5000 # milliseconds QuickBooks "thinks" per answer
     qube simulator sync <connection>                  # run the fake Web Connector now

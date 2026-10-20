@@ -361,7 +361,7 @@ curl -u "$QUBE_API_KEY:" \
 | `connection_error` | `qb_closed`, `modal_dialog`, `company_file_mismatch`, `unexpected` | QuickBooks not running, a dialog open, the wrong company file open, or an unexplained failure. Requests go <Badge color="orange">`retryable`</Badge>. | Until a `PUT` leaves it out |
 | `next_status` | `{"code": 3100}`, or any QuickBooks status code, with an optional `message` | QuickBooks refusing the next request with that code. | One request |
 | `next_response_error` | `"xml_error"`, or `{"hresult", "message"}` | QuickBooks failing to parse the next request. | One request |
-| `next_lost_response` | `true` | QuickBooks applying the next request, whatever it is, then the Web Connector dying before it answers. The request ends <Badge color="purple">`timed_out`</Badge>; a workflow that sent it [settles it](/workflows#lost-answers). | One request |
+| `next_lost_response` | `true` | QuickBooks applying the next request that changes the company file (an add, change, delete, void or merge), then the Web Connector dying before it answers. Queries and reports before it are answered normally and leave the fault armed, since a lost query is simply asked again. The request ends <Badge color="purple">`timed_out`</Badge>; a workflow that sent it [settles it](/workflows#lost-answers). | The next write |
 | `next_response_too_large` | `true` | QuickBooks applying the next request, then answering it with more than the [size limit](/error_handling#when-the-answer-is-too-large) for one answer. The request ends <Badge color="red">`error`</Badge> with `error_type` `response_too_large`; a workflow that sent it sees `no_response` with reason `too_large`. Sandbox companies are too small to reach the limit otherwise. | One request |
 | `latency_ms` | `0` to `60000` | QuickBooks taking its time over each answer. | Until a `PUT` leaves it out |
 
@@ -373,7 +373,7 @@ Selected**.
   <Tab title="CLI">
     ```bash
     qube simulator faults <connection> --next 3100      # the next request: name already in use
-    qube simulator faults <connection> --next lost      # the next request: applied, then its answer is lost
+    qube simulator faults <connection> --next lost      # the next add, change or delete: applied, then its answer is lost
     qube simulator faults <connection> --qb closed      # QuickBooks closed until you say otherwise
     qube simulator faults <connection> --qb ok          # QuickBooks is back
     qube simulator faults <connection> --latency 5000   # five seconds per answer
@@ -385,7 +385,7 @@ Selected**.
   </Tab>
   <Tab title="Dashboard">
     A simulated connection's page has a **Simulator** panel: choose whether QuickBooks is reachable, what
-    happens to the **Next request** (a lost answer, or 3100, 3120, 3140, 3180, 3200 or malformed XML) and how
+    happens to the **Next request** (a lost answer, which waits for the next add, change or delete, or 3100, 3120, 3140, 3180, 3200 or malformed XML) and how
     long QuickBooks thinks (up to 15 seconds). Run the Web Connector now, or reset the company file, and
     watch each request get queued and answered live. Other codes and latencies are set through the API.
   </Tab>
@@ -400,7 +400,7 @@ Walk every path before your customers do:
 | Happy path | nothing | Store the returned `list_id` / `txn_id` |
 | Duplicate name | `next_status: {code: 3100}` | Ask the user, or use [`ensure`](/workflows#pick-a-template) |
 | Record changed in QuickBooks | `next_status: {code: 3200}` | Re-query, then retry the update. (A workflow's update reads the record back, finds it unchanged and sends it again.) |
-| Answer lost | `next_lost_response: true` | Query before resending a create or update. A workflow [settles it](/workflows#lost-answers) itself |
+| Answer lost | `next_lost_response: true`, then send a create or update | Query before resending a create or update. A workflow [settles it](/workflows#lost-answers) itself |
 | Record changed before a workflow's update | A chart of your own with an update state: change the record through the API, then run the update with the `edit_sequence` from before | Answer the [conflict prompt](/workflows#conflicts): `overwrite` or `keep` |
 | Missing reference | `next_status: {code: 3140}` | Create the referenced record, or tell the user |
 | QuickBooks closed | `connection_error: qb_closed` | Show `error.user_message`, not resend; the answer follows once you clear the fault |

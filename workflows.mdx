@@ -830,9 +830,11 @@ with a message saying why. A mutation that couldn't be confirmed is listed under
 on the run's page as **Not confirmed**: it may or may not be in QuickBooks, so look before sending it again.
 
 To watch it happen, use a simulated connection to arm a lost answer fault before a run sends a creation request. On the connection's page, set **Next
-request** to "applied, then the Web Connector dies before answering", run
+request** to "the next add, change or delete is applied, then the Web Connector dies before answering", run
 `qube simulator faults <connection> --next lost`, or set the simulator's
-[`next_lost_response`](/simulator#make-it-fail) fault through the API. How the run settles each kind of
+[`next_lost_response`](/simulator#make-it-fail) fault through the API. The fault waits for the next request
+that changes the company file, so the lookups a run sends first are answered normally, and the first add, change or
+delete is applied and its answer lost. How the run settles each kind of
 request, and how a chart can do the looking itself, is in
 [Settling lost answers](/workflow-authoring#settling-lost-answers).
 
