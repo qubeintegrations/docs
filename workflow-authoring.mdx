@@ -430,19 +430,20 @@ stateDiagram-v2
     | `meta.run_id` | Always: the run your app started, even inside a workflow it calls. |
     | `meta.outcome` | While an output renders. |
     | `response`, `responses`, `decision` | During a transition. |
-    | `each` | In a per-item `input`, a `$map` template or a `$find` condition. |
+    | `each` | In a per-item `input`, a `$map` template or key, or a `$find` condition. |
 
-    Six `$` keys build values, and no others are allowed:
+    Eight `$` keys build values, and no others are allowed:
 
     | Key | What it does |
     | --- | --- |
     | `$from` | Uses a value as the base of a map and deep-merges the map's own keys onto it. That's how `create` above passes the caller's whole customer through. |
-    | `$map` | `{"$map": "${vars.items}", "as": "item", "template": {...}}` builds a list from a list, rendering the template once per element (`each.item`, `each.index`, `each.count`). |
+    | `$map` | `{"$map": "${vars.items}", "as": "item", "template": {...}}` builds a list from a list, rendering the template once per element (`each.item`, `each.index`, `each.count`). With `"key"` beside it, a template rendered per element to a string or a list of strings, it builds an object instead: each element's rendered template under its key, or under each of its keys. A later element replaces an earlier one under the same key, and an element whose key renders to nothing is left out. `add_transaction` keys its output's `references` by where each sits in the add, `"key": "${each.ref.paths}"`, so an item named on two lines is under both. |
     | `$add` | `{"$add": [a, b]}` is the sum of its operands, numbers or templates that render to numbers, with nothing counting as 0: `{"$add": ["${vars.attempts}", 1]}` counts, and `-1` counts down. An operand that isn't a number fails the run. |
     | `$default` | `{"$default": [a, b]}` is the first candidate that renders to something other than nothing or an empty string: `{"$default": ["${vars.record.full_name}", "${vars.record.name}"]}` is a list record's name whatever list it came from. |
     | `$merge` | `{"$merge": [a, b]}` deep-merges objects, each onto the ones before it, the way `$from` merges a map's own keys: objects merge key by key, and lists and plain values replace. An operand that renders to nothing is skipped. `{"$merge": ["${input.invoice}", "${vars.overrides}"]}` merges two objects the run holds, where `$from` would need the second one's keys written out. |
     | `$find` | `{"$find": "${response.data}", "as": "invoice", "where": <condition>}` is the first element for which the condition holds, with the element at `each.invoice`, or nothing: `{"$find": "${response.data}", "as": "invoice", "where": {"path": "each.invoice.external_guid", "op": "eq", "value": "${vars.guid}"}}` picks out the invoice carrying a GUID, which is how a chart that looks for a lost add itself recognises the one it sent. |
     | `$refs` | `{"$refs": "${input.params}", "operation": "invoice.create"}` lists the references an add's params make, one per distinct record, each with its `kind` (`customer`, `item`, `account`, ...), `full_name`, `name`, `parent`, `list_id` and `paths`. With `"found"` beside it (the `response` of a for-each over them), each also has its `outcome`, `how` and `record`; with `"made"` too (the `response` of a for-each over the ones `found` answered `not_found`), those take its outcome and record; `"missing": true` keeps the ones still `not_found`. With `"list_ids"` instead (one per reference, in that order), it is the params with each reference replaced by its ListID. `add_transaction` is built on it. |
+    | `$read` | `{"$read": "${decision.data.txn_id}", "operation": "${input.operation}"}` is the query that reads the record that add makes, whole, by its id: `{"operation": ..., "params": ...}`, its type's query by `txn_id` with the flag that asks for its lines for a transaction (`include_line_items`, or a build assembly's `include_component_line_items`), or by `list_id` for a list record. Send it from a request state with `"operation": "${vars.read.operation}"` and `"params": {"$from": "${vars.read.params}"}`. `add_transaction` reads the transaction your app names at `ask_about_add` this way. |
   </Accordion>
   <Accordion title="Outcomes" description="kind, output" icon="flag-checkered">
     `completed` and `failed` always exist. Declare more under `outcomes`: your app branches on the run's
@@ -1077,7 +1078,7 @@ finds out whether QuickBooks applied it ([Lost answers](/workflows#lost-answers)
 | --- | --- |
 | A query | Sends it again. |
 | A list add: a customer, vendor, item, class... | Looks for a record with the full name it sent, under its parent if it had one. None there, it sends the add again. |
-| A transaction add: an invoice, bill, check... | Looks for it by its reference number, or else by its customer or vendor and its date, at most 50, and matches the `external_guid` the run put on it. None matches, it sends the add again, unless all 50 came back: then it may be past them, and the run can't tell (below). |
+| A transaction add: an invoice, bill, check... | Looks for it by its reference number, or else by its customer or vendor and its date, at most 50, headers only, and matches the `external_guid` the run put on it. The one that matches is then read whole by its TxnID, with its lines; that read is sent again if its answer is lost too, and if it still can't be had, the run keeps the header it found. None matches, it sends the add again, unless all 50 came back: then it may be past them, and the run can't tell (below). |
 | An update | Reads the record back. If it already has the fields sent, the update was applied. If nobody has touched it, the update is sent again. If someone else changed it, it's a [conflict](#conflicts-in-a-chart). |
 | A delete | Looks the record up by its id. If it's gone, the delete was applied; if not, it's sent again. |
 
@@ -1099,7 +1100,7 @@ What the answer would have raised, usually `success`, with two more fields:
 
 | `response.settled` | What happened |
 | --- | --- |
-| `found` | The add had been applied. `response.data` is the record the run found. |
+| `found` | The add had been applied. `response.data` is the record the run found, whole: a transaction is read by its TxnID after the check finds it, so it comes with its lines and their `txn_line_id`s, as the add's own answer would have. When that read can't be answered, it's the header the check found, and `response.evidence` says why. |
 | `already_deleted` | The delete had been applied. `response.data` is only the id and its delete type. |
 | `already_current` | The record already had every field the update sends. |
 | `resent` | It hadn't been applied, or it was a query, so the run sent it again. This is that answer. |
@@ -1111,7 +1112,7 @@ Two endings are left for the chart to handle, both as `error` with `code` `null`
 
 | `response.error.type` | What happened |
 | --- | --- |
-| `unsettled` | The run can't tell. Usually it found records that might be the one it sent and nothing to tell them apart, as with a transaction type that has no `external_guid`, and `response.error.candidates` lists them. It's also `unsettled` when the check itself can't be trusted: the record an update was for no longer exists, a list add's parent is gone, the check came back full with none carrying the GUID sent (so there may be more), or QuickBooks answered the check with an error. Then `candidates` may be empty. `response.error.candidates_complete` is `true` only when the candidates are every record the check could have found (a transaction add's check by reference number, which answers whole, or one that came back with fewer than its cap of 50): then if none of them is it, it wasn't added. `response.error.message` says which. Unhandled, `unsettled` fails the run with that message. |
+| `unsettled` | The run can't tell. Usually it found records that might be the one it sent and nothing to tell them apart, as with a transaction type that has no `external_guid`, and `response.error.candidates` lists them, a transaction's as a header, without its lines. It's also `unsettled` when the check itself can't be trusted: the record an update was for no longer exists, a list add's parent is gone, the check came back full with none carrying the GUID sent (so there may be more), or QuickBooks answered the check with an error. Then `candidates` may be empty. `response.error.candidates_complete` is `true` only when the candidates are every record the check could have found (a transaction add's check by reference number, which answers whole, or one that came back with fewer than its cap of 50): then if none of them is it, it wasn't added. `response.error.message` says which. Unhandled, `unsettled` fails the run with that message. |
 | `no_response` | QuickBooks didn't answer the checks and re-sends either. The run sends at most five more requests for one that was lost, re-sending it at most twice, then gives up. |
 
 <AccordionGroup>
@@ -1151,9 +1152,9 @@ Two endings are left for the chart to handle, both as `error` with `code` `null`
     | Where | What it shows |
     | --- | --- |
     | The request, in the dashboard | Its own ending (<Badge color="purple">`timed_out`</Badge>, say). |
-    | The run's event log | A `settling` event for each check and re-send, saying why it went out and what it looks at ("looking for reference number "1044" with invoice.query, which answers whole"), and a `settled` or `unsettled` one at the end with the verdict and its grounds, so the decision can be audited without opening a payload. |
+    | The run's event log | A `settling` event for each check and re-send, and for the read of a transaction a check found (no attempt of its own: found on the first check is settled after 1 attempt), saying why it went out and what it looks at ("looking for reference number "1044" with invoice.query, which answers whole"), and a `settled` or `unsettled` one at the end with the verdict and its grounds, so the decision can be audited without opening a payload. |
     | The step's row on the run's page | The same. |
-    | `summary.requests` | The checks and re-sends, each with a `role`: `settle`, `resend`, `reapply`, `overwrite`, or `prepare` for the read before an update. The original request's entry says how it was `settled` and its `evidence`. |
+    | `summary.requests` | The checks and re-sends, each with a `role`: `settle`, `read` for the transaction a check found, read whole by its TxnID, `resend`, `reapply`, `overwrite`, or `prepare` for the read before an update. The original request's entry says how it was `settled` and its `evidence`. |
     | `summary.side_effects` | An add, delete or update found applied, with `settled` and `evidence` too. |
   </Accordion>
 </AccordionGroup>
