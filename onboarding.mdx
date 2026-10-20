@@ -73,6 +73,14 @@ import { Request } from "/snippets/request.jsx";
   <Step title="Send them to onboarding">
     Redirect the browser to the connection's `links.onboarding`. Ask your customer to do this on the
     Windows computer where QuickBooks is installed. If they use a QuickBooks server, that machine is best.
+
+    If they open it somewhere else, like a phone, a Mac or another PC, the page shows them a short code. They
+    enter it at qubesync.com/go on the QuickBooks computer and carry on there, so your app doesn't need to handle
+    that case.
+
+    <Frame caption="Opened on the wrong computer, the page shows a code to enter on the QuickBooks computer.">
+      <img src="/images/quickstart/onboarding-handoff.png" alt="A card headed Open this on the QuickBooks computer: on that computer, go to qubesync.com/go and enter this code, an eight-character code in large type, good for 15 minutes and works once, and a Share link for setting it up later or for someone else" />
+    </Frame>
   </Step>
   <Step title="Handle their return to your app">
     QuBe Sync redirects to your `redirect_url` with two query parameters, `connection_id` and `state`:
