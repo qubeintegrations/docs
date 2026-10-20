@@ -218,9 +218,13 @@ stateDiagram-v2
         "prompt": {
           "message": "No customer has exactly that name. Pick the one you meant, or add it as a new customer.",
           "data": { "found": "${vars.found}" },
+          "details": [{ "label": "Customer", "value": "${input.customer.name}" }],
           "options": [
             { "id": "use", "label": "Use this one",
-              "fields": { "list_id": { "type": "string", "required": true, "label": "ListID of the one to use" } } },
+              "fields": { "list_id": { "type": "string", "required": true, "label": "The customer",
+                "choose": { "from": "${vars.found.candidates}", "value": "${item.list_id}",
+                            "label": "${item.full_name}", "detail": "${item.reasons}" },
+                "record": { "kind": "customer", "label": "Another customer…" } } } },
             { "id": "add", "label": "None of these: add it" }
           ]
         },
@@ -264,7 +268,7 @@ stateDiagram-v2
     | Type | What it does |
     | --- | --- |
     | `request` | Sends one QuickBooks operation with `params`, or several with `requests`. Raises `success` or `error`. |
-    | `wait` | Pauses and asks your app a question. Raises the id of the option your app chose. |
+    | `wait` | Pauses and asks your app a question (**Wait states**, below). Raises the id of the option your app chose. |
     | `notify` | Sends your app data (`data`, under the `name` it routes on) and waits for its `2xx`. Raises `success` or `error` ([Sending your app data from a chart](#sending-your-app-data-from-a-chart)). |
     | `match` | Identifies a list record by name against the connection's name index. Always raises `success`, with the answer in `response.data` ([Match states](#match-states), [Matching names in a chart](#matching-names-in-a-chart)). |
     | `workflow` | Runs another workflow as one step, optionally once per item of a list ([Composing workflows](#composing-workflows)). |
@@ -275,6 +279,25 @@ stateDiagram-v2
 
     Every state also takes `entry` and `exit`: assignments made when the run enters or leaves it.
     `upsert` counts its looks this way, and `add_transaction` its sends.
+  </Accordion>
+  <Accordion title="Wait states" description="prompt, details, choose, record" icon="comment">
+    A `wait` state's `prompt` is the question. Your app shows every question the same way, from the
+    `details` and `choices` the run builds when it asks ([Answering a question](/workflows#answering-a-question)),
+    so write them for the person who answers.
+
+    | Key | What it does |
+    | --- | --- |
+    | `message` | The question, a template. |
+    | `data` | Anything the app needs beside it (the record found, the candidates), a template. |
+    | `details` | What the question is about, as at most 20 `{"label", "value"}` rows, each a template: `[{"label": {"$kind_name": "${input.kind}"}, "value": "${vars.name}"}]` shows `Customer: Lone Star Supply Co`. A list renders as its parts joined with ` · `, and a row whose value renders to nothing is left out. |
+    | `options` | The answers: each an `id` (the event it raises), a `label`, an optional `description`, and the `fields` it asks for (`type`, `required`, `label`). Each becomes a choice. At most 26. |
+    | `fields.<name>.choose` | One choice per element of `from` (a template that gives a list), the field already filled with what `value` renders to for it, so your app never handles the value: `{"from": "${vars.found.candidates}", "value": "${item.list_id}", "label": "${item.full_name}", "detail": "${item.reasons}"}`. The element is at `item`, bound only here. Its choices are `use:1`, `use:2`, ..., at most 25, and 26 in all. One field per option. |
+    | `fields.<name>.record` | A search choice too, filled from the connection's name index: `{"kind": "${input.kind}", "label": "Another one…"}`. `kind` is a list a match takes (`customer`, `entity`, `item`, an item type, `account`, ...). Offered only on a realtime or simulated connection, so give the question another way to answer as well, such as a name to look up. The field is a `string`: a search answers a ListID, which the chart should read before using. |
+
+    `{"$kind_name": "${input.kind}"}` is a kind, or an operation's (`invoice.create`), as a person reads it:
+    `Customer`, `Service item`, `Invoice`. The validator checks every key, `item` outside a `choose`
+    included. A template in `details` or a `choose` that doesn't render when the run asks fails the run, as a
+    bad `message` does.
   </Accordion>
   <Accordion title="Request states" description="requests, settle, on_conflict" icon="paper-plane">
     | Key | What it does |
@@ -496,8 +519,8 @@ Click a step to open it:
 | **Match a name** | The kind of record (pick one, or take it from a reference such as `${input.kind}`), the name, the parent, the fields to compare, exact only, a minimum score and whether to refresh the index first. |
 | **Wait for decision** | The question and its answers. |
 
-<Frame caption="A wait step: the message, what it sends with it, and each answer with the option id it sends.">
-  <img src="/images/workflows/builder-selected.png" alt="The inspector for ensure's wait state ask_use: the message with ${vars.name}, the Send with it JSON, and the Answers list with labels that send use_existing and rename, the second asking for a name field" />
+<Frame caption="A wait step: the message, what it sends with it, the details rows your app shows, and each answer with the option id it sends.">
+  <img src="/images/workflows/builder-selected.png" alt="The inspector for ensure's wait state ask_use: the message with ${vars.name}, the Send with it JSON, the Details JSON (the kind's name and who holds it), and the Answers list with labels that send use_existing and rename, the second asking for a name field, with Picked from a list, or searched closed under it" />
 </Frame>
 
 <Check>

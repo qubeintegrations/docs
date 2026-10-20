@@ -364,6 +364,48 @@ higher than the last you applied (except a notification, which you deduplicate o
 Revisions count per run, so give every run a new reference (`contact-381-2` for the next run about the
 same record).
 
+A question arrives as `workflow_run.awaiting_input`, with the question in `prompt`. Every question has the
+same shape, so one handler and one screen answer all of them: show `prompt.message`, the `prompt.details`
+rows and a button per `prompt.choices` entry (with an input per entry of its `fields`), and POST the picked
+choice's `id` to `links.decisions` ([Answering a question](/workflows#answering-a-question)):
+
+```json workflow_run.awaiting_input (abridged)
+{
+  "event": "workflow_run.awaiting_input",
+  "run_id": "fb1951a1-25b9-4fb2-98c7-c988988ecdf7",
+  "reference": "contact-381",
+  "revision": 6,
+  "run_state": "awaiting_input",
+  "prompt": {
+    "id": "resolve / ask",
+    "token": "Vq3kT9xRb2LmW8sZ",
+    "kind": "decision",
+    "message": "No record has exactly that name. Pick the one you meant, say none of these is it, or cancel.",
+    "details": [ { "label": "Customer", "value": "Riverbend" } ],
+    "choices": [
+      { "id": "use:1", "label": "Riverbend Electric", "description": null,
+        "detail": "similar name", "fields": [] },
+      { "id": "use", "label": "Another one…", "description": null, "detail": null,
+        "fields": [ { "name": "list_id", "type": "record", "kind": "customer",
+                      "label": "The one to use", "required": true } ] },
+      { "id": "none", "label": "None of these", "description": null, "detail": null, "fields": [] },
+      { "id": "cancel", "label": "Cancel", "description": null, "detail": null, "fields": [] }
+    ],
+    "data": { … },
+    "options": [ … ]
+  },
+  "links": {
+    "decisions": "https://qubesync.com/api/v2/connections/4fdde583-…/workflow-runs/fb1951a1-…/decisions?prompt_token=Vq3kT9xRb2LmW8sZ",
+    "search": "https://qubesync.com/api/v2/connections/4fdde583-…/workflow-runs/fb1951a1-…/search?prompt_token=Vq3kT9xRb2LmW8sZ",
+    …
+  }
+}
+```
+
+`{"choice": "use:1"}` picks Riverbend Electric: its ListID is QuBe Sync's, so your app never sends one. The
+`use` choice's `record` field is filled from `GET links.search?field=list_id&q=…`, and `links.search` is
+`null` when the question has nothing to search (always, on a standard connection).
+
 [Workflows → What your app receives](/workflows#what-your-app-receives) has the events, their payloads and
 the `WorkflowRunEventJob` the controller above hands them to.
 
