@@ -224,89 +224,169 @@ v1=signature2
   Use the **raw bytes** you received. Verify before parsing, and never re-serialize the JSON first.
 </Warning>
 
+{/* integration-kit:start webhooks-verify (mix integration_kit.docs in qube writes this: don't edit) */}
 <CodeGroup>
 ```ruby Ruby
-require "openssl"
 require "json"
+require "openssl"
+require "rack/utils"
 
 module QubeWebhook
   class Invalid < StandardError; end
 
-  # max_age is in seconds
-  def self.verify!(body, header, max_age: 300)
-    parts = header.to_s.split(",").map { |part| part.split("=", 2) }
-    timestamp = parts.find { |k, _| k == "t" }&.last.to_i
-    signatures = parts.select { |k, _| k == "v1" }.map(&:last)
-    raise Invalid, "stale webhook" if timestamp < Time.now.to_i - max_age
+  # The event a webhook carries, once its X-Qube-Signature checks out:
+  # its timestamp is within max_age seconds of now, and one of its v1
+  # signatures is the HMAC-SHA256 of "<t>.<body>". Pass the raw body,
+  # before anything parses it.
+  def self.verify!(raw_body, signature_header, max_age: 300)
+    fields = signature_header.to_s.split(",").map do |field|
+      field.strip.split("=", 2)
+    end
+    timestamp = fields.assoc("t").to_a.last.to_s
+    age = (Time.now.to_i - timestamp.to_i).abs
+    if timestamp.empty? || age > max_age
+      raise Invalid, "stale or missing timestamp"
+    end
 
-    expected = OpenSSL::HMAC.hexdigest("SHA256", ENV.fetch("QUBE_WEBHOOK_SECRET"), "#{timestamp}.#{body}")
-    raise Invalid, "bad signature" unless signatures.any? { |sig| OpenSSL.secure_compare(sig, expected) }
+    secret = ENV.fetch("QUBE_WEBHOOK_SECRET")
+    payload = "#{timestamp}.#{raw_body}"
+    expected = OpenSSL::HMAC.hexdigest("SHA256", secret, payload)
+    signed = fields.any? do |name, value|
+      name == "v1" && Rack::Utils.secure_compare(value.to_s, expected)
+    end
+    raise Invalid, "no signature matches" unless signed
 
-    JSON.parse(body)
+    JSON.parse(raw_body)
   end
 end
 ```
 
 ```python Python
-import hashlib, hmac, json, os, time
+import hashlib
+import hmac
+import json
+import os
+import time
+from typing import Any, Dict, Optional
 
-def verify_webhook(body: bytes, header: str, max_age: int = 300) -> dict:
-    parts = [part.split("=", 1) for part in header.split(",")]
-    timestamp = int(next(v for k, v in parts if k == "t"))
-    signatures = [v for k, v in parts if k == "v1"]
-    if timestamp < time.time() - max_age:
-        raise ValueError("stale webhook")
+
+class InvalidSignature(ValueError):
+    """A webhook whose signature doesn't check out: answer it 401."""
+
+
+def verify_webhook(
+    raw_body: bytes, signature_header: Optional[str], max_age: int = 300
+) -> Dict[str, Any]:
+    """The event a webhook carries, once its X-Qube-Signature checks
+    out: its timestamp is within max_age seconds of now, and one of its
+    v1 signatures is the HMAC-SHA256 of "<t>.<body>". raw_body is the
+    body's bytes, before anything parses it."""
+    header = signature_header or ""
+    fields = [
+        field.strip().partition("=") for field in header.split(",")
+    ]
+    stamps = [value for name, _, value in fields if name == "t"]
+    timestamp = stamps[0] if stamps else ""
+    if (
+        not timestamp.isdigit()
+        or abs(time.time() - int(timestamp)) > max_age
+    ):
+        raise InvalidSignature("stale or missing timestamp")
 
     secret = os.environ["QUBE_WEBHOOK_SECRET"].encode()
-    expected = hmac.new(secret, f"{timestamp}.".encode() + body, hashlib.sha256).hexdigest()
-    if not any(hmac.compare_digest(sig, expected) for sig in signatures):
-        raise ValueError("bad signature")
+    payload = timestamp.encode() + b"." + raw_body
+    expected = hmac.new(secret, payload, hashlib.sha256).hexdigest()
+    signatures = [value for name, _, value in fields if name == "v1"]
+    if not any(
+        hmac.compare_digest(value.encode(), expected.encode())
+        for value in signatures
+    ):
+        raise InvalidSignature("no signature matches")
 
-    return json.loads(body)
+    return json.loads(raw_body)
 ```
 
 ```javascript Node.js
-const crypto = require("crypto");
+const { createHmac, timingSafeEqual } = require("crypto");
 
-// maxAge is in seconds; body is the raw request body (a string or Buffer)
-function verifyWebhook(body, header, maxAge = 300) {
-  const parts = header.split(",").map((part) => part.split("=", 2));
-  const timestamp = Number(parts.find(([k]) => k === "t")?.[1]);
-  const signatures = parts.filter(([k]) => k === "v1").map(([, v]) => v);
-  if (timestamp < Date.now() / 1000 - maxAge) throw new Error("stale webhook");
+/** A webhook whose signature doesn't check out: answer it 401. */
+class InvalidSignature extends Error {}
 
-  const expected = Buffer.from(
-    crypto.createHmac("sha256", process.env.QUBE_WEBHOOK_SECRET).update(`${timestamp}.${body}`).digest("hex")
-  );
-  const ok = signatures.some((sig) => {
-    const given = Buffer.from(sig);
-    return given.length === expected.length && crypto.timingSafeEqual(given, expected);
+/**
+ * The event a webhook carries, once its X-Qube-Signature checks out:
+ * its timestamp is within `maxAge` seconds of now, and one of its v1
+ * signatures is the HMAC-SHA256 of "<t>.<body>". `rawBody` is the body
+ * as received (a Buffer or a string), before anything parses it.
+ */
+function verifyWebhook(rawBody, signatureHeader, maxAge = 300) {
+  if (typeof rawBody !== "string" && !Buffer.isBuffer(rawBody)) {
+    throw new TypeError(
+      "verifyWebhook needs the raw body, not a parsed one",
+    );
+  }
+  const fields = (signatureHeader || "").split(",").map((field) => {
+    const [name, ...value] = field.trim().split("=");
+    return [name, value.join("=")];
   });
-  if (!ok) throw new Error("bad signature");
+  const stamped = fields.find(([name]) => name === "t");
+  const timestamp = stamped ? stamped[1] : "";
+  const age = Math.abs(Date.now() / 1000 - Number(timestamp));
+  if (!/^\d+$/.test(timestamp) || age > maxAge) {
+    throw new InvalidSignature("stale or missing timestamp");
+  }
 
-  return JSON.parse(body);
+  const secret = process.env.QUBE_WEBHOOK_SECRET;
+  const hmac = createHmac("sha256", secret);
+  hmac.update(`${timestamp}.`).update(rawBody);
+  const expected = Buffer.from(hmac.digest("hex"));
+  const signed = fields.some(([name, value]) => {
+    const given = Buffer.from(value);
+    if (name !== "v1" || given.length !== expected.length) return false;
+    return timingSafeEqual(given, expected);
+  });
+  if (!signed) throw new InvalidSignature("no signature matches");
+
+  return JSON.parse(rawBody.toString());
 }
 ```
 
 ```elixir Elixir
-def verify_webhook(body, header, max_age \\ 300) do
-  parts = header |> String.split(",") |> Enum.map(&String.split(&1, "=", parts: 2))
-  timestamp = Enum.find_value(parts, fn [k, v] -> k == "t" && String.to_integer(v) end)
-  signatures = for ["v1", sig] <- parts, do: sig
+# The event a webhook carries, once its X-Qube-Signature checks out:
+# its timestamp is within max_age seconds of now, and one of its v1
+# signatures is the HMAC-SHA256 of "<t>.<body>". Pass the raw body,
+# before anything parses it.
+def verify_webhook(raw_body, signature_header, max_age \\ 300) do
+  fields =
+    for field <- String.split(signature_header || "", ","),
+        [name, value] <- [String.split(field, "=", parts: 2)],
+        do: {String.trim(name), String.trim(value)}
 
-  if timestamp < System.system_time(:second) - max_age, do: raise("stale webhook")
+  {"t", timestamp} = List.keyfind(fields, "t", 0, {"t", ""})
+  now = System.system_time(:second)
+
+  case Integer.parse(timestamp) do
+    {seconds, ""} when abs(now - seconds) <= max_age -> :ok
+    _ -> raise "stale or missing timestamp"
+  end
+
+  secret = System.fetch_env!("QUBE_WEBHOOK_SECRET")
 
   expected =
-    :crypto.mac(:hmac, :sha256, System.fetch_env!("QUBE_WEBHOOK_SECRET"), "#{timestamp}.#{body}")
+    :crypto.mac(:hmac, :sha256, secret, [timestamp, ".", raw_body])
     |> Base.encode16(case: :lower)
 
-  unless Enum.any?(signatures, &Plug.Crypto.secure_compare(&1, expected)),
-    do: raise("bad signature")
+  signed? =
+    Enum.any?(fields, fn {name, value} ->
+      name == "v1" and Plug.Crypto.secure_compare(value, expected)
+    end)
 
-  Jason.decode!(body)
+  unless signed?, do: raise("no signature matches")
+
+  Jason.decode!(raw_body)
 end
 ```
 </CodeGroup>
+{/* integration-kit:end webhooks-verify */}
 
 **Why check the timestamp?** It stops someone replaying a captured delivery. Every delivery, retries
 included, is signed afresh, so a healthy receiver never sees an old one.

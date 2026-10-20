@@ -549,7 +549,7 @@ reasoning ends up in the `description` fields, where the next person will read i
     | Tool | Gives it |
     | --- | --- |
     | `get_workflow_authoring_guide` | The chart rules, the JSON Schema and a worked example. |
-    | `list_workflow_templates`, `get_workflow_template` | Tested charts to start from. |
+    | `list_workflow_templates`, `get_workflow_template` | Tested charts to start from, with what each asks and how it ends. |
 
     In the dashboard, the builder's **JSON** window has a **Prompt for an LLM** tab with the same guide, plus
     the exact parameters and error codes of every operation the chart uses, and your app's other workflows
@@ -634,7 +634,8 @@ reasoning ends up in the `description` fields, where the next person will read i
   </Step>
   <Step title="Hand the other side to your assistant too">
     `GET /api/v2/workflows/{key}/usage.md` describes how to call the workflow, generated from the chart
-    itself. Give it to whatever writes your app's side.
+    itself. Give it to whatever writes your app's side. A shipped template's is
+    `GET /api/v2/workflow-templates/{key}/usage.md`, readable before you install it.
 
     It covers how to start the workflow, every question it can ask (with example webhooks and answers), every
     outcome and what's in its output. It describes the published version (the working copy, until there is

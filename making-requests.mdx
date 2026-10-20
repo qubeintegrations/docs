@@ -46,56 +46,143 @@ goes.
 
 Every example here uses the same few lines: JSON in, the response's `data` out.
 
+{/* integration-kit:start making-requests-client (mix integration_kit.docs in qube writes this: don't edit) */}
 <CodeGroup>
 ```ruby Ruby
-require "net/http"
 require "json"
+require "net/http"
 
 module Qube
-  def self.api(method, path, body = nil, query: {})
-    uri = URI("https://qubesync.com/api/v2#{path}")
-    uri.query = URI.encode_www_form(query) if query.any?
+  # A non-2xx answer: status is the HTTP status, and body what QuBe Sync
+  # said (with errors.code).
+  class Error < StandardError
+    attr_reader :status, :body
 
-    req = Net::HTTP.const_get(method.to_s.capitalize).new(uri, "Content-Type" => "application/json")
+    def initialize(status, body)
+      @status = status
+      @body = body
+      super("QuBe Sync answered #{status}: #{body}")
+    end
+  end
+
+  # JSON in, the response's data out: path is under /api/v2
+  # ("/connections"), or a whole URL from a webhook's links.
+  def self.api(method, path, body = nil, query: {}, headers: {})
+    uri = URI(path)
+    uri = URI("https://qubesync.com/api/v2#{path}") unless uri.host
+    if query.any? # after a link's own query
+      extra = URI.encode_www_form(query)
+      uri.query = uri.query ? "#{uri.query}&#{extra}" : extra
+    end
+    req = Net::HTTP.const_get(method.to_s.capitalize).new(uri, headers)
     req.basic_auth(ENV.fetch("QUBE_API_KEY"), "")
-    req.body = body.to_json if body
+    req["Accept"] = "application/json"
+    if body
+      req["Content-Type"] = "application/json"
+      req.body = JSON.generate(body)
+    end
 
-    res = Net::HTTP.start(uri.host, uri.port, use_ssl: true) { |http| http.request(req) }
-    raise "QuBe Sync answered #{res.code}: #{res.body}" unless res.is_a?(Net::HTTPSuccess)
+    options = { use_ssl: uri.scheme == "https",
+                open_timeout: 5, read_timeout: 30 }
+    res = Net::HTTP.start(uri.host, uri.port, options) do |http|
+      http.request(req)
+    end
+    unless res.is_a?(Net::HTTPSuccess)
+      raise Error.new(res.code.to_i, res.body)
+    end
 
-    JSON.parse(res.body).fetch("data")
+    JSON.parse(res.body)["data"]
   end
 end
 ```
 
 ```javascript Node.js
-const AUTH = "Basic " + Buffer.from(`${process.env.QUBE_API_KEY}:`).toString("base64");
+/**
+ * A non-2xx answer: `status` is the HTTP status, and `body` what QuBe
+ * Sync said (with errors.code).
+ */
+class QubeSyncError extends Error {
+  constructor(status, body) {
+    super(`QuBe Sync answered ${status}: ${body}`);
+    this.status = status;
+    this.body = body;
+  }
+}
 
-async function qube(method, path, body, query = {}) {
-  const url = new URL(`https://qubesync.com/api/v2${path}`);
-  Object.entries(query).forEach(([k, v]) => url.searchParams.set(k, v));
-
+// JSON in, the response's data out: `path` is under /api/v2
+// ("/connections"), or a whole URL from a webhook's links.
+async function qube(method, path, body, options = {}) {
+  const { query = {}, headers = {} } = options;
+  const url = /^https?:\/\//.test(path)
+    ? new URL(path)
+    : new URL(`https://qubesync.com/api/v2${path}`);
+  for (const [key, value] of Object.entries(query)) {
+    url.searchParams.set(key, value);
+  }
+  const credentials = Buffer.from(`${process.env.QUBE_API_KEY}:`);
+  const auth = `Basic ${credentials.toString("base64")}`;
+  const hasBody = body !== undefined;
   const res = await fetch(url, {
     method,
-    headers: { Authorization: AUTH, "Content-Type": "application/json" },
-    body: body ? JSON.stringify(body) : undefined,
+    headers: {
+      Authorization: auth,
+      Accept: "application/json",
+      ...(hasBody ? { "Content-Type": "application/json" } : {}),
+      ...headers,
+    },
+    body: hasBody ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(30000),
   });
-  if (!res.ok) throw new Error(`QuBe Sync answered ${res.status}: ${await res.text()}`);
-  return res.json();
+  const text = await res.text();
+  if (!res.ok) throw new QubeSyncError(res.status, text);
+  return JSON.parse(text).data;
 }
 ```
 
 ```python Python
 import os
+from typing import Any, Dict, Optional
+
 import requests
 
-def qube(method, path, body=None, **query):
-    res = requests.request(method, f"https://qubesync.com/api/v2{path}",
-                           auth=(os.environ["QUBE_API_KEY"], ""), json=body, params=query)
-    res.raise_for_status()
-    return res.json()["data"]
+
+class QubeSyncError(Exception):
+    """A non-2xx answer: status is the HTTP status, and body what
+    QuBe Sync said (with errors.code)."""
+
+    def __init__(self, status: int, body: str) -> None:
+        super().__init__(f"QuBe Sync answered {status}: {body}")
+        self.status = status
+        self.body = body
+
+
+def qube(
+    method: str,
+    path: str,
+    body: Optional[Dict[str, Any]] = None,
+    headers: Optional[Dict[str, str]] = None,
+    **query: Any,
+) -> Any:
+    """JSON in, the response's data out: path is under /api/v2
+    ("/connections"), or a whole URL from a webhook's links."""
+    url = path
+    if not path.startswith(("http://", "https://")):
+        url = f"https://qubesync.com/api/v2{path}"
+    response = requests.request(
+        method,
+        url,
+        params=query or None,
+        json=body,
+        headers={"Accept": "application/json", **(headers or {})},
+        auth=(os.environ["QUBE_API_KEY"], ""),
+        timeout=(5, 30),  # seconds: to connect, to read
+    )
+    if not 200 <= response.status_code < 300:
+        raise QubeSyncError(response.status_code, response.text)
+    return response.json()["data"]
 ```
 </CodeGroup>
+{/* integration-kit:end making-requests-client */}
 
 ## Query
 

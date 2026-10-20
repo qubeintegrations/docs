@@ -162,6 +162,7 @@ qube requests list --connection <id>              # another connection, this onc
   <Accordion title="Workflows" icon="diagram-project">
     ```bash
     qube workflows templates                        # the shipped templates
+    qube workflows templates add_transaction --usage   # how to call one before it's installed, as Markdown (--json: the contract)
     qube workflows install add_transaction --publish   # --as NEW_KEY installs a second copy
     qube workflows list                             # TEMPLATE: the template each came from, and whether it changed since
     qube workflows show add_transaction
@@ -170,6 +171,7 @@ qube requests list --connection <id>              # another connection, this onc
     qube workflows publish add_transaction --notes "Handle vendors too"
     qube workflows versions add_transaction
     qube workflows usage add_transaction                 # how to call it, as Markdown
+    qube workflows usage --all                           # every workflow's, with --- between them (--json: an array of {key, usage})
     qube workflows schema                           # the chart JSON Schema
     qube workflows run add_transaction --connection <id> --input @order.json \
       --wait                                        # until it ends or needs a decision; --version published|working|N on sandbox

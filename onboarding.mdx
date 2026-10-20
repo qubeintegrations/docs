@@ -134,46 +134,119 @@ import { Request } from "/snippets/request.jsx";
 
 In code, using the small API helper from [Making requests](/making-requests#a-small-api-client):
 
+{/* integration-kit:start onboarding (mix integration_kit.docs in qube writes this: don't edit) */}
 <CodeGroup>
 ```ruby Rails
+# Qube.api is the small client in Making requests. Route:
+#   post "quickbooks/connect", to: "quickbooks_connections#create"
+#
+# Behind your sign-in, as ApplicationController is: create keeps the
+# connection on the signed-in customer's account.
 class QuickbooksConnectionsController < ApplicationController
+  # POST /quickbooks/connect, from a "Connect QuickBooks Desktop"
+  # button. Best clicked on the computer where QuickBooks is installed.
+  # Until connection.connected comes, show the account as waiting for
+  # QuickBooks: the setup doesn't come back here.
   def create
-    connection = Qube.api(:post, "/connections", {
-      name: current_account.name,
-      redirect_url: callback_quickbooks_connections_url
-    })
-    current_account.update!(qube_connection_id: connection["id"])
+    # Where QuBe Sync says it's connected (connection.connected).
+    webhook_url = ENV.fetch("QUBE_WEBHOOK_URL")
+    connection_id = saved_connection_id
+    if connection_id
+      # Connected before: the same connection, its webhook URL brought
+      # up to date, with a fresh link.
+      Qube.api(
+        :put, "/connections/#{connection_id}",
+        { webhook_url: webhook_url }
+      )
+      connection = Qube.api(
+        :post, "/connections/#{connection_id}/onboarding-url"
+      )
+    else
+      connection = Qube.api(
+        :post, "/connections",
+        { name: current_account.name, webhook_url: webhook_url }
+      )
+      save_connection_id(connection["id"])
+    end
 
-    redirect_to connection.dig("links", "onboarding"), allow_other_host: true
+    onboarding = connection.dig("links", "onboarding")
+    redirect_to onboarding, allow_other_host: true
   end
 
-  def callback
-    if params[:state] == "connected"
-      redirect_to root_path, notice: "QuickBooks is connected."
-    else
-      redirect_to root_path, alert: "QuickBooks wasn't connected. Please try again."
-    end
+  private
+
+  # Where your app keeps the connection id: on the customer's account.
+  # Every request and run for them goes to it.
+  def saved_connection_id
+    current_account.qube_connection_id
+  end
+
+  def save_connection_id(connection_id)
+    current_account.update!(qube_connection_id: connection_id)
   end
 end
 ```
 
 ```javascript Express
-app.post("/quickbooks/connect", async (req, res) => {
-  const { data: connection } = await qube("POST", "/connections", {
-    name: req.account.name,
-    redirect_url: "https://your-app.example/quickbooks/callback",
-  });
-  await req.account.update({ qubeConnectionId: connection.id });
+// qube is the small client in Making requests. Mount the router after
+// your sign-in middleware:
+//   app.use(requireSignIn); // yours
+//   app.use(quickbooksConnect);
+const express = require("express");
 
-  res.redirect(connection.links.onboarding);
-});
+// Behind your sign-in: connect keeps the connection on the signed-in
+// customer's account.
+const quickbooksConnect = express.Router();
 
-app.get("/quickbooks/callback", (req, res) => {
-  const connected = req.query.state === "connected";
-  res.redirect(connected ? "/?quickbooks=connected" : "/?quickbooks=failed");
-});
+// POST /quickbooks/connect, from a "Connect QuickBooks Desktop" button.
+// Best clicked on the computer where QuickBooks is installed. Until
+// connection.connected comes, show the account as waiting for
+// QuickBooks: the setup doesn't come back here.
+quickbooksConnect.post("/quickbooks/connect", connect);
+
+async function connect(req, res, next) {
+  try {
+    // Where QuBe Sync says it's connected (connection.connected).
+    const webhookUrl = process.env.QUBE_WEBHOOK_URL;
+    const connectionId = await savedConnectionId(req);
+    let connection;
+    if (connectionId) {
+      // Connected before: the same connection, its webhook URL brought
+      // up to date, with a fresh link.
+      await qube("PUT", `/connections/${connectionId}`, {
+        webhook_url: webhookUrl,
+      });
+      connection = await qube(
+        "POST",
+        `/connections/${connectionId}/onboarding-url`,
+      );
+    } else {
+      connection = await qube("POST", "/connections", {
+        name: req.account.name,
+        webhook_url: webhookUrl,
+      });
+      await saveConnectionId(req, connection.id);
+    }
+    res.redirect(connection.links.onboarding);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// Where your app keeps the connection id: on the customer's account.
+// Every request and run for them goes to it.
+async function savedConnectionId(req) {
+  return req.account.qubeConnectionId;
+}
+
+async function saveConnectionId(req, connectionId) {
+  await req.account.update({ qubeConnectionId: connectionId });
+}
+
+module.exports = { quickbooksConnect };
 ```
 </CodeGroup>
+{/* integration-kit:end onboarding */}
 
 ## Keep an eye on the connection
 

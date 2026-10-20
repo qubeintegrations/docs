@@ -441,6 +441,13 @@ the query to send, such as `{"operation": "customer.query", "params": {"active_s
   </Accordion>
 </AccordionGroup>
 
+Read a template's whole usage contract before you install it with
+`GET /api/v2/workflow-templates/{key}/usage.md`, or `/usage` for JSON: how to start it, every question it can
+ask (its `prompt.id`, the options to answer with, and the webhook it arrives in) and every way it can end. It's
+the contract `GET /api/v2/workflows/{key}/usage` gives once the template is installed with the templates it
+calls, so the questions and outcomes your app handles are known before anything is installed. The
+[CLI](/cli) prints it with `qube workflows templates add_transaction --usage`.
+
 In the dashboard, open **Workflows** and clone any template into your sandbox app.
 
 <Frame caption="Workflows → Start from a template. A card names the templates it also installs.">
