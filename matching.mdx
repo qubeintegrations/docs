@@ -304,7 +304,9 @@ employee's or an other name's own address.
 
 Matching is for the records your app has no QuickBooks id for yet. Once your user confirms a match, store
 its `list_id` on your own record, and from then on refer to the QuickBooks record by it, such as
-`customer_ref: {list_id}` on an invoice. A `list_id` survives renames; a name doesn't.
+`customer_ref: {list_id}` on an invoice. A `list_id` survives renames; a name doesn't. It's unique only within that
+list of that company file, so keep it with the connection it came from (see
+[Making requests](/making-requests)).
 
 - **Match again only when the `list_id` stops working.** That happens when the record is deleted, or merged
   into another, in QuickBooks: a lookup by the `list_id` answers status code 500 with no record, and a

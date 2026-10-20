@@ -851,6 +851,10 @@ routes on. The usual use is a whole list, a page at a time: `pull_changes` sends
 each naming its `kind`, the customers, then the vendors, then whatever else you asked for (with a `since`,
 then one `deleted`), then `workflow_run.completed` with the counts.
 
+Save each record by the connection the run is on, its `kind` and its `list_id` or `txn_id`, never by the id
+alone: QuickBooks makes ids unique only within one list of one company file, so another customer's file (or a
+copy of this one) can hold the same ids.
+
 **The run waits for your `2xx`** before it goes on: notifications come one at a time, in `seq` order, and
 all of them before the run's ending, so `workflow_run.completed` means everything was sent. QuickBooks
 isn't held up: the pages keep being fetched while your app takes them. **The run's ending counts them**:

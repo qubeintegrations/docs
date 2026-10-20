@@ -267,6 +267,68 @@ non-`2xx` is retried and the dashboard shows each attempt, as for any `webhook_u
 
 See [Receive webhooks in development](/ngrok) for a tunnel instead.
 
+## Check your webhook endpoint
+
+`qube check webhooks` sends signed test deliveries to your own webhook endpoint and grades the answers, so you
+find out before QuBe Sync does whether it [verifies signatures](/webhooks#securing-your-endpoints), refuses
+what it should and answers in time. Run it with your app running on your machine:
+
+```bash
+qube check webhooks http://localhost:3000/webhooks/qube --operation orders --record 42
+```
+
+<Note>
+  `qube check` needs the CLI release that has it. On an older one, `qube check` answers `unknown command`:
+  run `qube version`, and `brew upgrade qube` to update.
+</Note>
+
+The URL is the base your app builds each webhook URL from, `QUBE_WEBHOOK_URL`. The CLI signs with the app's
+webhook secret, fetched the way `qube env` fetches it and kept in memory. It never prints, logs or writes the
+secret, or anything your app answers. Each check is one request:
+
+| Check | It sends | It passes when |
+| --- | --- | --- |
+| `bad-signature-401` | A run event with a wrong signature. | Your app answers `401`. |
+| `stale-timestamp-401` | A correct signature over a timestamp 10 minutes old. | `401`. |
+| `raw-body-signature` | A correct signature over a body with unusual spacing, key order and `\u` escapes. Needs `--operation`. | `2xx`. A `401` means your app verifies a parsed and re-serialized body, not the raw one. |
+| `unknown-operation-404` | A correct signature, to `URL/qube-check-unknown/1`. | `404`. |
+| `fast-2xx` | A run event to `URL/<operation>/qube-check-5`. Needs `--operation`. | `2xx` within 5 seconds. |
+| `connection-event-2xx` | A `connection.connected` for a connection that isn't the record's, to `URL/connection/<record>`. Needs `--record`. | `2xx` within 5 seconds. Your app should log and skip it. |
+
+```
+CHECK                  RULE                                   SENT                         EXPECTED   GOT         RESULT
+bad-signature-401      verify-signature                       wrong v1                     401        401 in 3ms  pass
+stale-timestamp-401    refuse-stale-timestamp                 t 10 min old                 401        200 in 3ms  FAIL
+raw-body-signature     verify-raw-body                        odd spacing, \u escapes      2xx        200 in 3ms  pass
+unknown-operation-404  fixed-operation-map                    signed, unknown slug         404        404 in 3ms  pass
+fast-2xx               answer-fast-work-in-job                signed run event             2xx in 5s  200 in 3ms  pass
+connection-event-2xx   connection-event-for-saved-connection  signed connection.connected  2xx in 5s  200 in 3ms  pass
+
+stale-timestamp-401: answered 200 to a correctly signed delivery whose timestamp is 10 minutes old. Refuse a `t` more than 5 minutes from now, or a captured delivery can be replayed.
+
+5 passed, 1 failed, 0 skipped.
+```
+
+The deliveries are fake: their ids, references and delivery ids say `qube-check`, and no record of your app's
+matches them, so an app that handles them right logs and skips them. Every request carries an
+`X-QUBE-Check` header naming its check, for your logs.
+
+| Flag | |
+| --- | --- |
+| `--operation SLUG` | One of the operation slugs your webhook route has (`URL/SLUG/RECORD_ID`). The run-event checks send to it, and are skipped without it. |
+| `--record ID` | The id of a record in your app that keeps a connection, such as a shop or an account: `URL/connection/ID` is that connection's webhook URL. The connection-event check sends there, and is skipped without it. |
+| `--production` | Required when the current app is a production app. |
+| `--yes` | Required when the URL isn't `localhost`, `127.0.0.1` or `[::1]`. |
+| `--json` | The same report as data: each check's `result`, `expected`, `got`, `status` and `detail`, a `summary` and `ok`. |
+
+- **Exit codes.** `1` when a check fails, `0` otherwise. A skipped check isn't a failure.
+- **It never follows a redirect.** A redirect is reported as one, since QuBe Sync doesn't follow them either,
+  and a request that gets no answer in 10 seconds fails.
+- **It never sends to QuBe Sync.** A URL on `qubesync.com` is refused, and so is a `qube listen` URL: check the
+  local URL you gave `--forward-to`.
+- **It needs a read and write session.** A [read-only session](#sessions-scope-and-access) can't read the
+  webhook secret, and neither can an act-as grant.
+
 ## Production apps
 
 In a production app, every request that changes something asks before it's sent, and names the app.

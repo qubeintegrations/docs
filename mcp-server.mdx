@@ -76,12 +76,15 @@ for the server to leak.
   </Card>
 </CardGroup>
 
-Two more are hand-written. `match_records` builds a [match](/matching): the request that finds the record a
+Three more are hand-written. `match_records` builds a [match](/matching): the request that finds the record a
 name means in a customer's company file, `POST /api/v2/connections/{connection_id}/matches`, checked the way
 the API checks it, with the answer's schema and what each tier means. Like the operation tools it never
 touches a connection, so the agent sends the request with your key. And `report_confusion` lets an agent tell
 us when a tool, guide or API response confused it, without sending any keys or customer data. We read those
-reports to improve the tools.
+reports to improve the tools. Last, `get_integration_checklist` returns the
+[integration checklist](/integration-checklist): every rule an integration has to get right, or one area's
+with `area`, each with what to check in the code, so an agent writing or reviewing your webhook handler has
+them to hand.
 
 ## What an operation tool returns
 

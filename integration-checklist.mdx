@@ -1,0 +1,699 @@
+---
+title: "Integration checklist"
+description: "Every rule a QuBe Sync integration has to get right, and an audit skill that has your coding agent check your code against all of them."
+icon: "list-check"
+---
+
+A QuickBooks Desktop integration has more to get right than most: webhooks that can repeat or arrive out of
+order, questions only your user can answer, ids that are unique only within one company file, and answers
+that can be lost on the way back from your customer's computer. This page lists every rule, by area, each
+with why it matters and where the docs explain it. Each rule has an id, so a finding can name the one it
+breaks.
+
+## Audit your code with your coding agent
+
+<Steps>
+  <Step title="Download the audit skill">
+    From your app's repo:
+
+    ```bash
+    curl -o .claude/skills/qube-sync-audit/SKILL.md --create-dirs https://qubesync.com/skills/qube-sync-audit/SKILL.md
+    ```
+
+    It's one Markdown file: every rule below, with what to look for in your code and what getting it wrong
+    and right looks like, and the steps to check them. It holds no key and calls nothing.
+  </Step>
+  <Step title="Run it">
+    In Claude Code, run `/qube-sync-audit`, or ask it to audit your QuBe Sync integration. Any other coding
+    agent can follow the file as its prompt: "Follow .claude/skills/qube-sync-audit/SKILL.md and audit this
+    repo."
+
+    The agent only reads your code. It never opens your `.env` or prints a secret, and it changes nothing
+    until you ask. Its report lists each finding with its rule id, severity and `file:line`, critical first.
+  </Step>
+  <Step title="Check your webhook endpoint live">
+    With your app running on your machine, the [CLI](/cli) sends your webhook endpoint signed test deliveries
+    and grades its answers: a bad signature, an old timestamp, an operation your app doesn't have, a
+    connection event that isn't for the connection you saved. The audit skill runs it too, and folds what
+    fails into its report:
+
+    ```bash
+    qube check webhooks http://localhost:3000/webhooks/qube --operation create_invoice --record 42
+    ```
+
+    Give it your app's local webhook URL, the one `qube listen --forward-to` forwards to, not the relay's.
+    `--operation` is one of your app's operation slugs, and `--record` the id of a record of yours that
+    keeps a connection (a shop or an account), whose connection's webhook URL is
+    `.../webhooks/qube/connection/42`. Without them, the checks that need them are skipped. The command
+    needs the CLI release that has `qube check webhooks`.
+  </Step>
+</Steps>
+
+Your agent can also read these rules, or one area's, from the [MCP server](/mcp-server) with its
+`get_integration_checklist` tool.
+
+The rules follow, by area. A <Badge color="red">Critical</Badge> rule guards against data loss, a
+security hole or another customer's data, and a <Badge color="orange">Major</Badge> one against
+wrong behaviour your users see. Each says when it applies: an app that only starts workflows has no
+request webhooks to deduplicate.
+
+{/* integration-rules:start checklist (mix integration_rules.gen in qube writes this: don't edit) */}
+
+## Onboarding
+
+Connecting a customer's QuickBooks: the connection, its webhook and its events.
+
+### `connection-webhook-url`
+
+<Badge color="orange">Major</Badge> Applies when the app connects its customers' QuickBooks (it
+creates connections).
+
+**Create each customer's connection with a `webhook_url`, so QuBe Sync can tell your app when
+they're connected.**
+
+The setup ends on the QuickBooks computer and never comes back to your app: the connection's
+`webhook_url` hearing `connection.connected` is how the app knows. Without one, the app shows the
+customer's QuickBooks as waiting forever, and nothing tells it when requests stall. See
+[Add the "Connect to QuickBooks" button](/onboarding#add-the-connect-to-quickbooks-button) and
+[Connection events](/webhooks#connection-events).
+
+### `save-connection-id`
+
+<Badge color="orange">Major</Badge> Applies when the app connects its customers' QuickBooks (it
+creates connections).
+
+**Save the connection's `id` on the record that keeps it (the customer's account or shop, say)
+before you send them to its `links.onboarding`, and reuse it when they click Connect again.**
+
+Every request and run goes out on that id, and the connection's events are matched to it. A
+simulated connection is connected as it's made, so its `connection.connected` can arrive before the
+create call returns. A customer who comes back (a link past its 48 hours, QuickBooks on a new
+computer) needs the same connection's link again, not a second connection. See
+[Add the "Connect to QuickBooks" button](/onboarding#add-the-connect-to-quickbooks-button) and
+[Setting a connection up again](/onboarding#setting-a-connection-up-again).
+
+### `connected-by-webhook`
+
+<Badge color="orange">Major</Badge> Applies when the app connects its customers' QuickBooks (it
+creates connections).
+
+**Show a customer's QuickBooks as connected only when a signed `connection.connected` arrives for
+their connection, never when a browser comes back.**
+
+The onboarding page doesn't send your customer back to your app: the setup ends on the QuickBooks
+computer, which usually isn't signed in to your app, and the v2 API refuses a `redirect_url`.
+Nothing has to wait for it either: runs started before the Web Connector connects wait in the queue.
+See [Add the "Connect to QuickBooks" button](/onboarding#add-the-connect-to-quickbooks-button) and
+[Connection events](/webhooks#connection-events).
+
+### `connection-event-for-saved-connection`
+
+<Badge color="red">Critical</Badge> Applies when the app takes connection events.
+
+**Apply a connection event only to the record whose saved connection id is the event's
+`connection.id`, and answer it `2xx` either way.**
+
+The signature covers the body, not the URL. A URL that names the record keeping the connection (the
+integration kit's `/webhooks/qube/connection/42`) is only a pointer, so a signed event posted to
+another record's URL would change that record. See [Connection events](/webhooks#connection-events)
+and [Add the "Connect to QuickBooks" button](/onboarding#add-the-connect-to-quickbooks-button).
+
+### `connection-event-newer-revision`
+
+<Badge color="orange">Major</Badge> Applies when the app takes connection events.
+
+**Apply a connection event only when its `revision` is newer than the last you applied for that
+connection, and save the revision with the change.**
+
+Deliveries can come out of order, a retried `connection.stalled` after its `connection.resumed` say.
+The `revision` counts up across all four events, per connection, and a retry of one event has the
+same `delivery_id` and `revision`. See [Connection events](/webhooks#connection-events).
+
+### `show-stall-reason`
+
+<Badge color="gray">Minor</Badge> Applies when the app takes connection events.
+
+**Show your customer what `connection.stall_reason` says to do, and clear it on
+`connection.resumed`.**
+
+`not_checking_in` means the Web Connector hasn't checked in when it was due: turn on the QuickBooks
+computer and check the Web Connector. `quickbooks_unavailable` means it is checking in but can't
+reach QuickBooks: open QuickBooks with the company file. A stall can change its reason and send
+`connection.stalled` again, so show the newest. See [Connection events](/webhooks#connection-events)
+and [Keep an eye on the connection](/onboarding#keep-an-eye-on-the-connection).
+
+### `setup-cancelled-offers-connect`
+
+<Badge color="gray">Minor</Badge> Applies when the app takes connection events.
+
+**On `connection.setup_cancelled`, offer the Connect button again.**
+
+Your customer chose Cancel setup on the onboarding page. The connection is unchanged and its
+onboarding link still works, so Connect can take them back to the same one. See
+[Connection events](/webhooks#connection-events).
+
+## Calling the API and starting runs
+
+The API key, the calls that queue requests or start workflow runs, and what each one carries.
+
+### `api-key-on-the-server`
+
+<Badge color="red">Critical</Badge> Applies to every integration.
+
+**Call the API only from your server, with HTTP basic auth: the API key as the username and an empty
+password, read from the environment.**
+
+An app's key reaches every connection of that app. In a browser, a mobile app or the repo, anyone
+who sees it can read and write your customers' company files. See
+[Do it from your code](/quickstart#do-it-from-your-code).
+
+### `sandbox-production-apart`
+
+<Badge color="orange">Major</Badge> Applies to every integration.
+
+**Keep sandbox and production apart: each environment uses its own app's API key and webhook secret,
+and only that app's connection ids.**
+
+Your code doesn't change between the two; the API key, the webhook secret and the connection ids do.
+A sandbox key can't reach production connections, and the other way round, so a connection id kept
+under one app answers `404` to the other's key. Every webhook says which app sent it, in `app_id`
+and `sandbox`. See [Launch checklist](/going-live#launch-checklist).
+
+### `reference-saved-before-start`
+
+<Badge color="orange">Major</Badge> Applies when the app starts workflow runs.
+
+**Start every run with a new `reference`, saved on your record before you send the start, and find
+the record by it rather than by `run_id`.**
+
+Any run webhook can arrive before the `201` that starts the run. Revisions count per run, so a
+reference used for a second run lets the first run's webhooks be taken for the second's, and the
+second's skipped against the first's. See [Workflow runs](/webhooks#workflow-runs) and
+[Good to know](/workflows#good-to-know).
+
+### `webhook-url-per-run`
+
+<Badge color="gray">Minor</Badge> Applies when the app starts workflow runs.
+
+**Give each run a webhook URL that names its operation and your record, such as
+`/webhooks/qube/create_invoice/42`, or route one shared endpoint on `event` and `reference`.**
+
+Each run takes its own `webhook_url`, so the URL can carry what the job needs: which class handles
+the run and which record it's about. One shared URL works too, when its job routes on `event` first
+and finds the record by `reference`. See [Handle it in a job](/webhooks#handle-it-in-a-job) and
+[Workflow runs](/webhooks#workflow-runs).
+
+### `idempotency-key`
+
+<Badge color="orange">Major</Badge> Applies when the app queues requests or starts workflow runs.
+
+**Send an `Idempotency-Key` with every call that queues a request or starts a run, and send a call
+whose answer you never got again with the same key.**
+
+Every call queues a new request: two calls to create an invoice make two invoices, and starting a
+run twice runs it twice. With the same key, a call sent again after a timeout gets back what the
+first one queued (`Idempotent-Replayed: true`), and nothing new is queued. See
+[Retrying a call safely](/making-requests#retrying-a-call-safely) and
+[Good to know](/workflows#good-to-know).
+
+## Webhooks
+
+The endpoint that takes QuBe Sync's deliveries, and the job that does the work.
+
+### `verify-signature`
+
+<Badge color="red">Critical</Badge> Applies to every integration.
+
+**Verify every delivery's `X-Qube-Signature` before you act on it, and answer `401` when no `v1` in
+it matches.**
+
+Anyone can POST to a public URL. The header carries a timestamp `t` and one `v1` for each active
+webhook secret on your app, each the hex HMAC-SHA256 of `<t>.<raw body>` keyed with that secret. See
+[Securing your endpoints](/webhooks#securing-your-endpoints).
+
+### `refuse-stale-timestamp`
+
+<Badge color="orange">Major</Badge> Applies to every integration.
+
+**Refuse a delivery whose `t` is more than five minutes from now, with `401`.**
+
+It stops someone replaying a captured delivery. Every delivery, retries included, is signed afresh,
+so a healthy receiver never sees an old one. See
+[Securing your endpoints](/webhooks#securing-your-endpoints).
+
+### `verify-raw-body`
+
+<Badge color="orange">Major</Badge> Applies to every integration.
+
+**Verify the signature over the raw bytes you received, before anything parses the body.**
+
+The signature is over the exact bytes QuBe Sync sent. Parsed and serialized again, JSON has other
+spacing, key order and escapes, so real deliveries fail, and a parser that runs before the check
+runs on bodies nobody has verified. See
+[Securing your endpoints](/webhooks#securing-your-endpoints).
+
+### `answer-fast-work-in-job`
+
+<Badge color="orange">Major</Badge> Applies to every integration.
+
+**Answer `2xx` within 5 seconds, and do the work in a background job.**
+
+Anything but a `2xx` within 5 seconds is a failed delivery: a timeout, a redirect, a `4xx` or a
+`5xx`. It's retried with backoff, up to 5 attempts, and then marked failed, so work done before the
+answer can run past it and run again on each retry. See
+[Four jobs for your endpoints](/webhooks#four-jobs-for-your-endpoints) and
+[When a delivery fails](/webhooks#when-a-delivery-fails).
+
+### `durable-job-queue`
+
+<Badge color="orange">Major</Badge> Applies to every integration.
+
+**Enqueue each delivery on a durable queue that retries a failed job, and answer `5xx` when the
+enqueue itself fails.**
+
+Once QuBe Sync has its `2xx`, it won't send that event again: a job that raises, or one an
+in-process queue loses on a restart, is gone unless your queue keeps and retries it. See
+[Handle it in a job](/webhooks#handle-it-in-a-job) and
+[When a delivery fails](/webhooks#when-a-delivery-fails).
+
+### `fixed-operation-map`
+
+<Badge color="red">Critical</Badge> Applies when the webhook URL names its handler (an operation
+slug in the path).
+
+**Turn the operation slug in a webhook URL into its class through a fixed map, and answer `404` for
+any other slug; never build a class name from the path.**
+
+The signature covers the body, not the URL, so a signed body can be posted to any path. A class
+looked up from the path lets the path choose which code runs. See
+[Handle it in a job](/webhooks#handle-it-in-a-job).
+
+### `route-on-event`
+
+<Badge color="gray">Minor</Badge> Applies when one endpoint takes more than one kind of webhook
+(request answers, run events, connection events, the name index's).
+
+**Route a webhook on its `event` first: run, connection and name index webhooks carry one, and a
+request's answer doesn't.**
+
+One endpoint can take a request's answers, a run's events, a connection's events and
+`name_index.ready`. A handler that treats every body as a request's answer finds no request for the
+others, and drops them. See [Handle it in a job](/webhooks#handle-it-in-a-job) and
+[Name index events](/webhooks#name-index-events).
+
+### `skip-other-reference`
+
+<Badge color="red">Critical</Badge> Applies when the app starts workflow runs.
+
+**Skip, and log, a run event whose `reference` isn't the one saved on the record it's for.**
+
+The signature covers the body, not the URL, so a record id in the URL is only a pointer, and a
+record's earlier runs keep sending until they end. Applying another run's event writes its results
+to the wrong record, perhaps another customer's. See [Workflow runs](/webhooks#workflow-runs) and
+[What your app receives](/workflows#what-your-app-receives).
+
+### `run-event-newer-revision`
+
+<Badge color="orange">Major</Badge> Applies when the app starts workflow runs.
+
+**Apply a run's webhook only when its `revision` is higher than the last you applied for that run,
+and save the revision with the change; notifications are the exception.**
+
+Deliveries can repeat, cross each other and arrive before the response to the call that caused them.
+Every body of a run (a webhook, the `201`, a decision's response, a `GET`) carries its `revision`,
+which goes up with every change. A notification is data, not the run's state, so it's deduplicated
+on `delivery_id` and never skipped by revision. See [Workflow runs](/webhooks#workflow-runs) and
+[What your app receives](/workflows#what-your-app-receives).
+
+### `notification-once`
+
+<Badge color="orange">Major</Badge> Applies when a workflow the app starts sends it data
+(`pull_changes`, `stream_query`, or any chart with a `notify` state).
+
+**Take each `workflow_run.notification` once, by its `delivery_id`, in a store every worker
+shares.**
+
+Delivery is at least once: a failed delivery is retried up to 10 times over about an hour, with the
+same `delivery_id`. A record of handled ids in one process's memory misses a retry that reaches
+another worker. See [Sending your app data](/workflows#sending-your-app-data) and
+[What your app receives](/workflows#what-your-app-receives).
+
+### `dedupe-request-webhooks`
+
+<Badge color="orange">Major</Badge> Applies when the app queues QuickBooks requests itself, not only
+through workflows.
+
+**Deduplicate a request's webhooks on `page_request_id` plus `state`: a `retryable` webhook isn't
+final.**
+
+A `retryable` webhook and the answer that follows it share `id` and `page_request_id`, and only
+`state` differs. Keyed on an id alone, the answer looks like a repeat and is lost. See
+[What to do with each `state`](/webhooks#what-to-do-with-each-state) and
+[Handling far edge cases](/pagination#handling-far-edge-cases).
+
+### `pages-complete-1-to-n`
+
+<Badge color="orange">Major</Badge> Applies when the app queues paged list queries itself.
+
+**Count a paged query as done once you've handled every page from 1 to the `done` page's `page`, not
+when the `done` page arrives.**
+
+Pages can arrive out of order (page 4 before page 3), and a retried page twice. The `done` page
+(`max_sandbox_iterations_reached` in a sandbox) is the last sent, and its `page` says how many there
+are. If the session ends partway, the next page ends `error`, and the query has to be queued again
+from page 1. See [Handling far edge cases](/pagination#handling-far-edge-cases) and
+[If the session ends partway](/pagination#if-the-session-ends-partway).
+
+## Questions and endings
+
+What a workflow run asks your app, and every way it ends.
+
+### `never-pick-an-answer`
+
+<Badge color="orange">Major</Badge> Applies when a workflow the app starts can ask a question
+(`workflow_run.awaiting_input`).
+
+**Show each question a run asks to your user, from its `message`, `details` and `choices`, and
+answer with the choice they pick; never pick one in code.**
+
+A run asks only when it can't decide: which of several records a name means, or whether a lost add
+went through. A guessed answer can put an invoice on the wrong customer or add it twice, and the run
+waits for an answer for as long as it takes, so there's nothing to gain by guessing. A rule your
+user set up ahead of time is still their choice. See
+[Answering a question](/workflows#answering-a-question),
+[Two kinds of question](/workflows#two-kinds-of-question) and
+[What your app receives](/workflows#what-your-app-receives).
+
+### `answer-at-links-decisions`
+
+<Badge color="orange">Major</Badge> Applies when a workflow the app starts can ask a question
+(`workflow_run.awaiting_input`).
+
+**Answer at the saved `links.decisions` as given, with the picked `choice` and its fields' `data`,
+and take a `409` or a `400 not_awaiting_input` on a retry as already answered.**
+
+`links.decisions` carries the question's `prompt_token`, so an answer sent again can't answer the
+run's next question. A `choice` names one the server offered, so what it fills in (a candidate's
+ListID, say) comes from the server, not your app. Without a token, an answer is taken for whatever
+the run is asking when it arrives. See [Answering a question](/workflows#answering-a-question),
+[Good to know](/workflows#good-to-know) and [The API at a glance](/workflows#the-api-at-a-glance).
+
+### `questions-passed-through`
+
+<Badge color="orange">Major</Badge> Applies when a workflow the app starts can ask a question
+(`workflow_run.awaiting_input`).
+
+**Show any question the same way, from its `message`, `details` and `choices`, and post the chosen
+`choice`; never branch on a question's id, and never send a ListID or TxnID your user typed or your
+app picked.**
+
+Each prompt carries what a screen needs: what it's about in `details`, and every choice with the
+fields it takes, so one screen answers every question, including ones a workflow adds later. Code
+per question id falls behind the chart, and it's where guesses creep in. A candidate's choice
+carries its id from the server, and a `record` field's value comes from `links.search`, so every id
+the run uses is one QuickBooks has. See [Answering a question](/workflows#answering-a-question) and
+[What your app receives](/workflows#what-your-app-receives).
+
+### `question-route-authorized`
+
+<Badge color="red">Critical</Badge> Applies when the app answers or searches a run's questions from
+routes of its own.
+
+**Check that the signed-in user may act on the record before an answer or search route reads its
+question; never trust a record id from a form or URL alone.**
+
+The route answers with your API key, which reaches every connection of your app, and the record id
+in its URL is the user's to change. Without the check, any signed-in user can answer another
+customer's question, or search their company file, by changing one number. See
+[Answering a question](/workflows#answering-a-question) and
+[Do it from your code](/quickstart#do-it-from-your-code).
+
+### `handle-every-ending`
+
+<Badge color="orange">Major</Badge> Applies when the app starts workflow runs.
+
+**Handle every way a run can end: each outcome of `workflow_run.completed`, `workflow_run.failed`
+and `workflow_run.cancelled`, with a branch for an outcome you don't know.**
+
+A run ends once: `completed` with an `outcome` (a chart's own `cancelled` outcome is a completed
+run), `failed` with an `outcome` and an `error` in words, or `cancelled`, with an optional
+`cancel_reason`. What it changed in QuickBooks stays changed either way, and a record left sending
+after a failure tells your user nothing. See [How a run ends](/workflows#how-a-run-ends).
+
+## Stored QuickBooks data
+
+The QuickBooks ids and records your app keeps, and how it finds them again.
+
+### `ids-keyed-by-connection`
+
+<Badge color="red">Critical</Badge> Applies when the app stores QuickBooks ids (`list_id`, `txn_id`)
+or QuickBooks records.
+
+**Key every QuickBooks id you store by the QuBe Sync connection it came from (run events carry it as
+`connection_id`) and its list or transaction type: never by the id alone, and never by your record
+that keeps the connection (the customer's account or shop).**
+
+QuickBooks makes a `list_id` unique only within one list of one company file, and a `txn_id` within
+one transaction type: two of your customers' files can hold the same one, and a copy of a file (a
+restored backup, a test copy) holds every one the same. A customer who connects another company file
+gets a new connection, so nothing from the old file may match it. See
+[Create](/making-requests#create) and [Sending your app data](/workflows#sending-your-app-data).
+
+### `stored-id-on-its-own-connection`
+
+<Badge color="red">Critical</Badge> Applies when the app sends stored QuickBooks ids back (a
+`list_id` in a reference such as `customer_ref`, or a `txn_id`).
+
+**Send a stored QuickBooks id only on the connection it came from; on any other, send the name, or
+find the record again.**
+
+On another connection the same id is another company file's record, or none: an invoice can land on
+the wrong customer, or be refused with 3140. After a customer connects another company file, their
+old rows' ids mean nothing there. See [Create](/making-requests#create).
+
+### `upsert-keeps-later-copy`
+
+<Badge color="orange">Major</Badge> Applies when the app imports or syncs QuickBooks records.
+
+**Upsert each record you import, keeping the copy with the later `time_modified`, and don't let a
+page saved later bring back a record that was deleted.**
+
+Pages can be saved in any order: by a queue with several workers, after a retried delivery, or when
+a query queued again after a session ended partway starts from page 1. `pull_changes` sends its
+deletions once the last page is answered, which can be before every page is saved. See
+[If the session ends partway](/pagination#if-the-session-ends-partway) and
+[Sending your app data](/workflows#sending-your-app-data).
+
+### `refer-by-id-not-name`
+
+<Badge color="orange">Major</Badge> Applies when the app keeps references to QuickBooks records
+(customers, items, QuickBooks accounts).
+
+**Once you know a record's `list_id` or `txn_id`, store it on your own record and refer to the
+QuickBooks record by it, not by its name.**
+
+A `list_id` is stable for the life of the company file; a `full_name` changes when someone renames
+the record in QuickBooks. Match a name again only when the id stops working: the record was deleted,
+or merged into another, and a request that references it is refused with 3120. See
+[Create](/making-requests#create).
+
+### `store-what-the-ending-carries`
+
+<Badge color="orange">Major</Badge> Applies when the app keeps what its workflow runs make or find.
+
+**Store what a run's final webhook carries in `output`: the records and ids it made or found, such
+as `add_transaction`'s `output.record` and each entry of its `output.references`.**
+
+A run's `output` is built for your app. `add_transaction`'s holds the whole transaction with its
+lines, and each reference keyed by where it sits in your `params` (`customer_ref`,
+`invoice_line_add.0.item_ref`), with the record it was found, chosen or created as. `summary` is the
+run's own log of its steps. See [How a run ends](/workflows#how-a-run-ends).
+
+## QuickBooks behaviour
+
+What QuickBooks Desktop and the Web Connector do that other APIs don't, for an app that sends
+requests itself.
+
+### `timed-out-look-first`
+
+<Badge color="orange">Major</Badge> Applies when the app queues QuickBooks writes itself (a workflow
+settles its own).
+
+**Treat a `timed_out` request as perhaps applied: queue a query again, but look before you send a
+create or an update again.**
+
+`timed_out` means QuickBooks received the request but its answer never came back: the customer's
+computer lost its connection, or QuickBooks or the Web Connector was closed, while the request was
+being processed. An `Idempotency-Key` doesn't help here, since the request was queued and sent:
+sending it again with its key only returns it. See
+[When the answer is lost](/error_handling#when-the-answer-is-lost) and
+[Lost answers](/workflows#lost-answers).
+
+### `retryable-not-resent`
+
+<Badge color="orange">Major</Badge> Applies when the app queues QuickBooks requests itself.
+
+**Don't resend a `retryable` request: show your customer `error.user_message`, and wait for the
+answer.**
+
+The Web Connector couldn't get it into QuickBooks (QuickBooks wasn't running, a dialog was open, or
+the wrong company file was), so nothing was applied, and QuBe Sync keeps trying on the Web
+Connector's next runs, for as long as it takes. A copy sent beside it runs too, once QuickBooks is
+back. See [When QuickBooks is out of reach](/error_handling#when-quickbooks-is-out-of-reach) and
+[What to do with each `state`](/webhooks#what-to-do-with-each-state).
+
+### `stale-edit-sequence-reapply`
+
+<Badge color="orange">Major</Badge> Applies when the app sends updates itself.
+
+**On a `stale_edit_sequence` (3200), re-apply your change on the record in
+`response_json.error.current` and resend with its `edit_sequence`, deciding first which value wins
+for a field someone else changed too.**
+
+QuickBooks refuses an update whose `edit_sequence` is out of date and changes nothing, but answers
+with the record as it stands. Resending your fields with the new `edit_sequence` without a look
+quietly overwrites what the other person changed. See
+[When the record changed after you read it](/error_handling#when-the-record-changed-after-you-read-it)
+and [Conflicts](/workflows#conflicts).
+
+### `names-unique-across-lists`
+
+<Badge color="orange">Major</Badge> Applies when the app creates customers, vendors, employees,
+other names or items itself.
+
+**Plan for a name another list already holds: names are unique across QuickBooks' customer, vendor,
+employee and other-name lists together.**
+
+Creating a customer whose name a vendor already has fails with error 3100 (`name_in_use`), and items
+share one name space across every type. A sync that looks only among customers before adding one
+meets this on real company files. See [Create](/making-requests#create) and
+[QuickBooks said no](/error_handling#quickbooks-said-no).
+
+### `ref-number-not-unique`
+
+<Badge color="orange">Major</Badge> Applies when the app stores or matches QuickBooks transactions.
+
+**Key transactions by `txn_id`, not by their number: QuickBooks doesn't keep `ref_number` unique.**
+
+QuickBooks accepts a new invoice with a number another invoice already has, and a voided invoice
+keeps its number, with its amounts at zero. An import keyed on the number merges different invoices.
+See [Tips](/pagination#tips).
+
+### `modified-date-filters`
+
+<Badge color="gray">Minor</Badge> Applies when the app syncs changes with modified-date queries
+itself.
+
+**Filter lists with `from_modified_date` and transactions with
+`modified_date_range_filter[from_modified_date]`, from the newest `time_modified` you received, sent
+back exactly as it came.**
+
+A list query takes the filter directly, and a transaction query takes it nested. QuickBooks labels
+local times with the standard offset even in daylight saving time and reads the filter the same way,
+so its own value finds what it should, while a UTC time from your own clock reaches up to an hour
+further back. A modified-date filter never finds deletions. See [Tips](/pagination#tips) and
+[Query](/making-requests#query).
+
+### `max-returned-is-not-the-whole-list`
+
+<Badge color="orange">Major</Badge> Applies when the app queries QuickBooks lists itself.
+
+**Don't take the answer to a query sent with `max_returned` alone as the whole list: leave the
+paging parameters out, or send `iterator=true` with it, when you need every record.**
+
+A query sent with `max_returned` alone gets at most that many records, in one answer, and QuickBooks
+doesn't say whether more matched. What the app concludes about the records it didn't get, such as
+that they're gone, is then wrong on a large company file. See [Auto-Pagination](/pagination).
+
+### `warning-is-success`
+
+<Badge color="orange">Major</Badge> Applies when the app queues QuickBooks writes itself.
+
+**Treat a `response_received` that carries a `warning` as saved: store the record's id and don't
+resend it.**
+
+A warning is still a success, and `data` is what QuickBooks saved; sent again, it's a second record.
+`530` means a field you sent isn't supported by this QuickBooks, so the record was saved without it:
+`message` names the field. See
+[QuickBooks said yes, with a warning](/error_handling#quickbooks-said-yes-with-a-warning).
+
+### `branch-on-codes`
+
+<Badge color="gray">Minor</Badge> Applies when the app queues QuickBooks requests itself.
+
+**Branch on `error.error_type` and then the status code (`error.error_code`, or
+`response_json.error.code`), never on the message text, and show your customer
+`error.user_message`.**
+
+The codes are stable things to branch on. `message` is QuickBooks' or the Web Connector's raw text,
+and `user_message` is plain language for your end user: what went wrong and what to do. See
+[QuickBooks said no](/error_handling#quickbooks-said-no) and
+[Where each key lives](/error_handling#where-each-key-lives).
+
+## Going live
+
+Production: answers by webhook, secrets kept secret, and the production app ready.
+
+### `webhooks-not-polling`
+
+<Badge color="orange">Major</Badge> Applies to every integration.
+
+**Take answers from webhooks, not by polling: `links.self`, and a `GET` of a request or a run, are
+for scripts and for looking into a problem.**
+
+A request is answered only when the customer's Web Connector checks in, every 5 minutes on a
+standard connection, so a poll mostly finds nothing. The webhook arrives the moment QuickBooks
+answers, and a run's notifications go only to its `webhook_url`. See
+[Handling the response](/making-requests#handling-the-response) and
+[Where to next](/quickstart#where-to-next).
+
+### `no-secrets-in-logs-or-browser`
+
+<Badge color="red">Critical</Badge> Applies to every integration.
+
+**Keep the API key and the webhook secret out of logs, error reports, the browser and the repo.**
+
+Either is enough to act as your app: the key reads and writes every connected company file, and the
+secret signs webhooks your endpoint will trust. Logged request headers and committed environment
+files are where they leak. See [Do it from your code](/quickstart#do-it-from-your-code) and
+[Operating it](/going-live#operating-it).
+
+### `production-credentials`
+
+<Badge color="orange">Major</Badge> Applies to every integration.
+
+**Give production the production app's own API key and webhook secret, and rotate either by adding
+the new one before expiring the old.**
+
+Deliveries are signed with every active secret on the app, one `v1` each, so a rotation drops
+nothing when your endpoint accepts any `v1`. Expiring an API key takes effect immediately, so deploy
+its successor first. See [Launch checklist](/going-live#launch-checklist) and
+[Rotate your webhook secret](/webhooks#rotate-your-webhook-secret).
+
+### `production-runs-published`
+
+<Badge color="orange">Major</Badge> Applies when the app starts workflow runs.
+
+**Publish every workflow your app starts in the production app before launch: production connections
+run only published versions.**
+
+Sandbox and simulated connections run your latest edits, but a production connection always uses the
+workflow's published version. Promote each workflow from your sandbox app, which publishes it there
+too, and fix any company-file values the promotion warns about. See
+[Launch checklist](/going-live#launch-checklist) and
+[From sandbox to production](/workflow-authoring#from-sandbox-to-production).
+
+### `public-webhook-url`
+
+<Badge color="orange">Major</Badge> Applies to every integration.
+
+**In production, make every `webhook_url` your app's public `https` address: never localhost, a
+private address, a tunnel or a `qube listen` URL, and never one that redirects.**
+
+QuBe Sync doesn't follow redirects, and a delivery to an address it can't reach, such as localhost
+or a private IP address, isn't sent or retried: it fails at once. A tunnel or relay URL from
+development stops working when the laptop does. See
+[When a delivery fails](/webhooks#when-a-delivery-fails) and
+[Receiving webhooks in development](/webhooks#receiving-webhooks-in-development).
+
+{/* integration-rules:end checklist */}

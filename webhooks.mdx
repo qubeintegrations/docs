@@ -118,14 +118,19 @@ class QuickbooksAnswerJob < ApplicationJob
     return unless answer["state"] == "response_received"
 
     data = answer.dig("response_json", "data")
+    # A list_id is unique only within one company file: keep it with its connection.
+    connection_id = request.qube_connection_id
     case request.purpose
     when "import_customers"
       Array(data).each do |attrs|
-        request.account.customers.find_or_initialize_by(qb_list_id: attrs["list_id"])
-          .update!(name: attrs["full_name"], email: attrs["email"])
+        Customer.find_or_initialize_by(qube_connection_id: connection_id,
+                                       qb_list_id: attrs["list_id"])
+          .update!(account: request.account, name: attrs["full_name"],
+                   email: attrs["email"])
       end
     when "add_customer"
-      request.subject.update!(qb_list_id: data["list_id"])
+      request.subject.update!(qube_connection_id: connection_id,
+                              qb_list_id: data["list_id"])
     end
   end
 end

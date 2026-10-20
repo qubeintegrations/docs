@@ -250,4 +250,4 @@ If that session ends
 before the last page (QuickBooks closes, the Web Connector is stopped, or the connection drops), QuickBooks
 can't pick up where it left off. The next page's webhook then has `state:` <Badge color="red">`error`</Badge>, with `error_type:`
 `quickbooks_connection_error` and a `user_message` saying so. Queue the query again to get the rest. It
-starts from the first page, so save returned records by their `list_id` or `txn_id` and upsert rather than create duplicates.
+starts from the first page, so upsert returned records by their connection, kind and `list_id` or `txn_id` rather than create duplicates.

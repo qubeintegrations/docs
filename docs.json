@@ -63,7 +63,8 @@
             "group": "Test and launch",
             "pages": [
               "simulator",
-              "going-live"
+              "going-live",
+              "integration-checklist"
             ]
           },
           {

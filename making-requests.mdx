@@ -234,6 +234,13 @@ A create's answer is the **new record** in `response_json.data`, with the ids Qu
 Store the `list_id` or `txn_id` against your own record. A `list_id` is stable for the life of the company
 file; a `full_name` changes when someone renames the record in QuickBooks.
 
+Keep it with the connection it came from. QuickBooks makes a `list_id` unique only within one list of one
+company file, and a `txn_id` within one transaction type: two of your customers' files can hold the same one,
+and a copy of a file (a restored backup, a test copy) holds every one the same. So when your app keeps its
+own table of QuickBooks records, find each row by the connection, the kind and the id together: never by the
+id alone, and not by your customer's account either, since a customer who connects another company file gets a
+new connection.
+
 If QuickBooks saved the record but left something out, such as a field this QuickBooks doesn't support, the
 answer is still a success, with `response_json.warning` saying what. See
 [Warnings](/error_handling#quickbooks-said-yes-with-a-warning).
