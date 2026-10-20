@@ -45,8 +45,9 @@ Your code doesn't change between the two. The API key, the webhook secret and th
     list.
   </Step>
   <Step title="Finish your onboarding flow">
-    Set a `redirect_url`, handle `connected`, `cancelled` and `expired`, and optionally show each customer their
-    connection's `last_connected_at` so they can tell when their Web Connector has stopped.
+    Set each connection's `webhook_url`, and handle its events: `connection.connected` marks the account
+    connected, `connection.setup_cancelled` offers the button again, and `connection.stalled` and
+    `connection.resumed` tell your customer when their Web Connector has stopped and started again.
     [Connect your customers](/onboarding).
   </Step>
   <Step title="Test against real QuickBooks">

@@ -41,7 +41,8 @@ Create a customer with `POST /customers`, and your endpoint receives the new cus
 ```
 
 Every field is described under [Payload fields](#payload-fields). [Workflow runs](#workflow-runs) send
-their own webhooks, about the run rather than each request.
+their own webhooks, about the run rather than each request, and so do [connections](#connection-events),
+when your customer connects and when your requests stall.
 
 ## Four jobs for your endpoints
 
@@ -85,8 +86,9 @@ Every webhook but <Badge color="green">`response_received`</Badge> carries an `e
 
 ## Handle it in a job
 
-Verify the signature, enqueue the payload, answer `200`. [Workflow run](#workflow-runs) webhooks carry an
-`event` and request webhooks don't, so one endpoint can route both.
+Verify the signature, enqueue the payload, answer `200`. [Workflow run](#workflow-runs) and
+[connection](#connection-events) webhooks carry an `event` and request webhooks don't, so one endpoint can
+route them all.
 
 <CodeGroup>
 ```ruby qube_webhooks_controller.rb
@@ -94,10 +96,10 @@ Verify the signature, enqueue the payload, answer `200`. [Workflow run](#workflo
 class QubeWebhooksController < ActionController::API
   def create
     payload = QubeWebhook.verify!(request.raw_post, request.headers["X-QUBE-Signature"])
-    if payload["event"].to_s.start_with?("workflow_run.")
-      WorkflowRunEventJob.perform_later(payload)
-    else
-      QuickbooksAnswerJob.perform_later(payload)
+    case payload["event"].to_s
+    when /\Aworkflow_run\./ then WorkflowRunEventJob.perform_later(payload)
+    when /\Aconnection\./ then ConnectionEventJob.perform_later(payload)
+    else QuickbooksAnswerJob.perform_later(payload)
     end
     head :ok
   rescue QubeWebhook::Invalid
@@ -389,6 +391,81 @@ no `id`.
 ```
 
 `name_index` is the connection's own `name_index`, as `GET /connections/{connection_id}` shows it. The payload
-never carries a name or a record. The controller above sends anything without a `workflow_run.` event to
-`QuickbooksAnswerJob`, which finds no request for it and returns, so route on `event` first if you opt in
-with the same endpoint.
+never carries a name or a record. The controller above sends anything without a `workflow_run.` or
+`connection.` event to `QuickbooksAnswerJob`, which finds no request for it and returns, so route on `event`
+first if you opt in with the same endpoint.
+
+## Connection events
+
+Give a connection a `webhook_url`, when you [create](/api-reference/v2/connections/create-a-connection) it or
+[later](/api-reference/v2/connections/update-a-connection), and QuBe Sync tells it what happens to the
+connection. It's signed the same way, needs the same quick `2xx` and is retried the same way. It has an
+`event` and a `connection`, and no `id`.
+
+| `event` | What happened | What to do |
+| --- | --- | --- |
+| `connection.connected` | The Web Connector checked in for the first time (`connection.setup` is `first`), or for the first time since your customer chose **Set up again** (`again`). | **Start syncing.** Mark the account connected. |
+| `connection.setup_cancelled` | Your customer chose **Cancel setup** on the setup page. The connection is unchanged, and its onboarding link still works. | **Offer to connect again.** |
+| `connection.stalled` | One of your requests has waited too long to be taken, and `connection.stall_reason` says why: `not_checking_in` (the Web Connector hasn't checked in when it was due, by the longer of 15 minutes and twice its schedule) or `quickbooks_unavailable` (it is checking in but can't reach QuickBooks, and your request has waited that long since you queued it). `connection.waiting` says how many are waiting and since when, and `connection.expected_check_in_at` when the Web Connector was due. | **Tell your customer**, by the reason. `not_checking_in`: turn on the QuickBooks computer and check the Web Connector. `quickbooks_unavailable`: open QuickBooks with the company file. |
+| `connection.resumed` | A stalled connection's requests are being taken again. It only ever follows a `connection.stalled`, whose time is `connection.stalled_at`. | **Clear the warning.** |
+
+```json connection.stalled
+{
+  "event": "connection.stalled",
+  "delivery_id": "a2d4f6b8-1c3e-4a5b-9d7f-0e2c4a6b8d10",
+  "revision": 2,
+  "timestamp": 1792485001,
+  "app_id": "98f339a4-32e8-424a-987e-ccaf5bcaa620",
+  "sandbox": false,
+  "connection": {
+    "id": "3f9c2a71-5d4e-4b8a-9c1f-7e2d6a5b8c90",
+    "name": "Riverbend Electric",
+    "type": "standard",
+    "last_connected_at": "2026-10-20T08:00:21Z",
+    "waiting": { "requests": 3, "oldest_queued_at": "2026-10-20T08:12:40Z" },
+    "expected_check_in_at": "2026-10-20T08:05:21Z",
+    "stall_reason": "not_checking_in"
+  },
+  "links": { "self": "https://qubesync.com/api/v2/connections/3f9c2a71-5d4e-4b8a-9c1f-7e2d6a5b8c90" }
+}
+```
+
+A `delivery_id` is new for each event and the same on every retry of it, so take each one once. Deliveries
+can also come out of order, a retried `connection.stalled` after its `connection.resumed` say, so apply an
+event only when its `revision` is newer than the last you applied: it counts up across all four, per
+connection. The payload never carries the Web Connector's username or password, the onboarding link or
+anything from QuickBooks; `links.self` is the connection, to read for more.
+
+A stall can change its reason while it goes on. A computer that was off overnight and is turned on in the
+morning is checking in again, but QuickBooks may not be open yet: `not_checking_in` becomes
+`quickbooks_unavailable`. You then get `connection.stalled` again, with the new reason and a newer
+`revision`, so show your customer the newest. With `quickbooks_unavailable` the Web Connector is checking in,
+so `expected_check_in_at` is its next try, which QuBe Sync spaces out while it keeps failing and which can be
+in the future. `connection.resumed` ends the stall whichever its last reason was.
+
+A connection with nothing of yours waiting is never stalled, however long its computer is off. A `simulated`
+connection never stalls, and is connected as it's made: its `connection.connected` comes right after
+`POST /connections`, so you can try your handler with no Web Connector.
+
+```ruby connection_event_job.rb
+# app/jobs/connection_event_job.rb
+class ConnectionEventJob < ApplicationJob
+  def perform(event)
+    account = Account.find_by(qube_connection_id: event.dig("connection", "id")) or return
+    account.with_lock do
+      # Applied already, or older than one that was.
+      next if event["revision"] <= account.qube_connection_revision.to_i
+
+      case event["event"]
+      when "connection.connected", "connection.resumed"
+        account.update!(quickbooks_status: "connected", quickbooks_stall_reason: nil)
+      when "connection.stalled"
+        # Also when a stall's reason changes: show the latest.
+        reason = event.dig("connection", "stall_reason")
+        account.update!(quickbooks_status: "stalled", quickbooks_stall_reason: reason)
+      end
+      account.update!(qube_connection_revision: event["revision"])
+    end
+  end
+end
+```
