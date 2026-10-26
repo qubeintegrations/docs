@@ -25,7 +25,10 @@ Your code doesn't change between the two. The API key, the webhook secret and th
   </Step>
   <Step title="Set up billing">
     In the dashboard, a production app without a subscription shows **Set up billing to enable**. Add a
-    payment method before your first customer connects.
+    payment method before your first customer connects: until your organization has billing, its
+    production app can't have connections of any type, `simulated` included. Creating one, from the API,
+    the CLI or the dashboard, is refused with `402` and the code `billing_required`, and nothing is
+    saved. Your sandbox app needs no billing.
   </Step>
   <Step title="Promote your workflows">
     Production connections only run **published** workflow versions. Publish in your sandbox app, then

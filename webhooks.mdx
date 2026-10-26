@@ -198,6 +198,112 @@ To protect yourself from timing attacks, JSON parsing vulnerabilities, etc., it'
 Every delivery carries an `X-QUBE-Signature` header: a timestamp and one HMAC-SHA256 signature per active
 webhook secret on your app. You can manage your webhook secrets in the _Application_'s settings.
 
+### Verify the signature
+
+<Warning>
+  Use the **raw bytes** you received. Verify before parsing, and never re-serialize the JSON first.
+</Warning>
+
+<Tabs>
+<Tab title="Use a library">
+
+For Ruby, Python and Node, a library checks the signature and the timestamp for you, and parses the body into a typed event:
+
+| Stack | Install | Needs |
+| --- | --- | --- |
+| Ruby | `bundle add qube_sync` (0.3.0 or later) | Ruby 3.3 |
+| Python | `pip install qubesync` (0.2.0 or later) | Python 3.8 |
+| Node | `npm install qubesync` (0.1.0 or later) | Node 16.17 |
+
+Each one's `verify` takes the raw body, the `X-QUBE-Signature` header and your secrets. It returns the event or raises a `SignatureError`.
+
+<CodeGroup>
+```ruby Rails
+class QubeWebhooksController < ActionController::API
+  def create
+    event = QubeSync::Webhooks.verify(
+      request.raw_post,
+      request.headers["X-QUBE-Signature"],
+      secrets: ENV.fetch("QUBE_WEBHOOK_SECRET")
+    )
+    QubeWebhookJob.perform_later(event.to_h)
+    head :ok
+  rescue QubeSync::Webhooks::SignatureError => e
+    Rails.logger.warn("QuBe Sync webhook refused: #{e.message}")
+    head :unauthorized
+  end
+end
+```
+
+```python Flask
+import os
+from flask import Flask, request
+from qubesync import webhooks
+
+app = Flask(__name__)
+SECRETS = [os.environ["QUBE_WEBHOOK_SECRET"]]
+
+@app.post("/webhooks/qube")
+def qube_webhook():
+    try:
+        event = webhooks.verify(
+            request.get_data(),  # the raw bytes, not request.json
+            request.headers.get("X-QUBE-Signature"),
+            SECRETS,
+        )
+    except webhooks.SignatureError:
+        return "", 401
+    enqueue(event.body)
+    return "", 200
+```
+
+```javascript Express
+const express = require("express");
+const { verify, SignatureError } = require("qubesync");
+
+const app = express();
+const secrets = [process.env.QUBE_WEBHOOK_SECRET];
+
+// express.raw on this route alone, so req.body is the raw Buffer.
+app.post("/webhooks/qube", express.raw({ type: "application/json" }), (req, res) => {
+  let event;
+  try {
+    event = verify(req.body, req.get("X-QUBE-Signature"), { secrets });
+  } catch (error) {
+    if (error instanceof SignatureError) return res.sendStatus(401);
+    throw error;
+  }
+  enqueue(event.body);
+  res.sendStatus(200);
+});
+```
+</CodeGroup>
+
+The event's `type` is `request`, `workflow_run`, `notification`, `connection`, `name_index` or
+`unknown`, for an event newer than your version of the library. Accept an `unknown` event with a
+`2xx`. Each event also gives you what the rules below ask for:
+
+- `dedupe_key`: `page_request_id` plus `state` for a request's answer, and the delivery id for a
+  notification or a connection event.
+- `newer_than?(stored)` (`newer_than` in Python, `newerThan` in Node) for the
+  [revisions](#workflow-runs) of workflow runs and connections.
+- `reference`: the reference you gave the workflow run.
+
+Each library's README lists every field:
+[Ruby](https://github.com/qubeintegrations/qube_sync_rb#webhooks),
+[Python](https://github.com/qubeintegrations/qube_sync_py#webhooks),
+[Node](https://github.com/qubeintegrations/qube_sync_node#webhooks).
+
+<Note>
+  Use version 0.3.0 or later of the `qube_sync` gem, and 0.2.0 or later of PyPI `qubesync`.
+</Note>
+
+</Tab>
+<Tab title="Verify it yourself">
+
+Without a library, or on an older runtime (Ruby before 3.3, for example) or a platform that can't
+install packages, verify inline.
+
 The header will be in the following format:
 <Note>Newlines have been added for readability.</Note>
 ```bash
@@ -220,9 +326,8 @@ v1=signature2
   </Step>
 </Steps>
 
-<Warning>
-  Use the **raw bytes** you received. Verify before parsing, and never re-serialize the JSON first.
-</Warning>
+Each of these is complete, using only the standard library and your framework. Each passes every case
+in the [test vectors](https://qubesync.com/webhooks/test_vectors.json), as the libraries do:
 
 {/* integration-kit:start webhooks-verify (mix integration_kit.docs in qube writes this: don't edit) */}
 <CodeGroup>
@@ -391,6 +496,9 @@ end
 **Why check the timestamp?** It stops someone replaying a captured delivery. Every delivery, retries
 included, is signed afresh, so a healthy receiver never sees an old one.
 
+</Tab>
+</Tabs>
+
 ### Rotate your webhook secret
 
 An app can have several webhook secrets, and each delivery is signed with all of them. That header carries
@@ -446,8 +554,8 @@ label for the run, such as the id of the record it's about, saved before you sen
 webhook carries it, so find your record by `reference` rather than `run_id`. Every webhook and response
 also carries the run's `revision`, which goes up with every change: skip a body whose `revision` isn't
 higher than the last you applied (except a notification, which you deduplicate on `delivery_id`).
-Revisions count per run, so give every run a new reference (`contact-381-2` for the next run about the
-same record).
+Revisions count per run, so give every run a new reference: the record's id plus a UUID, never the record's
+id alone.
 
 A question arrives as `workflow_run.awaiting_input`, with the question in `prompt`. Every question has the
 same shape, so one handler and one screen answer all of them: show `prompt.message`, the `prompt.details`
@@ -458,7 +566,7 @@ choice's `id` to `links.decisions` ([Answering a question](/workflows#answering-
 {
   "event": "workflow_run.awaiting_input",
   "run_id": "fb1951a1-25b9-4fb2-98c7-c988988ecdf7",
-  "reference": "contact-381",
+  "reference": "contact-381-9b2f6c1e-0d4a-4f7e-8a7b-2a1c3d4e5f60",
   "revision": 6,
   "run_state": "awaiting_input",
   "prompt": {

@@ -251,7 +251,7 @@ stateDiagram-v2
 ### Every key, for reference
 
 <AccordionGroup>
-  <Accordion title="Inputs" description="type, list, example, only" icon="right-to-bracket">
+  <Accordion title="Inputs" description="type, list, example, schema, only, enum, body_of" icon="right-to-bracket">
     `input` declares what a run is started with. A run whose input doesn't match is refused before anything
     is sent.
 
@@ -262,6 +262,9 @@ stateDiagram-v2
     | `required`, `description` | Optional. |
     | `example` | What the usage contract's start body and the dashboard's Run drawer show, in the input's own JSON type. An operation input needs none: its example is built from the operation. Nor does a list of objects a `workflow` state runs through one at a time: its example is one element of what that workflow takes. |
     | `operation` | For `"type": "operation"`: the input accepts exactly the body that operation's REST endpoint takes, validated the same way. Here, `customer` is anything you could `POST /customers`. Leave `operation` out and the input takes an operation *and* its params, so one chart can serve any record type ([One chart for any record type](#one-chart-for-any-record-type)). |
+    | `schema` | For an `object` or `array` input, or a `list` of anything but operations: what one value (one element, for a list) has to look like, as JSON Schema's `type`, `properties`, `required`, `additionalProperties`, `items`, `enum` and `description`, plus `body_of` on a property (below). `{"type": "object", "example": {"name": "Acme"}, "schema": {"properties": {"name": {"type": "string"}, "email": {"type": "string"}}, "required": ["name"], "additionalProperties": false}}` refuses a run whose input has no `name`, or a field besides `name` and `email`, naming the field (`input.customer.name: is required`). The example has to match it, the builder offers its fields as references, and a `${input.customer.<field>}` it doesn't list is a warning. Other JSON Schema keywords are refused rather than ignored. In the dashboard, **Make one from the example** writes one from the example's types. |
+    | `enum` | For a `string` input: the values a run may give it. `add_transaction`'s `operation` lists the transaction adds, so `customer.create` is refused at the start. |
+    | `body_of` | For an `object` input whose operation another input names: the run checks the body against that operation when it starts, as it does an operation input. `{"operation": "operation"}` when the other input holds an operation id (`add_transaction`'s `params`); `{"kind": "kind", "action": "create"}` when it holds a kind, for `<kind>.create` (`ensure`'s `add`; `update` and `query` are the other actions). The input it names is a `string` input. Inside a `schema`, it goes on an object property and names a property beside it (`add_transaction`'s `adds` entries). A field the operation doesn't take is refused before anything is sent (`input.params: unknown parameter: "customer_rf"`); required fields are checked when the request is sent, since the chart may fill some in. Your app's library writes a typed start per operation from it ([Typed starts in your code](/workflows#typed-starts-in-your-code)). |
     | `only` | Narrows an operation input to the parameters you name. `{"type": "operation", "operation": "customer.create", "only": ["name", "company_name", "email"]}` takes a customer's name, company and email and nothing else. A run started with more is refused, naming the field. |
   </Accordion>
   <Accordion title="States" description="the nine types, entry and exit" icon="circle-nodes">

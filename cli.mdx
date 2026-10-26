@@ -177,7 +177,9 @@ qube requests list --connection <id>              # another connection, this onc
       --wait                                        # until it ends or needs a decision; --version published|working|N on sandbox
     qube workflows runs <connection>                # runs on a connection
     qube workflows runs <connection> <run> --events # one run's event log; --after SEQ for the next page
-    qube workflows decide <connection> <run> rename --data '{"name": "Lone Star Supply Co (customer)"}'
+    qube workflows decide <connection> <run> --choice use:1   # answer a waiting run's question by a choice's id
+    qube workflows decide <connection> <run> --choice by_name --data '{"name": "Lone Star Supply"}'
+    qube workflows search <connection> <run> --field list_id "Lone Star"   # the records a record field can take
     qube workflows cancel <connection> <run> --reason "Wrong customer"
     qube workflows delete-run <connection> <run>    # an ended run and its history
     qube workflows unpublish add_transaction

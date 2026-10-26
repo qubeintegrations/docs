@@ -42,9 +42,79 @@ Fields are snake_case versions of QuickBooks' own names (`ListID` becomes `list_
 Add `webhook_url` as a **query parameter** to every call, whatever the method. That's where the answer
 goes.
 
+## Use a library
+
+QuBe Sync's libraries make these calls for you: the API key as basic auth, the response's `data` out, an
+`Idempotency-Key` on every call that queues (yours, or one they make and resend on their own retries), safe
+retries after a timeout or a `503`, and one `APIError` with the API's `status`, `code` and message. They take
+the key as an argument, so your app reads it from the environment.
+
+<CodeGroup>
+```ruby Ruby
+# gem "qube_sync", ">= 0.4.0", require: ["qube_sync/webhooks", "qube_sync/client"]
+qube = QubeSync::Client.new(api_key: ENV.fetch("QUBE_API_KEY"))
+
+request = qube.customer.create(
+  connection_id, { name: "Riverbend Electric" },
+  webhook_url: "https://your-app.example/webhooks/qube",
+  idempotency_key: customer.qube_idempotency_key
+)
+
+qube.customer.query(connection_id, { name_starts_with: "River" },
+                    webhook_url: "https://your-app.example/webhooks/qube")
+```
+
+```javascript Node.js
+// npm install qubesync@^0.2.0
+const { Client } = require("qubesync");
+const qube = new Client({ apiKey: process.env.QUBE_API_KEY });
+
+const request = await qube.customer.create(
+  connectionId,
+  { name: "Riverbend Electric" },
+  {
+    webhookUrl: "https://your-app.example/webhooks/qube",
+    idempotencyKey: customer.qubeIdempotencyKey,
+  },
+);
+
+await qube.customer.query(connectionId, { name_starts_with: "River" }, {
+  webhookUrl: "https://your-app.example/webhooks/qube",
+});
+```
+
+```python Python
+# pip install "qubesync>=0.3.0"
+import os
+from qubesync import Client
+
+qube = Client(os.environ["QUBE_API_KEY"])
+
+request = qube.customer.create(
+    connection_id,
+    {"name": "Riverbend Electric"},
+    webhook_url="https://your-app.example/webhooks/qube",
+    idempotency_key=customer.qube_idempotency_key,
+)
+
+qube.customer.query(
+    connection_id,
+    {"name_starts_with": "River"},
+    webhook_url="https://your-app.example/webhooks/qube",
+)
+```
+</CodeGroup>
+
+Every operation in the [API reference](/api-reference/introduction) is a method, named as workflows name it:
+the record's kind, then the action (`customer.create`, `invoice.query`, `txn_void.execute`). Each one's params
+are typed, with every field described: Ruby has RBS signatures, Python `TypedDict`s and Node `.d.ts` types. A
+kind's code loads the first time your app uses it. The same client creates connections, starts workflow runs,
+answers their questions and reads your queued requests, a page at a time or all of them. Each library's
+README lists every method.
+
 ## A small API client
 
-Every example here uses the same few lines: JSON in, the response's `data` out.
+Without a library, every example here uses the same few lines: JSON in, the response's `data` out.
 
 {/* integration-kit:start making-requests-client (mix integration_kit.docs in qube writes this: don't edit) */}
 <CodeGroup>

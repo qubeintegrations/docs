@@ -77,11 +77,11 @@ change when you connect real QuickBooks later.
         </Accordion>
       </Step>
       <Step title="Send a test request">
-        On the connection's page, click **Create Test Request**. It asks QuickBooks for the first 10
+        On the connection's page, click **Queue test request**. It asks QuickBooks for the first 10
         customers, and the simulator answers within seconds.
 
-        <Frame caption="The request goes from waiting to response_received on its own.">
-          <img src="/images/quickstart/connection-requests.png" alt="Recent Requests on the connection's page: the Create Test Request button and a CustomerQueryRq request in state response_received" />
+        <Frame caption="The request goes from Waiting to Answered on its own.">
+          <img src="/images/quickstart/connection-requests.png" alt="The Requests tab on the connection's page: a CustomerQueryRq request, Answered" />
         </Frame>
       </Step>
       <Step title="Read the answer">
@@ -95,7 +95,7 @@ change when you connect real QuickBooks later.
         <Accordion title="Make the next request fail on purpose">
           Real integrations fail in ways that are hard to reproduce, like a name that's already taken. On
           the connection's page, under **Faults**, set **Next request** to *answered with 3100 — name
-          already in use*, then click **Create Test Request** again. Its state is <Badge color="red">`error`</Badge>, with the same
+          already in use*, then click **Queue test request** again. Its state is <Badge color="red">`error`</Badge>, with the same
           refusal QuickBooks would send.
 
           <Frame>
@@ -163,12 +163,12 @@ change when you connect real QuickBooks later.
         </AccordionGroup>
       </Step>
       <Step title="Send a test request">
-        On the connection's page, click **Create Test Request**. It asks QuickBooks for the first 10
+        On the connection's page, click **Queue test request**. It asks QuickBooks for the first 10
         customers. QuickBooks answers the next time the Web Connector runs: within 5 minutes, or straight
         away if you click **Update Selected** in the Web Connector.
 
-        <Frame caption="The request waits until the Web Connector checks in, then shows response_received.">
-          <img src="/images/quickstart/connection-requests.png" alt="Recent Requests on the connection's page: the Create Test Request button and a CustomerQueryRq request in state response_received" />
+        <Frame caption="The request waits until the Web Connector checks in, then shows Answered.">
+          <img src="/images/quickstart/connection-requests.png" alt="The Requests tab on the connection's page: a CustomerQueryRq request, Answered" />
         </Frame>
       </Step>
       <Step title="Read the answer">
@@ -185,7 +185,7 @@ change when you connect real QuickBooks later.
 
 ## Do it from your code
 
-**Create Test Request** is a shortcut for one API call. To make it yourself, copy two values from the
+**Queue test request** is a shortcut for one API call. To make it yourself, copy two values from the
 dashboard:
 
 <AccordionGroup>

@@ -114,9 +114,10 @@ See [Add the "Connect to QuickBooks" button](/onboarding#add-the-connect-to-quic
 `connection.id`, and answer it `2xx` either way.**
 
 The signature covers the body, not the URL. A URL that names the record keeping the connection (the
-integration kit's `/webhooks/qube/connection/42`) is only a pointer, so a signed event posted to
-another record's URL would change that record. See [Connection events](/webhooks#connection-events)
-and [Add the "Connect to QuickBooks" button](/onboarding#add-the-connect-to-quickbooks-button).
+`qube_rails` engine's `/webhooks/qube/connections/<id>`) is only a pointer, so a signed event posted
+to another record's URL would change that record. See
+[Connection events](/webhooks#connection-events) and
+[Add the "Connect to QuickBooks" button](/onboarding#add-the-connect-to-quickbooks-button).
 
 ### `connection-event-newer-revision`
 
@@ -195,8 +196,9 @@ second's skipped against the first's. See [Workflow runs](/webhooks#workflow-run
 
 <Badge color="gray">Minor</Badge> Applies when the app starts workflow runs.
 
-**Give each run a webhook URL that names its operation and your record, such as
-`/webhooks/qube/create_invoice/42`, or route one shared endpoint on `event` and `reference`.**
+**Give each run a webhook URL that names it, such as `/webhooks/qube/runs/<id>` (a row written for
+the run before it starts, which keeps its operation and your record), or route one shared endpoint
+on `event` and `reference`.**
 
 Each run takes its own `webhook_url`, so the URL can carry what the job needs: which class handles
 the run and which record it's about. One shared URL works too, when its job routes on `event` first
@@ -207,12 +209,14 @@ and finds the record by `reference`. See [Handle it in a job](/webhooks#handle-i
 
 <Badge color="orange">Major</Badge> Applies when the app queues requests or starts workflow runs.
 
-**Send an `Idempotency-Key` with every call that queues a request or starts a run, and send a call
-whose answer you never got again with the same key.**
+**Make one `Idempotency-Key` for each call you mean to make once, from something new to that call (a
+UUID, or the run's new `reference`), store it with the record before you send it, and resend it only
+to retry that call.**
 
 Every call queues a new request: two calls to create an invoice make two invoices, and starting a
 run twice runs it twice. With the same key, a call sent again after a timeout gets back what the
-first one queued (`Idempotent-Replayed: true`), and nothing new is queued. See
+first one queued (`Idempotent-Replayed: true`), and nothing new is queued. A key lasts until what it
+created is purged (60 days after a request is answered or a run ends), and then frees up. See
 [Retrying a call safely](/making-requests#retrying-a-call-safely) and
 [Good to know](/workflows#good-to-know).
 
@@ -229,7 +233,7 @@ it matches.**
 
 Anyone can POST to a public URL. The header carries a timestamp `t` and one `v1` for each active
 webhook secret on your app, each the hex HMAC-SHA256 of `<t>.<raw body>` keyed with that secret. See
-[Securing your endpoints](/webhooks#securing-your-endpoints).
+[Verify the signature](/webhooks#verify-the-signature).
 
 ### `refuse-stale-timestamp`
 
@@ -239,7 +243,7 @@ webhook secret on your app, each the hex HMAC-SHA256 of `<t>.<raw body>` keyed w
 
 It stops someone replaying a captured delivery. Every delivery, retries included, is signed afresh,
 so a healthy receiver never sees an old one. See
-[Securing your endpoints](/webhooks#securing-your-endpoints).
+[Verify the signature](/webhooks#verify-the-signature).
 
 ### `verify-raw-body`
 
@@ -249,8 +253,7 @@ so a healthy receiver never sees an old one. See
 
 The signature is over the exact bytes QuBe Sync sent. Parsed and serialized again, JSON has other
 spacing, key order and escapes, so real deliveries fail, and a parser that runs before the check
-runs on bodies nobody has verified. See
-[Securing your endpoints](/webhooks#securing-your-endpoints).
+runs on bodies nobody has verified. See [Verify the signature](/webhooks#verify-the-signature).
 
 ### `answer-fast-work-in-job`
 

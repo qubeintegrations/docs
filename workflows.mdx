@@ -101,7 +101,7 @@ you see a question and its answer.
           kind: "customer",
           add: { name: "Lone Star Supply Co", email: "orders@lonestarsupply.example" },
         },
-        reference: "contact-381",
+        reference: "contact-381-9b2f6c1e-0d4a-4f7e-8a7b-2a1c3d4e5f60",
         webhook_url: "https://your-app.example/webhooks/qube",
       }}
     />
@@ -121,7 +121,7 @@ you see a question and its answer.
           "email": "orders@lonestarsupply.example"
         }
       },
-      "reference": "contact-381",
+      "reference": "contact-381-9b2f6c1e-0d4a-4f7e-8a7b-2a1c3d4e5f60",
       "webhook_url": "https://your-app.example/webhooks/qube"
     }
     ```
@@ -140,7 +140,7 @@ you see a question and its answer.
             "email": "orders@lonestarsupply.example"
           }
         },
-        "reference": "contact-381",
+        "reference": "contact-381-9b2f6c1e-0d4a-4f7e-8a7b-2a1c3d4e5f60",
         "webhook_url": "https://your-app.example/webhooks/qube"
       }'
     ```
@@ -148,10 +148,11 @@ you see a question and its answer.
     </Visibility>
     {/* agent-block:end */}
 
-    This returns `201` with the run object as JSON. `reference` is your own label for the run, such as the id
-    of the record it's about (up to 255 characters, and a new one for every run: `contact-381-2` for the next
-    run about this contact). The run and every webhook it sends carry it, so save your record before you start
-    the run, and a webhook that arrives before this response still finds it. `webhook_url` is optional, but
+    This returns `201` with the run object as JSON. `reference` is your own label for the run: the record it's
+    about plus a UUID, new for every run (up to 255 characters). The run and every webhook it sends carry it, so
+    save it on your record before you start the run, and a webhook that arrives before this response still finds
+    it. Send it as the run's `Idempotency-Key` too: a retry of the start then gets the same run back, and the
+    next run about this contact, with a reference of its own, is a run of its own. `webhook_url` is optional, but
     a run started without one sends no webhooks, and a workflow that [sends your app data](#sending-your-app-data)
     can't start without one (`422 webhook_url_required`).
   </Step>
@@ -224,7 +225,7 @@ you see a question and its answer.
         "workflow": "ensure",
         "workflow_id": "01a0e05a-3c52-7a8e-b1f4-6d2e9c0a7b31",
         "run_id": "fb1951a1-25b9-4fb2-98c7-c988988ecdf7",
-        "reference": "contact-381",
+        "reference": "contact-381-9b2f6c1e-0d4a-4f7e-8a7b-2a1c3d4e5f60",
         "revision": 6,
         "run_state": "awaiting_input",
         "prompt": {
@@ -288,7 +289,7 @@ you see a question and its answer.
       {
         "event": "workflow_run.completed",
         "run_id": "fb1951a1-25b9-4fb2-98c7-c988988ecdf7",
-        "reference": "contact-381",
+        "reference": "contact-381-9b2f6c1e-0d4a-4f7e-8a7b-2a1c3d4e5f60",
         "revision": 11,
         "run_state": "completed",
         "workflow": "ensure",
@@ -370,7 +371,7 @@ the query to send, such as `{"operation": "customer.query", "params": {"active_s
   <Accordion title="What each template takes, asks and ends with" icon="table">
     | Template | What it does | Asks your app | Ends |
     | --- | --- | --- | --- |
-    | `resolve` | Finds a list record of `kind` (`customer`, `vendor`, `employee`, `other_name`, `entity` for those four, `item` or one item type, `account`, `class`, `terms`, `sales_tax_code` and the other lists a transaction names) by the `list_id` your app stored, then by `name`, under `parent` (full name or ListID) for a job or a sub-item. The name is [matched](/matching) by rank on a realtime or simulated connection, with `fields` such as `email` or `account_number` for a customer, vendor, employee or other name, and through QuickBooks' own exact and "contains" filters on a standard one. Only an exact match is used without asking, or a strong one with `accept: "strong"`. What it finds is read whole by its ListID before it's used, and matched once more if it was deleted since. With `pick: true`, nothing found asks your app to pick one of the active records instead of ending `not_found`. It only finds: `ensure` and `upsert` write. | `ask` for a strong match or near matches: `use:1`, `use:2`, ... (one choice per match), `use` (a search, on a realtime or simulated connection), `none` (ends `not_found`) or `cancel`. `ask_detail` (or `ask_name`, for a list without an address) when more than 10 are alike: `narrow` (with an `account_number`, `city`, `postal_code` or fuller `name`), `none` or `cancel`, three times at most. With `pick`, `ask_pick`: `use` (a search), `by_name` (its name exactly as QuickBooks has it, looked up and used if it's there; asked again if not) or `cancel` | `found`, `picked`, `not_found`, `cancelled` |
+    | `resolve` | Finds a list record of `kind` (`customer`, `vendor`, `employee`, `other_name`, `entity` for those four, `item` or one item type, `account`, `class`, `terms`, `sales_tax_code` and the other lists a transaction names) by the `list_id` your app stored, then by `name`, under `parent` (full name or ListID) for a job or a sub-item. The name is [matched](/matching) by rank on a realtime or simulated connection, with `fields` such as `email` or `account_number` for a customer, vendor, employee or other name, and through QuickBooks' own exact and "contains" filters on a standard one. Only an exact match is used without asking, or a strong one with `accept: "strong"`. What it finds is read whole by its ListID before it's used, and matched once more if it was deleted since. With `pick: true`, nothing found asks your app to pick one of the active records instead of ending `not_found`. It only finds: `ensure` and `upsert` write. | `ask` for a strong match or near matches: `use:1`, `use:2`, ... (one choice per match), `use` (a search, on a realtime or simulated connection), `none` (ends `not_found`) or `cancel`. `ask_detail` (or `ask_name`, for a list without an address) when more than 10 are alike: `narrow` (with an `account_number`, `city`, `postal_code` or fuller `name`), `none` or `cancel`, three times at most. With `pick`, `ask_pick`: `use:1`, `use:2`, ... (one choice per active record, up to 25), `use` (a search, on a realtime or simulated connection), `by_name` (its name exactly as QuickBooks has it, looked up and used if it's there; asked again if not) or `cancel` | `found`, `picked`, `not_found`, `cancelled` |
     | `ensure` | Runs `resolve`, then sends your `add` (the body `POST /<kind>` takes; `kind` is the list it goes to, such as `customer` or `item_service`) when nothing is the record. A record of the add's own list with exactly the name is found and used without asking (on a realtime or simulated connection, before the add goes out); only a near match asks. A name already held in its name space (customers, vendors, employees and other names share one; every item type another) is a 3100: it finds what holds the name and asks. Allows five renames. Without an `add`, it creates nothing, and `resolve` asks your app to pick one of the active records instead. With `lookup: false` it sends the add without looking, for a caller that already did. | Through `resolve` (`ask_pick` without an `add`). `ask_use`: `use_existing`, `rename` (with `name`), `cancel`. `ask_rename` when another list holds the name: `rename`, `cancel` | `found`, `picked`, `created`, `created_renamed`, `used_existing`, `cancelled`; fails as `renames_exhausted` |
     | `upsert` | Finds a list record as `resolve` does (`kind`, the name and parent in your `add`, optional `list_id`, `fields` and `accept`) and sends your `update` to it with its ListID filled in; the engine reads the edit sequence first and asks before overwriting a record someone changed since. Nothing is the record: sends your `add` instead, looking once more if the name was taken in between. | `resolve / ask`: `use:1`, ... (one per match), `use` (a search), `none` (then the add goes out) or `cancel`. And the [conflict prompt](#conflicts) when the record changed after it was read | `updated`, `created`, `cancelled`; fails as `name_taken` when the update renames it to a name in use |
     | `push_records` | Runs `upsert` once per entry of `records` -- at most 200, each the `kind`, `add`, `update`, `list_id`, `fields` and `accept` that `upsert` takes, records of different lists mixed -- one at a time, in order, in one run. A record QuickBooks refuses, or one that isn't a valid `upsert` input, is listed in `errors` and the next one goes. For a webhook per record, run `upsert` once per record instead. | Through `upsert`, for each record that asks | `completed` |
@@ -996,6 +997,44 @@ Retrying with the fresh edit sequence would quietly overwrite whatever the other
 If you want to build a chart that overwrites or fails
 instead of asking, see [Conflicts in a chart](/workflow-authoring#conflicts-in-a-chart).
 
+## Typed starts in your code
+
+Your app's published workflows have types: `GET /api/v2/workflows/types` returns each one's input as JSON
+Schema, with the body of a QuickBooks operation as a reference to that operation's params. Each library
+has a generator that turns it into a start method per workflow, and one per operation where an input
+picks the operation, with the field docs and types the library's operation methods already have:
+
+```bash
+bin/rails g qube_rails:workflows          # Rails: app/qube/qube_workflows.rb and sig/qube_workflows.rbs
+QUBE_API_KEY=... qube_sync workflows      # any Ruby app: lib/qube_workflows.rb and sig/qube_workflows.rbs
+QUBE_API_KEY=... qubesync workflows       # Python: qube_workflows.py, TypedDicts
+QUBE_API_KEY=... npx qubesync workflows   # Node: qube-workflows.js and qube-workflows.d.ts
+```
+
+In Python it's `add_transaction.invoice(...)` and in Node `addTransaction.invoice(...)`, and the input
+types have the same names in both (`AddTransactionInvoiceInput`).
+
+```ruby
+QubeWorkflows.add_transaction.invoice(
+  connection, { customer_ref: { full_name: "Riverbend Electric" }, invoice_line_add: [...] },
+  adds: [{ kind: "customer", add: { name: "Riverbend Electric" } }],
+  reference: "invoice-1042-#{SecureRandom.uuid}", webhook_url: webhook_url
+)
+```
+
+`invoice_input(...)` builds the same input without starting a run, which is what an operation class's
+`input` returns. The file is checked in. Run the generator again when you publish a change, and with
+`--check` in CI: it exits non-zero once the file's digest differs from the server's (and only warns when it
+can't reach QuBe Sync). `--drafts` types each workflow's working copy where it has one, to write code against
+a version before you publish it.
+
+A body's required fields are the operation's, less the ones the workflow sets itself (`record_payment`
+fills the payment's `customer_ref`, `total_amount` and `applied_to_txn_add` from the invoice), which the
+generated types leave optional and their docs name.
+
+The types are a hint, never the authority: QuBe Sync checks every start, so a stale file means a missed
+type, not a wrong run. A start with a field the operation doesn't take is a `422` naming it.
+
 ## Follow your runs
 
 Every run has a page in the dashboard, at its `links.ui`. **Workflow runs** in the dashboard's menu lists them all.
@@ -1035,11 +1074,14 @@ part of the run you started.
 <AccordionGroup>
   <Accordion title="Starting a run twice runs it twice" description="unless both calls carry the same Idempotency-Key" icon="key">
     Use an `Idempotency-Key` to make sure you're not starting duplicate runs. See [Retrying a call safely](/making-requests#retrying-a-call-safely).
-    A `reference` doesn't do that: it's your label for the run, and two runs can have the same one. When you
-    start another run for the same record, give it a reference of its own (`order-1042-2`, or one with a
-    UUID in it), so the first run's webhooks can't be taken for the second's. Revisions count per run, so
-    the second run's bodies, starting again at revision 1, would also be skipped against the first run's. A
-    retry of the same start, with its `Idempotency-Key`, sends the same reference.
+    The run's new `reference` makes a good key: the record's id plus a UUID, made once when your app decides
+    to start the run, saved on the record, and sent again only to retry that same start. QuBe Sync's
+    libraries send the reference as the key for you. Never build either from the record alone
+    (`order-1042`): the next run for the order would get the first run back (or a `422`, if its input differs)
+    instead of starting, and once the first run is purged (60 days after it ends) a retried start would start
+    a new one. A reference of its
+    own for every run also keeps the first run's webhooks from being taken for the second's, whose revisions
+    start again at 1.
   </Accordion>
   <Accordion title="Answer at links.decisions, and a retry is safe" icon="ticket">
     Each question a run asks has a `prompt.token` to distinguish between questions that look the same (e.g. a `wait` in a loop, or a workflow called once per item), and `links.decisions` carries it (`?prompt_token=…`). It serves as an idempotency key of its own: if your answer gets no response, you can safely send it again to the same link without accidentally answering the run's next question. Once the run has asked again, it's refused with `409 prompt_changed` and nothing changes. On a retry, a `409` or a `400 not_awaiting_input` means your first answer landed or someone answered on the run's page. If you build the URL yourself, send the token as `prompt_token` in the body; without one, an answer is taken for whatever the run is

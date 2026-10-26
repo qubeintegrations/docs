@@ -478,7 +478,7 @@ match refreshes instead.
 | Answer | `code` | What happened | What to do |
 | --- | --- | --- | --- |
 | `409` | `name_index_building` | The index isn't in yet. `detail` says whether this call started the build. | Opt in with a `webhook_url` and match once `name_index.ready` arrives, or read the connection's `name_index.state`. |
-| `422` | `matching_requires_realtime` | The connection is `standard`. (A [workflow's `match` state](#in-a-workflow) falls back instead.) | Upgrade it to realtime. In your sandbox, that's free. |
+| `422` | `matching_requires_realtime` | The connection is `standard`. (A [workflow's `match` state](#in-a-workflow) falls back instead.) | Upgrade it to realtime from the connection's page in the dashboard (the API can't change a connection's type). In your sandbox, that's free. |
 | `422` | | A field it can't take, listed field by field: an unknown `kind`, a blank `name`, `fields` for a kind other than a customer, vendor, employee or other name, a field the kind's records don't have, a `min_score` outside 0.3 to 1.0, or the match sent in the query string. | Fix the request: it was never answered. |
 | `404` | | No such connection, or it belongs to another app. | Check the `connection_id` and the API key. |
 

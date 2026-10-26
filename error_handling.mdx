@@ -193,8 +193,8 @@ open. Nothing was applied, and only your customer can fix it.
     then 30 minutes apart. The Web Connector shows "Update postponed by application".
 
     Requests on a connection go to QuickBooks in the order they were queued, so everything queued after this
-    one waits behind it. If they wait a week without reaching QuickBooks, QuBe Sync emails your
-    organization's owners.
+    one waits behind it. Once your request has waited past the grace, QuBe Sync sends
+    [`connection.stalled`](/webhooks#connection-events) with `stall_reason: quickbooks_unavailable`.
   </Step>
   <Step title="Your customer fixes it">
     They don't have to wait: clicking **Update Selected** tries right away. If that first click also says
@@ -342,7 +342,7 @@ Both carry a `code` to branch on:
 | Answer | `code` | Meaning | What to do |
 | --- | --- | --- | --- |
 | `409` | `name_index_building` | The connection's name index isn't in yet. The first match (or opt-in) starts it, and it takes a few Web Connector sessions. | Opt in with a `webhook_url` and match once `name_index.ready` arrives. See [Turning it on](/matching#turning-it-on). |
-| `422` | `matching_requires_realtime` | The connection is `standard`, which has no name index. | Upgrade it to `realtime`. In a sandbox app, that costs nothing. |
+| `422` | `matching_requires_realtime` | The connection is `standard`, which has no name index. | Upgrade it to `realtime` from the connection's page in the dashboard (the API can't change a connection's type). In a sandbox app, that costs nothing. |
 
 A body matching can't take is a `422` too, field by field, such as `{"errors": {"kind": ["must be one of: ..."]}}`.
 
