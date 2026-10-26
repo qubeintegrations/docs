@@ -109208,7 +109208,7 @@
         ]
       },
       "WorkflowRunWebhookPayload": {
-        "description": "The body QuBeSync POSTs to a run's `webhook_url`, signed with `X-QUBE-Signature` like every other QuBeSync webhook. One flat envelope for every event, always about the run the app started -- a workflow it calls runs as part of it and sends none of its own. `GET links.run` returns the whole run. A webhook can arrive before the response to the call that caused it -- the start, or a decision -- so find your record by `reference` rather than `run_id`. The body is built when it is sent, not when the event happened: `run_state` and `revision` are the run's then, and an `awaiting_input` that arrives after the run moved on carries no `prompt`. Skip a body whose `revision` isn't higher than the highest you have applied -- but never a `workflow_run.notification`, which is data, deduplicated on `delivery_id`. `workflow_run.notification` is data a notify state sends the app mid-run: the run waits for a 2xx before it goes on, so notifications arrive one at a time, in `seq` order, all before the run's ending webhook; a failed delivery is retried for about an hour (10 attempts) with the same `delivery_id`.",
+        "description": "The body QuBeSync POSTs to a run's `webhook_url`, signed with `X-QUBE-Signature` like every other QuBeSync webhook. One flat envelope for every event, always about the run the app started -- a workflow it calls runs as part of it and sends none of its own. `GET links.run` returns the whole run. A webhook can arrive before the response to the call that caused it -- the start, or a decision -- so find your record by `reference` rather than `run_id`. The body is built when it is sent, not when the event happened: `run_state` and `revision` are the run's then, and an `awaiting_input` that arrives after the run moved on carries no `prompt`. Skip a body whose `revision` isn't higher than the highest you have applied -- but never a `workflow_run.notification`, which is data, deduplicated on `delivery_id`. `workflow_run.notification` is data a notify state sends the app mid-run: the run waits for a 2xx before it goes on, so notifications arrive one at a time, in `seq` order, all before the run's ending webhook; a failed delivery is retried for about an hour (10 attempts) with the same `delivery_id`.\n\nMissed the run's latest event (your endpoint was down for longer than the retries, about 8 hours, or your app dropped it)? `POST .../workflow-runs/{run_id}/redeliver` sends it again: the event for the run's state now, with its current `revision`.",
         "properties": {
           "app_id": {
             "format": "uuid",
@@ -121002,6 +121002,130 @@
           }
         ],
         "summary": "A workflow run's event log",
+        "tags": [
+          "Workflows"
+        ]
+      }
+    },
+    "/connections/{connection_id}/workflow-runs/{run_id}/redeliver": {
+      "post": {
+        "description": "Sends the run's latest webhook event again, to recover from an endpoint that was down for longer than the retry window (about 8 hours) or an event your app dropped. The event is the one for the run's state now: `workflow_run.completed`, `workflow_run.failed` or `workflow_run.cancelled` for a run that has ended, `workflow_run.awaiting_input` (with the question it is asking now) for one waiting on an answer. Never an older question: a resent `awaiting_input` whose question is answered before it goes out is not sent, as with any delivery.\n\nIt is the ordinary webhook: the same body and `revision` a delivery of that state carries, signed with your app's current secret, sent to the run's current `webhook_url` (never any other URL), and retried on the same schedule. So your revision rule holds: a receiver that already has that revision skips it. A failed resend sends the organization's owners no email. A run's `workflow_run.notification` events are not resent.\n\nAt most one resend per run a minute, and 60 per app a minute: over either, `429` with `Retry-After`. A resend while an earlier one for the same run is waiting to retry brings that retry forward rather than queueing another.",
+        "parameters": [
+          {
+            "description": "ID of the connection",
+            "in": "path",
+            "name": "connection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "ID of the workflow run",
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "data": {
+                      "event": "workflow_run.completed",
+                      "revision": 7,
+                      "run_id": "8d3c1f9e-2b7a-4c55-9a0e-6f1d2c3b4a59",
+                      "webhook_url": "https://example.com/webhooks/qube"
+                    }
+                  },
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "event": {
+                          "description": "The event queued: the one for the run's state now.",
+                          "enum": [
+                            "workflow_run.awaiting_input",
+                            "workflow_run.completed",
+                            "workflow_run.failed",
+                            "workflow_run.cancelled"
+                          ],
+                          "type": "string"
+                        },
+                        "revision": {
+                          "description": "The run's `revision` now, which the webhook carries.",
+                          "type": "integer"
+                        },
+                        "run_id": {
+                          "description": "The run.",
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "webhook_url": {
+                          "description": "Where it goes: the run's `webhook_url`.",
+                          "format": "uri",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "run_id",
+                        "event",
+                        "revision",
+                        "webhook_url"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The event is queued for delivery"
+          },
+          "404": {
+            "description": "No run with that id on that connection"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`nothing_to_redeliver`: the run has no event to send yet (it is still running and hasn't asked a question), or it has no `webhook_url`."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`rate_limited`: one resend per run a minute, 60 per app a minute. `Retry-After` says how many seconds to wait.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until you may resend.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Resend a run's latest event",
         "tags": [
           "Workflows"
         ]

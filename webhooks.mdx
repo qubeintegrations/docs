@@ -528,6 +528,16 @@ one `v1=` per secret, so you can rotate without dropping a delivery:
     After the last attempt the request's `webhook_state` becomes `failed`, your organization's owners get an
     email, and the dashboard offers **Resend webhook**.
   </Step>
+  <Step title="A run's event can be sent again">
+    Down for longer than that, or dropped an event? For a [workflow run](#workflow-runs),
+    `POST /connections/{connection_id}/workflow-runs/{run_id}/redeliver` (or **Resend latest event** on
+    the run's page) sends the run's latest event again: its ending, or the question it's asking now,
+    never an older one. It's the same body with the run's current `revision`, so your revision check
+    still holds, signed with your current secret, to the run's current `webhook_url`, and retried the
+    same way. It answers `202`, or `409` `nothing_to_redeliver` while the run is still working; one per
+    run a minute and 60 per app (`429` with `Retry-After`). A failed resend emails nobody, and a run's
+    notifications aren't resent.
+  </Step>
 </Steps>
 
 <Note>
