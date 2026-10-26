@@ -364,6 +364,7 @@ curl -u "$QUBE_API_KEY:" \
 | `next_lost_response` | `true` | QuickBooks applying the next request that changes the company file (an add, change, delete, void or merge), then the Web Connector dying before it answers. Queries and reports before it are answered normally and leave the fault armed, since a lost query is simply asked again. The request ends <Badge color="purple">`timed_out`</Badge>; a workflow that sent it [settles it](/workflows#lost-answers). | The next write |
 | `next_response_too_large` | `true` | QuickBooks applying the next request, then answering it with more than the [size limit](/error_handling#when-the-answer-is-too-large) for one answer. The request ends <Badge color="red">`error`</Badge> with `error_type` `response_too_large`; a workflow that sent it sees `no_response` with reason `too_large`. Sandbox companies are too small to reach the limit otherwise. | One request |
 | `latency_ms` | `0` to `60000` | QuickBooks taking its time over each answer. | Until a `PUT` leaves it out |
+| `stalled` | `not_checking_in`, `quickbooks_unavailable` | The QuickBooks computer switched off, or QuickBooks not open: the Web Connector doesn't run, so your requests wait, and once one is waiting you get [`connection.stalled`](/webhooks#connection-events) with this `stall_reason` within seconds. Leaving it out sends `connection.resumed`, and the waiting requests are answered. | Until a `PUT` leaves it out |
 
 `GET /connections/{id}/simulator` shows the current faults and a summary of the company file, and
 `POST /connections/{id}/simulator/sync` runs the fake Web Connector right away, like clicking **Update
@@ -377,19 +378,42 @@ Selected**.
     qube simulator faults <connection> --qb closed      # QuickBooks closed until you say otherwise
     qube simulator faults <connection> --qb ok          # QuickBooks is back
     qube simulator faults <connection> --latency 5000   # five seconds per answer
+    qube simulator faults <connection> --stall not_checking_in   # stalled until --stall off
     qube simulator sync <connection>                    # run the Web Connector now
     qube simulator reset <connection>
     ```
 
     `--next lost` arms `next_lost_response`, and `--next ok` clears whichever next-request fault is armed.
+    `--stall` takes `not_checking_in` or `quickbooks_unavailable`, and `--stall off` clears it.
   </Tab>
   <Tab title="Dashboard">
     A simulated connection's page has a **Simulator** panel: choose whether QuickBooks is reachable, what
-    happens to the **Next request** (a lost answer, which waits for the next add, change or delete, or 3100, 3120, 3140, 3180, 3200 or malformed XML) and how
-    long QuickBooks thinks (up to 15 seconds). Run the Web Connector now, or reset the company file, and
+    happens to the **Next request** (a lost answer, which waits for the next add, change or delete, or 3100, 3120, 3140, 3180, 3200 or malformed XML), how
+    long QuickBooks thinks (up to 15 seconds) and whether the connection is stalled. Run the Web Connector now, or reset the company file, and
     watch each request get queued and answered live. Other codes and latencies are set through the API.
   </Tab>
 </Tabs>
+
+### Test your stall handling
+
+A real connection stalls when your requests wait past a grace of at least 15 minutes, so the
+`stalled` fault is how you try your [`connection.stalled` and `connection.resumed`](/webhooks#connection-events)
+handler without one. Give the connection a `webhook_url`, then:
+
+1. Set `{"faults": {"stalled": "not_checking_in"}}`, or `quickbooks_unavailable`, the `stall_reason` you
+   want to see.
+2. Queue a request. It waits, as it would on a computer that's switched off, and within seconds you get
+   `connection.stalled` with that `stall_reason`. If a request is already waiting when you set the fault,
+   the event comes right away.
+3. Optionally, set the other reason: `connection.stalled` comes again, with the new reason and a newer
+   `revision`, as when a computer is turned on before QuickBooks is open.
+4. Clear the fault (a `PUT` without it, or a reset). You get `connection.resumed`, and the waiting
+   requests are answered.
+
+The events are the ones a real stall sends, with the same fields. As on a real connection, nothing is
+sent while nothing of yours is waiting, and `connection.resumed` also comes, within a few minutes, if you
+delete the waiting requests. With the fault set, `POST /connections/{id}/simulator/sync` runs nothing and answers
+`"result": "stalled"`.
 
 ## A test plan for your integration
 
@@ -405,6 +429,7 @@ Walk every path before your customers do:
 | Missing reference | `next_status: {code: 3140}` | Create the referenced record, or tell the user |
 | QuickBooks closed | `connection_error: qb_closed` | Show `error.user_message`, not resend; the answer follows once you clear the fault |
 | Wrong company file | `connection_error: company_file_mismatch` | Show `error.user_message` |
+| Computer off, or QuickBooks closed for long | `stalled: not_checking_in` or `quickbooks_unavailable`, then queue a request | Tell your customer by the `stall_reason` on `connection.stalled`, and clear the warning on `connection.resumed` |
 | Slow QuickBooks | `latency_ms: 20000` | Keep your UI responsive while it waits |
 | Large import | `iterator=true&max_returned=2` | Handle several pages, out of order |
 | Your webhook endpoint down | stop your server, then queue a request | Recover from QuBe Sync's retries and not process a repeat twice |

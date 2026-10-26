@@ -154,9 +154,12 @@ qube requests list --connection <id>              # another connection, this onc
     qube simulator faults <connection> --next lost    # one-shot: the next add, change or delete is applied, then its answer is lost; --next ok clears it
     qube simulator faults <connection> --qb closed    # sticky: closed | modal | mismatch | unexpected | ok
     qube simulator faults <connection> --latency 5000 # milliseconds QuickBooks "thinks" per answer
+    qube simulator faults <connection> --stall not_checking_in  # sticky: not_checking_in | quickbooks_unavailable | off
     qube simulator sync <connection>                  # run the fake Web Connector now
     qube simulator reset <connection>                 # back to the seeded company, faults cleared
     ```
+    `--stall` stalls the connection, so you get `connection.stalled` once a request waits, and
+    `--stall off` sends `connection.resumed` ([Test your stall handling](/simulator#test-your-stall-handling)).
     See [Test without QuickBooks](/simulator).
   </Accordion>
   <Accordion title="Workflows" icon="diagram-project">

@@ -679,8 +679,10 @@ so `expected_check_in_at` is its next try, which QuBe Sync spaces out while it k
 in the future. `connection.resumed` ends the stall whichever its last reason was.
 
 A connection with nothing of yours waiting is never stalled, however long its computer is off. A `simulated`
-connection never stalls, and is connected as it's made: its `connection.connected` comes right after
-`POST /connections`, so you can try your handler with no Web Connector.
+connection is connected as it's made: its `connection.connected` comes right after `POST /connections`, so
+you can try your handler with no Web Connector. It stalls only when you set its simulator's
+[`stalled` fault](/simulator#test-your-stall-handling): then you get `connection.stalled` within seconds of a
+request waiting, and `connection.resumed` when you clear it.
 
 ```ruby connection_event_job.rb
 # app/jobs/connection_event_job.rb
