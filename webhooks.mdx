@@ -51,7 +51,7 @@ when your customer connects and when your requests stall.
     Verify `X-QUBE-Signature` against the timestamp and raw body before you parse it.
   </Card>
   <Card title="2. Answer 2xx within 5 seconds" icon="stopwatch" href="#when-a-delivery-fails">
-    Anything else is retried, up to 5 attempts.
+    Anything else is retried with backoff for about 8 hours.
   </Card>
   <Card title="3. Work in a background job" icon="layer-group" href="#handle-it-in-a-job">
     Enqueue the payload and return. Process the result in the job.
@@ -519,9 +519,10 @@ one `v1=` per secret, so you can rotate without dropping a delivery:
 ## When a delivery fails
 
 <Steps>
-  <Step title="Retried, up to 5 attempts in all">
+  <Step title="Retried for about 8 hours">
     Anything but a `2xx` within 5 seconds is a failed delivery: a 3xx (redirects aren't followed), 4xx or
-    5xx, a timeout, or a refused connection. QuBe Sync retries with backoff.
+    5xx, a timeout, or a refused connection. QuBe Sync retries with backoff, 12 attempts in all: the first
+    four within about 4 minutes, so a deploy or a restart loses nothing, then further apart.
   </Step>
   <Step title="Then marked failed">
     After the last attempt the request's `webhook_state` becomes `failed`, your organization's owners get an
@@ -534,6 +535,12 @@ one `v1=` per secret, so you can rotate without dropping a delivery:
   [can't reach](#receiving-webhooks-in-development), like localhost or a private IP
   address, isn't sent or retried. It fails immediately with "Webhook not sent: ...", and the owners get the
   email.
+</Note>
+
+<Note>
+  **A delivery that's out of date stops.** A run's `workflow_run.awaiting_input` isn't retried once
+  the question is answered or the run has ended, and a connection's event isn't once a newer one has
+  been sent: the newer webhook says where things stand. Nobody is emailed about these.
 </Note>
 
 ## Receiving webhooks in development

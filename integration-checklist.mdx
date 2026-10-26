@@ -262,7 +262,7 @@ runs on bodies nobody has verified. See [Verify the signature](/webhooks#verify-
 **Answer `2xx` within 5 seconds, and do the work in a background job.**
 
 Anything but a `2xx` within 5 seconds is a failed delivery: a timeout, a redirect, a `4xx` or a
-`5xx`. It's retried with backoff, up to 5 attempts, and then marked failed, so work done before the
+`5xx`. It's retried with backoff for about 8 hours, and then marked failed, so work done before the
 answer can run past it and run again on each retry. See
 [Four jobs for your endpoints](/webhooks#four-jobs-for-your-endpoints) and
 [When a delivery fails](/webhooks#when-a-delivery-fails).

@@ -109358,7 +109358,7 @@
             "type": "string"
           },
           "run_state": {
-            "description": "The run's `state` when this body was built -- `state` on the run. Usually what `event` says, but a body is built when it is sent, so a retried `workflow_run.awaiting_input` can arrive saying `running`, with no `prompt`, after the question was answered. (`state` on a notification is the notify state's path.)",
+            "description": "The run's `state` when this body was built -- `state` on the run. What `event` says: a body is built when it is sent, and a `workflow_run.awaiting_input` still being retried once the question is answered, or the run has ended, is not sent. (`state` on a notification is the notify state's path.)",
             "enum": [
               "running",
               "awaiting_input",
@@ -118225,7 +118225,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts; after the last, your organization's owners are emailed."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours; after the last attempt, your organization's owners are emailed."
                   }
                 },
                 "summary": "Something happened to the connection"
@@ -119431,7 +119431,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -120171,7 +120171,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts; after the last, your organization's owners are emailed."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours; after the last attempt, your organization's owners are emailed."
                   }
                 },
                 "summary": "The name index is ready, or its build gave up"
@@ -122336,7 +122336,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -122595,7 +122595,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -123103,7 +123103,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -123626,7 +123626,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -124042,7 +124042,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -124995,7 +124995,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -125276,7 +125276,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -125689,7 +125689,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -125969,7 +125969,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -126682,7 +126682,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -127306,7 +127306,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -127599,7 +127599,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -128311,7 +128311,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -128815,7 +128815,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -129259,7 +129259,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -129968,7 +129968,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -130447,7 +130447,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -130826,7 +130826,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -131238,7 +131238,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -131646,7 +131646,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -132389,7 +132389,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -133287,7 +133287,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -134291,7 +134291,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -134749,7 +134749,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -135364,7 +135364,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -135762,7 +135762,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -136150,7 +136150,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -136838,7 +136838,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -137305,7 +137305,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -137791,7 +137791,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -138517,7 +138517,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -139409,7 +139409,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -140411,7 +140411,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -140819,7 +140819,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -141132,7 +141132,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -141458,7 +141458,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -141749,7 +141749,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -142055,7 +142055,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -142329,7 +142329,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -143041,7 +143041,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -143859,7 +143859,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -144787,7 +144787,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -145499,7 +145499,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -146317,7 +146317,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -147245,7 +147245,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -147992,7 +147992,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -149221,7 +149221,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -150319,7 +150319,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -150729,7 +150729,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -151076,7 +151076,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -151434,7 +151434,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -152437,7 +152437,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -153416,7 +153416,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -153821,7 +153821,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -154119,7 +154119,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -154527,7 +154527,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -154842,7 +154842,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -155308,7 +155308,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -156250,7 +156250,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -157205,7 +157205,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -157471,7 +157471,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -157747,7 +157747,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -158094,7 +158094,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -158460,7 +158460,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -158851,7 +158851,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -159133,7 +159133,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -159528,7 +159528,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -159923,7 +159923,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -160325,7 +160325,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -160734,7 +160734,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -161058,7 +161058,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -161694,7 +161694,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -162424,7 +162424,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -163146,7 +163146,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -163417,7 +163417,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -163949,7 +163949,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -164413,7 +164413,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -165318,7 +165318,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -166228,7 +166228,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -166747,7 +166747,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -167486,7 +167486,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -168400,7 +168400,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -169435,7 +169435,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -169727,7 +169727,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -170062,7 +170062,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -171098,7 +171098,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -172065,7 +172065,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -172363,7 +172363,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -173095,7 +173095,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -173733,7 +173733,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -174201,7 +174201,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -174605,7 +174605,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -174988,7 +174988,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -175384,7 +175384,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -176149,7 +176149,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -177271,7 +177271,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -178417,7 +178417,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -178705,7 +178705,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -179212,7 +179212,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -179619,7 +179619,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -180039,7 +180039,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -180555,7 +180555,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -181020,7 +181020,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -181484,7 +181484,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -181918,7 +181918,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -182295,7 +182295,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -182700,7 +182700,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -183221,7 +183221,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -183735,7 +183735,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -184257,7 +184257,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -184779,7 +184779,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -185323,7 +185323,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -185886,7 +185886,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -186394,7 +186394,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -186933,7 +186933,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -187482,7 +187482,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -187989,7 +187989,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -188509,7 +188509,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -189035,7 +189035,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -189537,7 +189537,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -189907,7 +189907,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -190286,7 +190286,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -191009,7 +191009,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -191836,7 +191836,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -192769,7 +192769,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -193200,7 +193200,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -193548,7 +193548,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -193899,7 +193899,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -194402,7 +194402,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -194777,7 +194777,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -195161,7 +195161,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -195668,7 +195668,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -196202,7 +196202,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -196746,7 +196746,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -197229,7 +197229,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -197660,7 +197660,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -197986,7 +197986,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -198321,7 +198321,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -198806,7 +198806,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -199694,7 +199694,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -200102,7 +200102,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -200417,7 +200417,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -201125,7 +201125,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -201708,7 +201708,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -202153,7 +202153,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -202558,7 +202558,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -202989,7 +202989,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -203443,7 +203443,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -203807,7 +203807,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -204089,7 +204089,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -204379,7 +204379,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -204721,7 +204721,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -205043,7 +205043,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -205477,7 +205477,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -205894,7 +205894,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -206320,7 +206320,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -207033,7 +207033,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -207464,7 +207464,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -207780,7 +207780,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -208458,7 +208458,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -209400,7 +209400,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -209795,7 +209795,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -210197,7 +210197,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -210674,7 +210674,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -211150,7 +211150,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -211607,7 +211607,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -212067,7 +212067,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -212377,7 +212377,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -212694,7 +212694,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -213104,7 +213104,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -213556,7 +213556,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -214006,7 +214006,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -214417,7 +214417,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -214750,7 +214750,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -215092,7 +215092,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -215488,7 +215488,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -215883,7 +215883,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -216306,7 +216306,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -216565,7 +216565,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -217268,7 +217268,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -217723,7 +217723,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -218427,7 +218427,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -219127,7 +219127,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -219500,7 +219500,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -220377,7 +220377,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -221082,7 +221082,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -221578,7 +221578,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -221860,7 +221860,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -222166,7 +222166,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -222637,7 +222637,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -223067,7 +223067,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -223503,7 +223503,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -224243,7 +224243,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -225106,7 +225106,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -226085,7 +226085,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -226424,7 +226424,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -226720,7 +226720,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -227433,7 +227433,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -228052,7 +228052,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -228731,7 +228731,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -229667,7 +229667,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -230738,7 +230738,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -231475,7 +231475,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -232869,7 +232869,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -233982,7 +233982,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -234388,7 +234388,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -234703,7 +234703,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -235026,7 +235026,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -235435,7 +235435,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -235773,7 +235773,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -236122,7 +236122,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -236421,7 +236421,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -237155,7 +237155,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -237616,7 +237616,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -238015,7 +238015,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -238309,7 +238309,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -238582,7 +238582,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -238987,7 +238987,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -239285,7 +239285,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -239634,7 +239634,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -239967,7 +239967,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -240375,7 +240375,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -240688,7 +240688,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -240981,7 +240981,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -241394,7 +241394,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -242158,7 +242158,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -242635,7 +242635,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -243042,7 +243042,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -243455,7 +243455,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -243871,7 +243871,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -244309,7 +244309,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -244759,7 +244759,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -245833,7 +245833,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -246524,7 +246524,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -246958,7 +246958,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -247385,7 +247385,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -247816,7 +247816,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -248171,7 +248171,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -248538,7 +248538,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -248889,7 +248889,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -249199,7 +249199,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -249504,7 +249504,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -249804,7 +249804,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -250113,7 +250113,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -250522,7 +250522,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -250912,7 +250912,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -251349,7 +251349,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -251780,7 +251780,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -252186,7 +252186,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -252487,7 +252487,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -252801,7 +252801,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -253524,7 +253524,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -254344,7 +254344,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -255277,7 +255277,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -255685,7 +255685,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -256000,7 +256000,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -256617,7 +256617,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -257420,7 +257420,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -258236,7 +258236,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -258667,7 +258667,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
@@ -259001,7 +259001,7 @@
                 },
                 "responses": {
                   "2XX": {
-                    "description": "Received. Anything else is retried, up to 5 attempts."
+                    "description": "Received. Anything else is retried with backoff for about 8 hours."
                   }
                 },
                 "summary": "QuickBooks answered (or the request failed)"
