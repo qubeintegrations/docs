@@ -82,7 +82,9 @@ name once punctuation and suffixes are set aside, so neither is certain, and the
       "list": "customer",
       "is_active": true,
       "score": 1.0,
-      "reasons": ["same after removing punctuation and suffixes", "same email"]
+      "reasons": ["same after removing punctuation and suffixes", "same email"],
+      "email": "ap@acme.example",
+      "phone": null
     },
     {
       "list_id": "80000012-1712345678",
@@ -90,7 +92,9 @@ name once punctuation and suffixes are set aside, so neither is certain, and the
       "list": "customer",
       "is_active": true,
       "score": 1.0,
-      "reasons": ["same after removing punctuation and suffixes"]
+      "reasons": ["same after removing punctuation and suffixes"],
+      "email": null,
+      "phone": null
     }
   ],
   "candidates_total": 2,
@@ -181,6 +185,14 @@ Each record in `record` or `candidates` has:
   `different name` for a record found by its account number alone; then `same number`; then
   `same account number`, `same email`, `same phone`, `same postal code`, `same city` or
   `same company name`; and `a job under Smith` for a child matched without a `parent`.
+</ResponseField>
+<ResponseField name="email" type="string | null">
+  Its email, lower-cased, for a person to tell candidates apart. `null` when it has none, or isn't a
+  customer, vendor, employee or other name.
+</ResponseField>
+<ResponseField name="phone" type="string | null">
+  Its phone, for a person to tell candidates apart: a 10-digit one as `512-555-0142`. `null` when it
+  has none.
 </ResponseField>
 
 And the answer says how many records qualified:
@@ -305,7 +317,7 @@ employee's or an other name's own address.
 Matching is for the records your app has no QuickBooks id for yet. Once your user confirms a match, store
 its `list_id` on your own record, and from then on refer to the QuickBooks record by it, such as
 `customer_ref: {list_id}` on an invoice. A `list_id` survives renames; a name doesn't. It's unique only within that
-list of that company file, so keep it with the connection it came from (see
+list family (customers, vendors, employees and other names share one) of that company file, so keep it with the connection it came from (see
 [Making requests](/making-requests)).
 
 - **Match again only when the `list_id` stops working.** That happens when the record is deleted, or merged
@@ -358,15 +370,15 @@ app which one is meant. The same rule as everywhere: [only use `exact` without a
 | How current | The index as it stands, with `index.as_of`. | Refreshes the index from QuickBooks first, unless the state says `"refresh": false` or the last refresh finished less than a minute ago, so a run that matches several names (an invoice's customer and items) waits for one refresh, not one each. A `3100` (name in use) since then makes the next match refresh anyway. |
 | How it answers | At once, a `200`. | Not at once: the run waits, holding nothing, until the refresh is in, and your app hears what came of it through the run's webhooks. |
 | The first match | Refused with `name_index_building`, and starts the build. | A run whose chart, or a workflow it calls, has a `match` state starts the build as the run starts, so it overlaps the earlier steps. The run waits while the index builds. |
-| A standard connection | Refused with `matching_requires_realtime`. | Falls back to QuickBooks' own filters, below. |
+| A standard connection | Refused with `matching_requires_realtime`. | A run can't start on one ([workflows run on realtime connections](/workflows#workflows-run-on-realtime-connections)). A run still going when its connection's downgrade takes effect falls back to QuickBooks' own filters, below. |
 
-**The fallback.** On a standard connection, or if the index's build gives up, the step sends QuickBooks' own
+**The fallback.** On a connection downgraded to standard mid-run, or if the index's build gives up, the step sends QuickBooks' own
 filters instead, as ordinary requests of the run: the exact full name, and the "contains" name filter, for
 each list the `kind` covers. The answer has the same shape, with `index.state` `unavailable`. It is `exact`,
 or `candidates` without scores (`score` is `null`, with the reason `contains the name`), or `none`, and
 never `strong`. `exact_only` skips the "contains" query, and `min_score` and `fields` have nothing to apply
-to, so they are ignored. So a chart works on every connection, and realtime makes it better: ranking,
-punctuation, suffixes, word order, typos and the other fields.
+to, so they are ignored. So the run finishes, without the ranking, punctuation, suffixes, word order,
+typos and other fields the index matches on.
 
 **Or let a template do it.** The shipped `resolve` template finds a list record of any kind (a customer, a
 job under its parent, a vendor, an item, an account) by the `list_id` you stored, then by name. It asks your
@@ -478,7 +490,7 @@ match refreshes instead.
 | Answer | `code` | What happened | What to do |
 | --- | --- | --- | --- |
 | `409` | `name_index_building` | The index isn't in yet. `detail` says whether this call started the build. | Opt in with a `webhook_url` and match once `name_index.ready` arrives, or read the connection's `name_index.state`. |
-| `422` | `matching_requires_realtime` | The connection is `standard`. (A [workflow's `match` state](#in-a-workflow) falls back instead.) | Upgrade it to realtime from the connection's page in the dashboard (the API can't change a connection's type). In your sandbox, that's free. |
+| `422` | `matching_requires_realtime` | The connection is `standard`. (A run [already going](#in-a-workflow) when its connection was downgraded falls back instead.) | Upgrade it to realtime from the connection's page in the dashboard (the API can't change a connection's type). In your sandbox, that's free. |
 | `422` | | A field it can't take, listed field by field: an unknown `kind`, a blank `name`, `fields` for a kind other than a customer, vendor, employee or other name, a field the kind's records don't have, a `min_score` outside 0.3 to 1.0, or the match sent in the query string. | Fix the request: it was never answered. |
 | `404` | | No such connection, or it belongs to another app. | Check the `connection_id` and the API key. |
 

@@ -4,29 +4,42 @@ description: "Every rule a QuBe Sync integration has to get right, and an audit 
 icon: "list-check"
 ---
 
-A QuickBooks Desktop integration has more to get right than most: webhooks that can repeat or arrive out of
-order, questions only your user can answer, ids that are unique only within one company file, and answers
-that can be lost on the way back from your customer's computer. This page lists every rule, by area, each
-with why it matters and where the docs explain it. Each rule has an id, so a finding can name the one it
-breaks.
+A QuickBooks Desktop integration has more to get right than most: questions only your user can answer, ids that are unique only within one company file, and answers that can be lost on the way back from your customer's computer.
 
 ## Audit your code with your coding agent
 
 <Steps>
   <Step title="Download the audit skill">
-    From your app's repo:
-
-    ```bash
-    curl -o .claude/skills/qube-sync-audit/SKILL.md --create-dirs https://qubesync.com/skills/qube-sync-audit/SKILL.md
-    ```
-
     It's one Markdown file: every rule below, with what to look for in your code and what getting it wrong
-    and right looks like, and the steps to check them. It holds no key and calls nothing.
+    and right looks like, and the steps to check them. It holds no key and calls nothing. From your app's
+    repo, save it where your agent looks for skills:
+
+    <Tabs>
+      <Tab title="Codex, Cursor">
+        Both read skills from `.agents/skills/`:
+
+        ```bash
+        curl -o .agents/skills/qube-sync-audit/SKILL.md --create-dirs https://qubesync.com/skills/qube-sync-audit/SKILL.md
+        ```
+      </Tab>
+      <Tab title="Claude Code">
+        ```bash
+        curl -o .claude/skills/qube-sync-audit/SKILL.md --create-dirs https://qubesync.com/skills/qube-sync-audit/SKILL.md
+        ```
+      </Tab>
+      <Tab title="Other agents">
+        Gemini CLI, GitHub Copilot and the rest can follow the file as a prompt, wherever you keep it:
+
+        ```bash
+        curl -o qube-sync-audit/SKILL.md --create-dirs https://qubesync.com/skills/qube-sync-audit/SKILL.md
+        ```
+      </Tab>
+    </Tabs>
   </Step>
   <Step title="Run it">
-    In Claude Code, run `/qube-sync-audit`, or ask it to audit your QuBe Sync integration. Any other coding
-    agent can follow the file as its prompt: "Follow .claude/skills/qube-sync-audit/SKILL.md and audit this
-    repo."
+    Ask your agent to audit your QuBe Sync integration: an agent that reads skills finds this one by its
+    description, and in Claude Code `/qube-sync-audit` runs it by name. For an agent without skills, say
+    "Follow qube-sync-audit/SKILL.md and audit this repo."
 
     The agent only reads your code. It never opens your `.env` or prints a secret, and it changes nothing
     until you ask. Its report lists each finding with its rule id, severity and `file:line`, critical first.
@@ -52,10 +65,9 @@ breaks.
 Your agent can also read these rules, or one area's, from the [MCP server](/mcp-server) with its
 `get_integration_checklist` tool.
 
-The rules follow, by area. A <Badge color="red">Critical</Badge> rule guards against data loss, a
+A <Badge color="red">Critical</Badge> rule guards against data loss, a
 security hole or another customer's data, and a <Badge color="orange">Major</Badge> one against
-wrong behaviour your users see. Each says when it applies: an app that only starts workflows has no
-request webhooks to deduplicate.
+wrong behaviour your users see.
 
 {/* integration-rules:start checklist (mix integration_rules.gen in qube writes this: don't edit) */}
 
@@ -91,6 +103,23 @@ create call returns. A customer who comes back (a link past its 48 hours, QuickB
 computer) needs the same connection's link again, not a second connection. See
 [Add the "Connect to QuickBooks" button](/onboarding#add-the-connect-to-quickbooks-button) and
 [Setting a connection up again](/onboarding#setting-a-connection-up-again).
+
+### `workflow-connections-realtime`
+
+<Badge color="orange">Major</Badge> Applies when the app creates connections and starts workflow
+runs on them.
+
+**Create the connections your app runs workflows on as `realtime` (`"type": "realtime"` on
+`POST /api/v2/connections`), and handle a start answered `422` with `errors.code`
+`realtime_required`.**
+
+Workflows run on realtime and simulated connections only: a start on a standard connection is
+refused with nothing stored, so its customer never gets the run. A connection's type can't be
+changed through the API, only upgraded from its page in the dashboard, and once a downgrade takes
+effect new runs are refused (runs already going finish). The same call with the same
+`Idempotency-Key` starts the run once the connection is upgraded. See
+[Workflows run on realtime connections](/workflows#workflows-run-on-realtime-connections) and
+[When a workflow run is refused](/error_handling#when-a-workflow-run-is-refused).
 
 ### `connected-by-webhook`
 
@@ -191,6 +220,30 @@ Any run webhook can arrive before the `201` that starts the run. Revisions count
 reference used for a second run lets the first run's webhooks be taken for the second's, and the
 second's skipped against the first's. See [Workflow runs](/webhooks#workflow-runs) and
 [Good to know](/workflows#good-to-know).
+
+### `one-run-per-record-at-a-time`
+
+<Badge color="orange">Major</Badge> Applies when the app starts workflow runs.
+
+**While a record's last run of an operation hasn't ended, give back that run (resending its start
+with the same `reference` if QuBe Sync never confirmed it) rather than starting another.**
+
+A second click, a retried job or a page loaded twice would otherwise start a second run with a new
+reference, which QuBe Sync can't tell from a new one: the invoice is added twice. See
+[Good to know](/workflows#good-to-know).
+
+### `missing-records-in-adds`
+
+<Badge color="orange">Major</Badge> Applies when the app starts `add_transaction` (or another
+workflow that takes `adds`).
+
+**Send each customer, vendor, employee or item your transaction names that QuickBooks may not have
+yet as an entry of `adds`, built from your own record, until it's linked.**
+
+`add_transaction` creates a missing record only from an add your app sent for it. A reference with
+no entry is matched on its name alone, and when nothing matches, the run can only ask your user to
+pick an existing record: there's no choice to create it. See
+[Pick a template](/workflows#pick-a-template).
 
 ### `webhook-url-per-run`
 
@@ -457,7 +510,8 @@ or QuickBooks records.
 `connection_id`) and its list or transaction type: never by the id alone, and never by your record
 that keeps the connection (the customer's account or shop).**
 
-QuickBooks makes a `list_id` unique only within one list of one company file, and a `txn_id` within
+QuickBooks makes a `list_id` unique only within one list family of one company file (customers,
+vendors, employees and other names share one; every item type shares another), and a `txn_id` within
 one transaction type: two of your customers' files can hold the same one, and a copy of a file (a
 restored backup, a test copy) holds every one the same. A customer who connects another company file
 gets a new connection, so nothing from the old file may match it. See
@@ -512,6 +566,18 @@ A run's `output` is built for your app. `add_transaction`'s holds the whole tran
 lines, and each reference keyed by where it sits in your `params` (`customer_ref`,
 `invoice_line_add.0.item_ref`), with the record it was found, chosen or created as. `summary` is the
 run's own log of its steps. See [How a run ends](/workflows#how-a-run-ends).
+
+### `prune-ended-runs-only`
+
+<Badge color="orange">Major</Badge> Applies when the app deletes its run records.
+
+**Prune only runs that have ended, at least a day after they ended, never the QuickBooks ids you
+keep, and never the run your next sync's `since` comes from unless you keep that time elsewhere.**
+
+A run deleted before it ends loses its reference, so the next start makes a new one and can add the
+record twice. A webhook for a deleted run is answered `404`, which QuBe Sync retries for hours and
+then reports. The ids are what say a record is in QuickBooks, and a lost `since` makes the next sync
+a full one. See [When a delivery fails](/webhooks#when-a-delivery-fails).
 
 ## QuickBooks behaviour
 

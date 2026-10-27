@@ -1,6 +1,6 @@
 ---
 title: "MCP server"
-description: "Point Claude Code, Cursor or any MCP client at QuBe Sync. Your agent can look up every QuickBooks operation, build the exact API request, write and validate workflows, and never needs your API key."
+description: "Point Claude Code, Codex, Cursor, Gemini CLI, VS Code or any MCP client at QuBe Sync. Your agent can look up every QuickBooks operation, build the exact API request, write and validate workflows, and never needs your API key."
 icon: "robot"
 ---
 
@@ -33,6 +33,18 @@ The server speaks Streamable HTTP and needs no authentication.
     claude mcp add --transport http qubesync https://qubesync.com/mcp
     ```
   </Tab>
+  <Tab title="Codex">
+    ```bash
+    codex mcp add qubesync --url https://qubesync.com/mcp
+    ```
+
+    Or add it to `~/.codex/config.toml`:
+
+    ```toml
+    [mcp_servers.qubesync]
+    url = "https://qubesync.com/mcp"
+    ```
+  </Tab>
   <Tab title="Cursor">
     Add it to `.cursor/mcp.json` in your project, or to `~/.cursor/mcp.json` for every project:
 
@@ -40,6 +52,35 @@ The server speaks Streamable HTTP and needs no authentication.
     {
       "mcpServers": {
         "qubesync": { "url": "https://qubesync.com/mcp" }
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Gemini CLI">
+    ```bash
+    gemini mcp add --transport http qubesync https://qubesync.com/mcp
+    ```
+
+    That adds it to the project's `.gemini/settings.json`. Add `--scope user` for every project.
+  </Tab>
+  <Tab title="VS Code">
+    For GitHub Copilot's agent mode, add it to `.vscode/mcp.json` in your project:
+
+    ```json
+    {
+      "servers": {
+        "qubesync": { "type": "http", "url": "https://qubesync.com/mcp" }
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Windsurf">
+    Add it to `~/.codeium/windsurf/mcp_config.json`:
+
+    ```json
+    {
+      "mcpServers": {
+        "qubesync": { "serverUrl": "https://qubesync.com/mcp" }
       }
     }
     ```

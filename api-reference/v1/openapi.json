@@ -49,7 +49,7 @@
       },
       "post": {
         "summary": "Create a new connection",
-        "description": "Creates and returns a new connection for the authenticated application. Returns an onboarding URL for the user to complete the QuickBooks setup process. Only `name`, `redirect_url` and `type` can be set: sending `username`, `password`, `company_file`, `quickbooks_product_name` or `last_connected_at` is refused with `422` naming the field. Set a password with `POST /connections/{connection_id}/password`.",
+        "description": "Creates and returns a new connection for the authenticated application. Returns an onboarding URL for the user to complete the QuickBooks setup process. Only `name`, `redirect_url` and `type` can be set: sending `username`, `password`, `company_file`, `quickbooks_product_name` or `last_connected_at` is refused with `422` naming the field. Set a password with `POST /connections/{connection_id}/password`. A production app can have connections only once its organization has billing: until then every type is refused with `402 billing_required`.",
         "tags": [
           "Connections"
         ],
@@ -125,6 +125,22 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "402": {
+            "description": "`billing_required`: this is a production app, and its organization has no active billing yet. A production app can't have connections of any type, `simulated` included, until an owner of the organization sets up billing in the dashboard. Use the sandbox app to test before then. Nothing was saved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "errors": {
+                    "detail": "This is a production app, and its organization doesn't have billing set up yet, so it can't have connections. An owner of the organization can set up billing in the QuBe Sync dashboard. To test before then, use the organization's sandbox app.",
+                    "code": "billing_required"
+                  }
+                }
+              }
+            }
           },
           "422": {
             "description": "Invalid fields, such as a `type` that isn't one of the listed values, or a field that can't be set here, such as `last_connected_at`. `errors` names each one. Nothing was saved.",
@@ -4234,7 +4250,7 @@
         "maxLength": 2048
       },
       "Error": {
-        "description": "What a refused request answers with. The one key is errors, and its shape says what went wrong: a sentence when the endpoint explains the refusal in words (a parameter the operation does not take, a key already taken, a run that has already ended); an object with detail, and a code when there is one, when the request named nothing that exists or may not do what it asked (403, 404, and a CLI session's 401), or an answer to a run's question was refused (the decisions endpoint's 400, 409 and 422, which always carry a code to branch on); an object of fields, each a list of messages, when a record failed validation and nothing was saved; a list of {path, message} problems when a submitted document or input fails validation. A request without a usable API key gets a 401 Basic challenge with the plain-text body Unauthorized, not JSON.",
+        "description": "What a refused request answers with. The one key is errors, and its shape says what went wrong: a sentence when the endpoint explains the refusal in words (a parameter the operation does not take, a key already taken, a run that has already ended); an object with detail, and a code when there is one, when the request named nothing that exists or may not do what it asked (402, 403, 404, and a CLI session's 401), or an answer to a run's question was refused (the decisions endpoint's 400, 409 and 422, which always carry a code to branch on); an object of fields, each a list of messages, when a record failed validation and nothing was saved; a list of {path, message} problems when a submitted document or input fails validation. A request without a usable API key gets a 401 Basic challenge with the plain-text body Unauthorized, not JSON.",
         "properties": {
           "errors": {
             "oneOf": [

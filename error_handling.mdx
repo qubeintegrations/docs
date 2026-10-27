@@ -306,9 +306,8 @@ Two rarer kinds of <Badge color="red">`error`</Badge>:
 
 ## When the Web Connector stops checking in
 
-Some problems stop the Web Connector before it ever reaches QuBe Sync: a wrong password, a log file it
-can't write, a damaged `.qwc` file. **Those never arrive as a webhook.** The Web Connector just stops
-checking in, and requests wait in `waiting`.
+Some problems stop the Web Connector before it ever reaches QuBe Sync, like an incorrect password or a log file it
+can't write. **Those never arrive as a webhook.** The Web Connector just stops checking in, and requests stay in `waiting`.
 
 <Steps>
   <Step title="Check when it last connected">
@@ -345,6 +344,18 @@ Both carry a `code` to branch on:
 | `422` | `matching_requires_realtime` | The connection is `standard`, which has no name index. | Upgrade it to `realtime` from the connection's page in the dashboard (the API can't change a connection's type). In a sandbox app, that costs nothing. |
 
 A body matching can't take is a `422` too, field by field, such as `{"errors": {"kind": ["must be one of: ..."]}}`.
+
+## When a workflow run is refused
+
+[Workflows run on realtime connections](/workflows#workflows-run-on-realtime-connections), and on simulated
+ones. Starting a run on a `standard` connection is refused on the call itself, with nothing stored:
+
+| Answer | `code` | Meaning | What to do |
+| --- | --- | --- | --- |
+| `422` | `realtime_required` | The connection is `standard`, in a production or a sandbox app. | Upgrade it to `realtime` from the connection's page in the dashboard (the API can't change a connection's type), then send the same call again, with the same `Idempotency-Key`. In a sandbox app, that costs nothing. Create the connections you run workflows on as `realtime` so this doesn't happen. |
+
+A run already going when its connection's downgrade takes effect isn't refused: it finishes, at the
+standard pace.
 
 ## In a workflow
 

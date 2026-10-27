@@ -118,7 +118,7 @@ class QuickbooksAnswerJob < ApplicationJob
     return unless answer["state"] == "response_received"
 
     data = answer.dig("response_json", "data")
-    # A list_id is unique only within one company file: keep it with its connection.
+    # A list_id is unique only within one list family of one company file: keep it with its connection.
     connection_id = request.qube_connection_id
     case request.purpose
     when "import_customers"
@@ -141,7 +141,7 @@ Because each request or workflow takes its own `webhook_url`, you can also have 
 
 ## Payload fields
 
-The four fields you act on, from the example at the top of this page. The rest are below them.
+The four fields you act on, from the example at the top of this page.
 
 <ResponseField name="id" type="string">
   The request you queued, as returned by the `201`. For a multi-page answer, every page carries the first
@@ -595,9 +595,9 @@ choice's `id` to `links.decisions` ([Answering a question](/workflows#answering-
     "choices": [
       { "id": "use:1", "label": "Riverbend Electric", "description": null,
         "detail": "similar name", "fields": [] },
-      { "id": "use", "label": "Another one…", "description": null, "detail": null,
+      { "id": "use", "label": "Use this one", "description": null, "detail": null,
         "fields": [ { "name": "list_id", "type": "record", "kind": "customer",
-                      "label": "The one to use", "required": true } ] },
+                      "label": "Search for a different one", "required": true } ] },
       { "id": "none", "label": "None of these", "description": null, "detail": null, "fields": [] },
       { "id": "cancel", "label": "Cancel", "description": null, "detail": null, "fields": [] }
     ],

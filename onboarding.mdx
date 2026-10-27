@@ -61,7 +61,12 @@ import { Request } from "/snippets/request.jsx";
       | `type` | Picks up requests | Best for |
       | --- | --- | --- |
       | `standard` (default) | Every 5 minutes | Background syncing |
-      | `realtime` | Every 10 seconds | Interactive UIs, where time matters, and [name matching](/matching) |
+      | `realtime` | Every 10 seconds | Interactive UIs, where time matters, [workflows](/workflows) and [name matching](/matching) |
+
+      If your app runs workflows, create its connections with `"type": "realtime"`: a workflow run on a
+      standard connection is refused with `realtime_required` (see
+      [Workflows run on realtime connections](/workflows#workflows-run-on-realtime-connections)), and the API
+      can't change a connection's type afterwards.
 
       Realtime connections are billed at a higher rate; see [pricing](https://qubesync.com/#pricing).
 
@@ -85,7 +90,7 @@ import { Request } from "/snippets/request.jsx";
   </Step>
   <Step title="Know when they're connected">
     When the Web Connector checks in for the first time, QuBe Sync POSTs `connection.connected` to the
-    connection's `webhook_url`, signed like every other webhook. That's your signal: mark the account
+    connection's `webhook_url`, signed like every other webhook. That's your signal to mark the account
     connected and start syncing.
 
     ```json connection.connected
@@ -250,29 +255,19 @@ module.exports = { quickbooksConnect };
 
 ## Keep an eye on the connection
 
-A connection's `last_connected_at` is the last time its Web Connector checked in. Displaying it to your user can help them self-diagnose why they're still waiting on a request. If it's hours or days old, the computer running QuickBooks is probably off, the Web Connector
-isn't running, or the company file has moved. Requests keep waiting in the queue in the meantime.
+Showing your customer their connection status can help them self-diagnose why they're still waiting on a request. 
 
-You don't have to watch it yourself. When one of your requests has waited too long to be taken, the
-connection's `webhook_url` hears `connection.stalled`, and `connection.resumed` once its requests are being
-taken again ([Connection events](/webhooks#connection-events)). Its `connection.stall_reason` tells you what
-to tell your customer: `not_checking_in` means the Web Connector hasn't checked in when it was due (by the
-longer of 15 minutes and twice its schedule), so turn on the QuickBooks computer and check the Web Connector,
-and `quickbooks_unavailable` means it is checking in but can't reach QuickBooks, so open QuickBooks with the
-company file. If they wait a week, QuBe Sync also emails your organization's owners.
+When their web connector hasn't been heard from, the
+connection's `webhook_url` receives `connection.stalled` (and `connection.resumed` once it's polling again [Connection events](/webhooks#connection-events)). Its `connection.stall_reason` tells you what
+to tell your customer. `not_checking_in` means the Web Connector hasn't checked in when it was due (by the
+longer of 15 minutes and twice its schedule), so turn on the QuickBooks computer and check the Web Connector. `quickbooks_unavailable` means it is checking in but can't reach QuickBooks, so open QuickBooks with the correct
+company file.
 
 ## Setting a connection up again
 
 If QuickBooks moves to another computer, or your customer's Web Connector entry was removed, send them to the
 connection's onboarding link again ([regenerate it](/api-reference/v2/connections/regenerate-the-onboarding-url)
-if it's more than 48 hours old). The page tells them the connection is already set up, and offers
-**Set up again**.
-
-Choosing it changes the connection's password straight away, so the Web Connector entry already installed is
-turned away ("Invalid password for username") and can't be mistaken for the new one. Until your customer
-finishes the new setup, requests wait in the queue and `last_connected_at` stays at the old entry's last
-check-in. When the new entry checks in, the connection's `webhook_url` hears `connection.connected` again, with
-`connection.setup` set to `again`.
+if it's more than 48 hours old). The page tells them the connection is already set up, and offers **Set up again**.
 
 ## When a customer leaves
 

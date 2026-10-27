@@ -293,9 +293,11 @@ stateDiagram-v2
     | `message` | The question, a template. |
     | `data` | Anything the app needs beside it (the record found, the candidates), a template. |
     | `details` | What the question is about, as at most 20 `{"label", "value"}` rows, each a template: `[{"label": {"$kind_name": "${input.kind}"}, "value": "${vars.name}"}]` shows `Customer: Lone Star Supply Co`. A list renders as its parts joined with ` · `, and a row whose value renders to nothing is left out. |
-    | `options` | The answers: each an `id` (the event it raises), a `label`, an optional `description`, and the `fields` it asks for (`type`, `required`, `label`). Each becomes a choice. At most 26. |
+    | `options` | The answers: each an `id` (the event it raises), a `label` and an optional `description` (both templates, so a button can say what follows, as `resolve`'s "None of these: add "Acme" as new" does), and the `fields` it asks for (`type`, `required`, `label`). Each becomes a choice. At most 26. |
     | `fields.<name>.choose` | One choice per element of `from` (a template that gives a list), the field already filled with what `value` renders to for it, so your app never handles the value: `{"from": "${vars.found.candidates}", "value": "${item.list_id}", "label": "${item.full_name}", "detail": "${item.reasons}"}`. The element is at `item`, bound only here. Its choices are `use:1`, `use:2`, ..., at most 25, and 26 in all. One field per option. |
-    | `fields.<name>.record` | A search choice too, filled from the connection's name index: `{"kind": "${input.kind}", "label": "Another one…"}`. `kind` is a list a match takes (`customer`, `entity`, `item`, an item type, `account`, ...). Offered only on a realtime or simulated connection, so give the question another way to answer as well, such as a name to look up. The field is a `string`: a search answers a ListID, which the chart should read before using. |
+    | `fields.<name>.record` | A search choice too, filled from the connection's name index: `{"kind": "${input.kind}", "label": "Use this one"}`, `label` being the button that sends the pick. `kind` is a list a match takes (`customer`, `entity`, `item`, an item type, `account`, ...). Every list but inventory sites can be searched, and workflows run only on realtime or simulated connections, which have the index. The field is a `string`: a search answers a ListID, which the chart should read before using. |
+    | `fields.<name>.enum` | The values a `string` or `number` field takes, each with what a person reads: `[{"value": "item_service", "label": "Service"}]`. A drop-down; an answer outside it is refused. |
+    | `fields.<name>` of type `rows` | The same columns asked of each row of a list, in one question ([A table of rows](/workflows#a-table-of-rows)). `rows` is `{"from": "${vars.asking}", "key", "label", "detail", "columns", "values"}`, templates over `item`, the element: `columns` the names the row asks, `values` what it already has. `columns` is a list of fields with a `name`, each with optional `enum`, `record` (`{"kind": "${item.kind}"}`) and `when` (`{"action": ["create"]}`: the values of the row's other columns it applies under). Answered as `{row key: {column: value}}`; at most 100 rows. |
 
     `{"$kind_name": "${input.kind}"}` is a kind, or an operation's (`invoice.create`), as a person reads it:
     `Customer`, `Service item`, `Invoice`. The validator checks every key, `item` outside a `choose`
@@ -385,21 +387,23 @@ stateDiagram-v2
     A match step has no QuickBooks status codes to branch on. Branch on `response.data.match`.
 
     <Note>
-      **On a realtime or simulated connection, it refreshes the index first.** The run waits, parked and
+      **It refreshes the index first.** Every connection a run can start on (realtime or simulated:
+      [workflows run on realtime connections](/workflows#workflows-run-on-realtime-connections)) has a
+      name index. The run waits, parked and
       holding nothing, until the refresh is in, then matches, so the answer reflects QuickBooks as of that
       moment. A refresh that finished less than a minute ago is used as it is, so the matches of one burst
       (a transaction's references, say) wait for one refresh, not one each. The first use builds the index. A run whose chart, or a workflow it calls, has a `match` state
       starts the build as the run starts, so it overlaps the steps before it, and the run waits while the
       index builds.
 
-      **Anywhere else, it falls back and is never refused.** On a standard connection, or if the index's
-      build gives up, the step sends QuickBooks' own filters instead, as ordinary requests of the run,
+      **Without an index, it falls back and is never refused.** On a connection downgraded to standard
+      while the run is going, or if the index's build gives up, the step sends QuickBooks' own filters instead, as ordinary requests of the run,
       settled like any other: the exact full name, and the "contains" name filter, for each list the `kind`
       covers. The answer has the same shape, with `index.state` `unavailable`: `exact`, or `candidates`
       without scores (`score` is `null`, the reason is `contains the name`), or `none`, and never `strong`.
       `exact_only` skips the "contains" query, and `min_score` and `fields` have nothing to apply to, so they
-      are ignored. A chart works on every connection, and realtime makes it better: ranking, punctuation,
-      suffixes, word order, typos and the other fields.
+      are ignored. So the run finishes, without the index's ranking, punctuation, suffixes, word order,
+      typos and other fields.
     </Note>
 
     <Note>

@@ -29,6 +29,32 @@ recover gracefully and reconcile what mutations were made or not. Naive solution
   <img src="/images/workflows/builder.png" alt="Part of the upsert chart: resolve, then update when it finds the record, cancelled when your app stops at one of its questions, or create when nothing is the record, with a retry from create back to resolve when the name was taken since the lookup" />
 </Frame>
 
+## Workflows run on realtime connections
+
+A run waits on QuickBooks at every step, and often on a person answering a question, so workflows run on
+`realtime` connections, which check in every 10 seconds, and on `simulated` ones while you build. Create
+the connections your app runs workflows on with `"type": "realtime"` (see
+[Onboarding](/onboarding#add-the-connect-to-quickbooks-button)). Your sandbox app isn't billed, so realtime
+costs nothing there.
+
+Starting a run on a `standard` connection is refused, in a sandbox app too, with nothing stored:
+
+```json 422
+{
+  "errors": {
+    "code": "realtime_required",
+    "detail": "Workflows run on realtime connections, and this connection is standard. Upgrade it to realtime from its page in the dashboard (Upgrade to realtime, under Speed); in a sandbox app that costs nothing, since sandbox apps aren't billed. A simulated connection runs workflows too."
+  }
+}
+```
+
+A connection's type can't be changed through the API: upgrade it from its page in the dashboard. Nothing
+was stored, the `Idempotency-Key` included, so once it's realtime the same call starts the run.
+
+A realtime connection slowed to every 5 minutes, or with a downgrade scheduled, still runs workflows. When
+a downgrade takes effect at the end of the billing period, runs already going finish, at the standard
+pace, and new ones are refused.
+
 ## Run your first workflow
 
 This runs `ensure` for a customer whose name a vendor already has (in a [simulated connection](/simulator)), so
@@ -331,8 +357,7 @@ you see a question and its answer.
 Start from a shipped template rather than a blank chart. Each one is complete and tested, and a template
 that calls other workflows installs those too. The generic ones work for any record type. `resolve`, `ensure`
 and `upsert` take a `kind` (`customer`, `item_service`, `account`, ...) and a name, which they
-[match](/matching) by rank on a realtime or simulated connection and through QuickBooks' own filters on a
-standard one. `add_transaction` takes any transaction add, and `resolve_transaction` and `stream_query` take
+[match](/matching) by rank against the connection's name index. `add_transaction` takes any transaction add, and `resolve_transaction` and `stream_query` take
 the query to send, such as `{"operation": "customer.query", "params": {"active_status": "All"}}`.
 
 **Find a record, without writing.** Each asks your app to pick one when it isn't sure.
@@ -371,11 +396,11 @@ the query to send, such as `{"operation": "customer.query", "params": {"active_s
   <Accordion title="What each template takes, asks and ends with" icon="table">
     | Template | What it does | Asks your app | Ends |
     | --- | --- | --- | --- |
-    | `resolve` | Finds a list record of `kind` (`customer`, `vendor`, `employee`, `other_name`, `entity` for those four, `item` or one item type, `account`, `class`, `terms`, `sales_tax_code` and the other lists a transaction names) by the `list_id` your app stored, then by `name`, under `parent` (full name or ListID) for a job or a sub-item. The name is [matched](/matching) by rank on a realtime or simulated connection, with `fields` such as `email` or `account_number` for a customer, vendor, employee or other name, and through QuickBooks' own exact and "contains" filters on a standard one. Only an exact match is used without asking, or a strong one with `accept: "strong"`. What it finds is read whole by its ListID before it's used, and matched once more if it was deleted since. With `pick: true`, nothing found asks your app to pick one of the active records instead of ending `not_found`. It only finds: `ensure` and `upsert` write. | `ask` for a strong match or near matches: `use:1`, `use:2`, ... (one choice per match), `use` (a search, on a realtime or simulated connection), `none` (ends `not_found`) or `cancel`. `ask_detail` (or `ask_name`, for a list without an address) when more than 10 are alike: `narrow` (with an `account_number`, `city`, `postal_code` or fuller `name`), `none` or `cancel`, three times at most. With `pick`, `ask_pick`: `use:1`, `use:2`, ... (one choice per active record, up to 25), `use` (a search, on a realtime or simulated connection), `by_name` (its name exactly as QuickBooks has it, looked up and used if it's there; asked again if not) or `cancel` | `found`, `picked`, `not_found`, `cancelled` |
+    | `resolve` | Finds a list record of `kind` (`customer`, `vendor`, `employee`, `other_name`, `entity` for those four, `item` or one item type, `account`, `class`, `terms`, `sales_tax_code` and the other lists a transaction names) by the `list_id` your app stored, then by `name`, under `parent` (full name or ListID) for a job or a sub-item. The name is [matched](/matching) by rank on a realtime or simulated connection, with `fields` such as `email` or `account_number` for a customer, vendor, employee or other name, and through QuickBooks' own exact and "contains" filters on a connection downgraded to standard while the run is going. Only an exact match is used without asking, or a strong one with `accept: "strong"`. What it finds is read whole by its ListID before it's used, and matched once more if it was deleted since. With `pick: true`, nothing found asks your app to pick one of the active records instead of ending `not_found`. It only finds: `ensure` and `upsert` write. | `ask` for a strong match or near matches: `use:1`, `use:2`, ... (one choice per match), `use` (a search, on a realtime or simulated connection), `none` (ends `not_found`) or `cancel`. `ask_detail` (or `ask_name`, for a list without an address) when more than 10 are alike: `narrow` (with an `account_number`, `city`, `postal_code` or fuller `name`), `none` or `cancel`, three times at most. With `pick`, `ask_pick`: `use:1`, `use:2`, ... (one choice per active record, up to 25), `use` (a search, on a realtime or simulated connection), `by_name` (its name exactly as QuickBooks has it, looked up and used if it's there; asked again if not) or `cancel` | `found`, `picked`, `not_found`, `cancelled` |
     | `ensure` | Runs `resolve`, then sends your `add` (the body `POST /<kind>` takes; `kind` is the list it goes to, such as `customer` or `item_service`) when nothing is the record. A record of the add's own list with exactly the name is found and used without asking (on a realtime or simulated connection, before the add goes out); only a near match asks. A name already held in its name space (customers, vendors, employees and other names share one; every item type another) is a 3100: it finds what holds the name and asks. Allows five renames. Without an `add`, it creates nothing, and `resolve` asks your app to pick one of the active records instead. With `lookup: false` it sends the add without looking, for a caller that already did. | Through `resolve` (`ask_pick` without an `add`). `ask_use`: `use_existing`, `rename` (with `name`), `cancel`. `ask_rename` when another list holds the name: `rename`, `cancel` | `found`, `picked`, `created`, `created_renamed`, `used_existing`, `cancelled`; fails as `renames_exhausted` |
     | `upsert` | Finds a list record as `resolve` does (`kind`, the name and parent in your `add`, optional `list_id`, `fields` and `accept`) and sends your `update` to it with its ListID filled in; the engine reads the edit sequence first and asks before overwriting a record someone changed since. Nothing is the record: sends your `add` instead, looking once more if the name was taken in between. | `resolve / ask`: `use:1`, ... (one per match), `use` (a search), `none` (then the add goes out) or `cancel`. And the [conflict prompt](#conflicts) when the record changed after it was read | `updated`, `created`, `cancelled`; fails as `name_taken` when the update renames it to a name in use |
     | `push_records` | Runs `upsert` once per entry of `records` -- at most 200, each the `kind`, `add`, `update`, `list_id`, `fields` and `accept` that `upsert` takes, records of different lists mixed -- one at a time, in order, in one run. A record QuickBooks refuses, or one that isn't a valid `upsert` input, is listed in `errors` and the next one goes. For a webhook per record, run `upsert` once per record instead. | Through `upsert`, for each record that asks | `completed` |
-    | `add_transaction` | Sends any transaction add (`operation`, such as `invoice.create`, and its `params`, lines included) once every list record it names exists, in two passes over its distinct references (the same item on five lines is one). First it finds each with `resolve`, writing nothing: every question comes here, and a cancel ends the run with nothing created and nothing more asked. An account, sales tax code, terms, price level or sales tax item that isn't there, or any record your app sent no add for, is your app's to pick. Then it creates what the first pass didn't find, a reference sent with a stored ListID that names nothing any more included, with `ensure`: a customer, vendor, employee or item from the add your app sent for it in `adds`, a class, payment method, ship method or customer message from its name alone. Each entry of `adds` is `{"kind": "item_service", "add": {...}}`, matched to a reference by full name, and may carry `fields` (`email`, `phone`, `account_number`, `city`, `postal_code`, `company_name`) and `accept` (`strong`), which `resolve` matches that reference with in the first pass; a reference without an entry is matched on its name alone, and only an exact match is used without asking. `references` changes those rules by kind (`ensure`, `create` or `must_exist`). A cancel at a name clash there stops the rest. Then the add goes out with every reference as its ListID, and a lost answer is [settled by the run](#lost-answers): the run stamps the add with a GUID, and looks for it by the reference number your app sent, which QuickBooks answers whole, or else among the transactions for the same customer or vendor and date, at most 50. One carrying the GUID is the add, and the run reads it whole by its TxnID and uses it. A whole answer without it (by reference number, or fewer than 50) means the add didn't go in, and the run sends it again. | Through `resolve` in the first pass, and `ensure`'s name clash questions in the second, for each reference that asks. And `ask_about_add` when the run could not settle whether the add went in either way: `use_existing:1`, `use_existing:2`, ... (one choice per candidate, its TxnID QuBe Sync's: the run reads that transaction whole by it before ending `added`; by `option`, `use_existing` takes a `txn_id`, and one QuickBooks has no transaction for asks again, saying so in the message and in `data.not_found`, and the third ends `no_such_transaction`), `add_again`, `cancel`. Its `data.why` says which: `unsettled`, the `candidates` the check found could be it (`candidates_complete` is true when they're every transaction that could be, so if none is it, it wasn't added); `no_response`, the check went unanswered too, so there are no candidates and nothing is known | `added`, `cancelled`; fails as `unanswered_twice` or `no_such_transaction` |
+    | `add_transaction` | Sends any transaction add (`operation`, such as `invoice.create`, and its `params`, lines included) once every list record it names exists, in two passes over its distinct references (the same item on five lines is one). First it finds each with `resolve`, writing nothing: every question comes here, and a cancel ends the run with nothing created and nothing more asked. An account, sales tax code, terms, price level or sales tax item that isn't there is your app's to pick. Customers, vendors, other names and items that aren't there and that your app sent no complete add for (none, or an item add without its accounts) are asked about in one question, `ask_missing`, a row each: create it (an item's type and accounts, where the add doesn't say them, are your user's to choose) or use one QuickBooks has. Then it creates what the first pass didn't find, a reference sent with a stored ListID that names nothing any more included, with `ensure`: a customer, vendor, employee or item from the add your app sent for it in `adds`, a class, payment method, ship method or customer message from its name alone. Each entry of `adds` is `{"kind": "item_service", "add": {...}}`, matched to a reference by full name, and may carry `fields` (`email`, `phone`, `account_number`, `city`, `postal_code`, `company_name`) and `accept` (`strong`), which `resolve` matches that reference with in the first pass; a reference without an entry is matched on its name alone, and only an exact match is used without asking. `references` changes those rules by kind (`ensure`, `create` or `must_exist`). A cancel at a name clash there stops the rest. Then the add goes out with every reference as its ListID, and a lost answer is [settled by the run](#lost-answers): the run stamps the add with a GUID, and looks for it by the reference number your app sent, which QuickBooks answers whole, or else among the transactions for the same customer or vendor and date, at most 50. One carrying the GUID is the add, and the run reads it whole by its TxnID and uses it. A whole answer without it (by reference number, or fewer than 50) means the add didn't go in, and the run sends it again. | Through `resolve` in the first pass, and `ensure`'s name clash questions in the second, for each reference that asks. `ask_missing` between them, once, for every record with no complete add: `proceed` (a `rows` field, [below](#a-table-of-rows)) or `cancel`. And `ask_about_add` when the run could not settle whether the add went in either way: `use_existing:1`, `use_existing:2`, ... (one choice per candidate, its TxnID QuBe Sync's: the run reads that transaction whole by it before ending `added`; by `option`, `use_existing` takes a `txn_id`, and one QuickBooks has no transaction for asks again, saying so in the message and in `data.not_found`, and the third ends `no_such_transaction`), `add_again`, `cancel`. Its `data.why` says which: `unsettled`, the `candidates` the check found could be it (`candidates_complete` is true when they're every transaction that could be, so if none is it, it wasn't added); `no_response`, the check went unanswered too, so there are no candidates and nothing is known | `added`, `cancelled`; fails as `unanswered_twice` or `no_such_transaction` |
     | `resolve_transaction` | Finds a transaction by the `txn_id` your app stored, then by its `ref_number`, then by the filters your `query` carries (a customer, a date range), picking out the one carrying the `external_guid` your app kept from the add. One transaction with the number and no GUID to check is it; anything less sure is offered to your app. Without line items: read it whole by `txn_id` when you need them. | `ask`: `use:1`, `use:2`, ... (one choice per candidate), `none` (ends `not_found`) or `cancel` | `found`, `picked`, `not_found`, `cancelled` |
     | `void_transaction` | Finds a transaction of `kind` as `resolve_transaction` does, then voids it, or deletes it when `action` is `delete`. QuickBooks voids sixteen types (invoice, bill, check, journal_entry and the others `kind` lists) and deletes those and nine more (sales_order, estimate, purchase_order, receive_payment, time_tracking and four others), so a delete takes kinds a void does not; asking to void one of those nine fails at once, before anything is sent, and says to pass `action` `delete`. An invoice that payments paid can be voided: the payments stay, with what they had applied to it now their `unused_payment`. Nothing is voided or deleted until the transaction is identified. | Through `resolve_transaction` | `voided`, `deleted`, `not_found`, `cancelled` |
     | `record_payment` | Finds an invoice as `resolve_transaction` does and records a `payment` (a `receive_payment.create` body: how it was paid) for the invoice's own customer, applied to that invoice; the amount defaults to what the invoice still owes. An invoice already paid in full is reported, not paid again. | Through `resolve_transaction` | `applied`, `already_paid`, `not_found`, `cancelled` |
@@ -390,7 +415,7 @@ the query to send, such as `{"operation": "customer.query", "params": {"active_s
     for whichever record asks, and `add_transaction` relays `find_references / ask` (or `ask_detail`,
     `ask_pick`, ...) in its first pass and `create_missing / ask_use` (or `ask_rename`) in its second, for
     whichever reference asks: `prompt.from.item_index` says which, counting from 0, and `item_count` how many
-    there are.
+    there are. Its own `ask_missing` asks about every missing record at once, between the two passes.
 
     Every template can also end <Badge color="red">`failed`</Badge>, when something goes wrong that it doesn't handle. `error` says why,
     usually in QuickBooks' own words.
@@ -407,7 +432,7 @@ the query to send, such as `{"operation": "customer.query", "params": {"active_s
     | `record_payment` | `{outcome, payment, invoice: {txn_id, ref_number, balance_before, applied}}` |
     | `stream_query` | `{kind, records, pages, passes}`: how many records were sent, over how many pages, and how many times the query was started from page 1 |
     | `pull_changes` | `{since, lists, transactions, deleted: {lists, transactions}}`: `lists` and `transactions` hold `stream_query`'s output for each kind, in the order given, and `deleted` how many deleted records of each were sent (0 without `since`) |
-    | `add_transaction` | `{record, references}`: `record` is the transaction, lines and their `txn_line_id`s included: what QuickBooks answered the add with; or, when its answer was lost and the run found it by its GUID, that transaction read by its TxnID; or the one your app named at `ask_about_add`, read the same way. Only when the read after a found GUID can't be answered is it the header the check found. `references` is an object keyed by where each reference sits in the `params` your app sent: `customer_ref`, `invoice_line_add.0.item_ref` (the first line's item). An item named on two lines is under both paths, with the same entry. Each entry is `kind` (the list it names), `outcome`, `how` (`id`, `exact`, `strong` or `picked`, when the first pass found it) and `record`, the record the add used, read whole, whose `type` is always its list (`customer`, `item_service`, ...), however it was found or made. Store each `record.list_id` against what your app sent at that path: it differs from the `list_id` you sent when the one you stored was stale. `outcome` is `found` or `picked` (the first pass), `created`, `created_renamed` or `used_existing` (the second), or `cancelled`. On `cancelled`, `record` is null, a reference the second pass didn't get to is still `not_found`, and one the run never looked for has a null `outcome` and `record` |
+    | `add_transaction` | `{record, references}`: `record` is the transaction, lines and their `txn_line_id`s included: what QuickBooks answered the add with; or, when its answer was lost and the run found it by its GUID, that transaction read by its TxnID; or the one your app named at `ask_about_add`, read the same way. Only when the read after a found GUID can't be answered is it the header the check found. `references` is an object keyed by where each reference sits in the `params` your app sent: `customer_ref`, `invoice_line_add.0.item_ref` (the first line's item). An item named on two lines is under both paths, with the same entry. Each entry is `kind` (the list it names), `outcome`, `how` (`id`, `exact`, `strong` or `picked`, when the first pass found it) and `record`, the record the add used, read whole, whose `type` is always its list (`customer`, `item_service`, ...), however it was found or made. Store each `record.list_id` against what your app sent at that path: it differs from the `list_id` you sent when the one you stored was stale. `outcome` is `found` or `picked` (the first pass, or a row of `ask_missing` answered `use`), `created`, `created_renamed` or `used_existing` (the second), or `cancelled`. On `cancelled`, `record` is null, a reference the second pass didn't get to is still `not_found`, and one the run never looked for has a null `outcome` and `record` |
     | `company_profile` | `{company, preferences, host}`, each as its query answers it |
 
     An invoice whose customer the run created under a new name, abridged:
@@ -571,7 +596,7 @@ its fields in `data`, to `links.decisions`.
 | `id` | Unique within the prompt. Send it as `choice`. |
 | `label` | The button's text. |
 | `description`, `detail` | `null`, or a line under the label: what picking it does, or which record it is (a candidate's list and why it matched, a transaction's date, customer and amount). |
-| `fields` | What to fill in first, each `name`, `type` (`string`, `number`, `boolean` or `record`), `label` and `required`, and for a `record`, `kind`. Empty for a choice that's a button alone. |
+| `fields` | What to fill in first, each `name`, `type` (`string`, `number`, `boolean`, `record` or `rows`), `label` and `required`; for a `record`, `kind`; for one that takes a fixed list, `enum` (`[{"value", "label"}]`, a drop-down); for `rows`, `columns` and `rows` ([below](#a-table-of-rows)). Empty for a choice that's a button alone. |
 
 <CardGroup cols={2}>
   <Card title="One choice per record the run found" icon="list-check">
@@ -580,9 +605,9 @@ its fields in `data`, to `links.decisions`.
     send `{"choice": "use:2"}`. Your app never handles the ListID or TxnID, and never sends one it picked
     itself or one a person typed.
   </Card>
-  <Card title="Another one, searched" icon="magnifying-glass">
+  <Card title="A search for another" icon="magnifying-glass">
     On a realtime or simulated connection, a question that picks a record also offers a search: a choice
-    such as `{"id": "use", "label": "Another one…"}` with a field of type `record`. Fill it from
+    such as `{"id": "use", "label": "Use this one"}` with a field of type `record`. Fill it from
     `GET links.search?field=list_id&q=lone` and send the `value` of the one picked:
     `{"choice": "use", "data": {"list_id": "80000012-1712345678"}}`.
   </Card>
@@ -616,12 +641,12 @@ curl -u "$QUBE_API_KEY:" \
 </Visibility>
 {/* agent-block:end */}
 
-It answers at most 20 records of the field's `kind`, best first, from the connection's [name index](/matching):
+It answers at most 20 records of the field's `kind`, best first, from the connection's [name index](/matching). `detail` is for a person to read: the record's list, then its company name, email, phone, city and postal code or account number where QuickBooks has them:
 
 ```json
 {
   "data": [
-    { "value": "80000012-1712345678", "label": "Lone Star Supply", "detail": "Customer" },
+    { "value": "80000012-1712345678", "label": "Lone Star Supply", "detail": "Customer · ar@lonestar.example · 512-555-0142 · Austin 78701" },
     { "value": "80000031-1712399999", "label": "Lone Star Supply Co (old)", "detail": "Customer · inactive" }
   ]
 }
@@ -629,10 +654,50 @@ It answers at most 20 records of the field's `kind`, best first, from the connec
 
 `links.search` carries the prompt's `token`, so a search for a question the run has moved on from is a
 `409 prompt_changed`. `q` is 2 to 100 characters (`422 invalid_q`), `field` must be a `record` field of one
-of the choices (`422 invalid_field`), and while the index is still being built the search is a
-`409 name_index_building`, as a match is. A standard connection has no name index, so its questions offer
-no search choice and `links.search` is `null`. Every shipped question that offers a search also offers
-another way to answer, such as `resolve`'s pick by the record's exact name (`by_name`).
+of the choices, or a `rows` field's record column (`422 invalid_field`), and while the index is still being built the search is a
+`409 name_index_building`, as a match is. A connection downgraded to standard while a run is going has no
+name index any more: a question asked after that offers no search choice and its `links.search` is `null`,
+and a search for one asked before is `422 matching_requires_realtime`. Workflows run only on realtime or simulated connections,
+so a question's search is there whenever its kind is one the index holds (every list but inventory sites, which `resolve` lists whole).
+
+#### A table of rows
+
+A field of type `rows` asks the same columns of each row of a list, in one question: `add_transaction`'s
+`ask_missing` has a row for each record QuickBooks doesn't have. Show it as a table. Its `columns` are shared
+by every row (so your screen can set one column on many rows at once), and each row says which of them it
+asks.
+
+| Field | What it holds |
+| --- | --- |
+| `columns` | Each `name`, `type` (`string`, `number`, `boolean` or `record`), `label`, `required`, `kind` (a `record` column's list, or `null` when it depends on the row), `enum` (the values it takes, or `null`) and `when` (`null`, or the values of the row's other columns it applies under: `{"action": ["create"], "item_type": ["item_inventory"]}`). |
+| `rows` | Each `key` (what its answer is keyed by), `label`, `detail`, `columns` (the names it asks), `values` (what it already says for columns it doesn't ask, such as an item add's type) and `kinds` (each record column's list for this row). At most 100. |
+
+Show a row's column only when it's in the row's `columns` and its `when` holds over the row's `values` and
+what your user has picked so far, and show or hide it as they change. Search a record column with
+`GET links.search?field=records.list_id&row=customer_ref&q=lone`: `row` picks that row's list
+(`422 invalid_row` without it when the list depends on the row). Answer every row, with only the columns
+it asks:
+
+```json
+{
+  "choice": "proceed",
+  "data": {
+    "records": {
+      "customer_ref": { "action": "use", "list_id": "80000001-1712345678" },
+      "invoice_line_add.0.item_ref": {
+        "action": "create", "item_type": "item_inventory",
+        "income_account": "8000000A-1712345678", "asset_account": "80000005-1712345678",
+        "cogs_account": "8000000C-1712345678"
+      },
+      "invoice_line_add.1.item_ref": { "action": "create", "income_account": "8000000A-1712345678" }
+    }
+  }
+}
+```
+
+A required column that applies and is left out is `422 missing_fields`, named `records.<key>.<column>` (a
+row left out is `records.<key>`); a column the row doesn't ask, or a value outside its `enum`, is
+`422 invalid_data`. An answer to a column that doesn't apply is dropped.
 
 A choice the prompt doesn't offer is `422 invalid_choice`, a field the choice doesn't list (or a value of
 the wrong type) is `422 invalid_data`, and a missing required one is `422 missing_fields`, each naming what
@@ -860,8 +925,8 @@ each naming its `kind`, the customers, then the vendors, then whatever else you 
 then one `deleted`), then `workflow_run.completed` with the counts.
 
 Save each record by the connection the run is on, its `kind` and its `list_id` or `txn_id`, never by the id
-alone: QuickBooks makes ids unique only within one list of one company file, so another customer's file (or a
-copy of this one) can hold the same ids.
+alone: QuickBooks makes ids unique only within one list family of one company file (customers, vendors, employees
+and other names share one), so another customer's file (or a copy of this one) can hold the same ids.
 
 **The run waits for your `2xx`** before it goes on: notifications come one at a time, in `seq` order, and
 all of them before the run's ending, so `workflow_run.completed` means everything was sent. QuickBooks
@@ -1058,7 +1123,7 @@ All under `https://qubesync.com/api/v2/connections/{connection_id}`, with your a
 
 | Call | What it does |
 | --- | --- |
-| `POST /workflow-runs` | Starts a run: `workflow` (the key), `input`, optional `reference` (your own label for the run, 1 to 255 characters, on the run and every webhook) and `webhook_url`. On a sandbox or simulated connection, `version` picks the chart ([versions](/workflow-authoring#versions-and-publishing)). `201` with the run. Input the workflow doesn't accept is `422`, with the path of each problem, before anything is queued. |
+| `POST /workflow-runs` | Starts a run: `workflow` (the key), `input`, optional `reference` (your own label for the run, 1 to 255 characters, on the run and every webhook) and `webhook_url`. On a sandbox or simulated connection, `version` picks the chart ([versions](/workflow-authoring#versions-and-publishing)). `201` with the run. Input the workflow doesn't accept is `422`, with the path of each problem, before anything is queued. A `standard` connection is `422 realtime_required` ([above](#workflows-run-on-realtime-connections)). |
 | `GET /workflow-runs/{run_id}` | The whole run: `reference`, `revision`, `state`, `current_state`, `outcome`, `input`, `vars`, `prompt`, `output`, `error`, `summary`, `cancel_reason`, `trace` and `links`. |
 | `GET /workflow-runs` | The 100 most recent runs your app started on the connection, newest first. `?state=`, `?outcome=` (the exact key) and `?reference=` (exactly as you sent it) filter them. |
 | `POST /workflow-runs/{run_id}/decisions` | Answers the question: `choice` (one of `prompt.choices`), plus `data` with the choice's fields, or `option` with the option's. `links.decisions` names the question (`?prompt_token=`, the prompt's `token`; or send `prompt_token` in the body) so a retry can't answer the next one. `422` for a choice or option it doesn't offer, a missing field, a field the choice doesn't list, a conflict's `params` with a field the update doesn't take (`invalid_data`), or a `prompt_token` that isn't a string. `409 prompt_changed` when the run has asked again since the question the token names. `400 not_awaiting_input` when the run isn't waiting. Both are safe to ignore on a repeat. Every refusal is `{"errors": {"code": "prompt_changed", "detail": "..."}}`: branch on `code`, not on `detail`'s words. |
@@ -1094,10 +1159,10 @@ part of the run you started.
   </Accordion>
   <Accordion title="A chart can identify a record by name" description="the match state" icon="magnifying-glass">
     A `match` state identifies a list record by name: `ACME, Inc.` finds `Acme Inc`, whatever the punctuation,
-    company suffix or word order. On a realtime or simulated connection it is the ranked
+    company suffix or word order. It is the ranked
     [match](/matching#in-a-workflow) the matches endpoint does, after the run catches the connection's name
-    index up with QuickBooks (unless that was done in the last minute, which the matches of one burst share). On a standard connection it sends QuickBooks' own "contains" filter instead, so
-    the same chart works on every connection. The chart branches on `response.data.match`, and uses only an
+    index up with QuickBooks (unless that was done in the last minute, which the matches of one burst share). A run still going when its connection is downgraded to standard sends QuickBooks' own "contains" filter instead, so
+    it can finish. The chart branches on `response.data.match`, and uses only an
     `exact` match without asking: see [Matching names in a chart](/workflow-authoring#matching-names-in-a-chart).
   </Accordion>
   <Accordion title="An installed template is a copy" icon="clone">

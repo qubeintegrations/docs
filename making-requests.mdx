@@ -11,7 +11,7 @@ See the [API Reference](/api-reference) for full documentation of all 261 QuickB
 Every QuickBooks operation is a REST endpoint under a connection, covering lists
 (customers, vendors, items, accounts), transactions (invoices, bills, payments, sales receipts, journal
 entries), payroll and reports. They are all compiled and validated directly from QuickBooks' own schema definitions, so they support
-every feature native qbXML offers. All behave the same way:
+every feature native qbXML offers.
 
 <Steps>
   <Step title="Send JSON">
@@ -391,8 +391,9 @@ A create's answer is the **new record** in `response_json.data`, with the ids Qu
 Store the `list_id` or `txn_id` against your own record. A `list_id` is stable for the life of the company
 file; a `full_name` changes when someone renames the record in QuickBooks.
 
-Keep it with the connection it came from. QuickBooks makes a `list_id` unique only within one list of one
-company file, and a `txn_id` within one transaction type: two of your customers' files can hold the same one,
+Keep it with the connection it came from. QuickBooks makes a `list_id` unique only within one list family of
+one company file (customers, vendors, employees and other names share one; every item type shares another), and
+a `txn_id` within one transaction type: two of your customers' files can hold the same one,
 and a copy of a file (a restored backup, a test copy) holds every one the same. So when your app keeps its
 own table of QuickBooks records, find each row by the connection, the kind and the id together: never by the
 id alone, and not by your customer's account either, since a customer who connects another company file gets a

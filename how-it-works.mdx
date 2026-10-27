@@ -24,8 +24,9 @@ production connection.
 **Connection.** One QuickBooks company file, usually one per customer. It carries the Web Connector's
 credentials and knows when it last checked in (`last_connected_at`). It is `standard` (the Web Connector
 checks in every 5 minutes), `realtime` (every 10 seconds) or `simulated` (a fake QuickBooks hosted by QuBe
-Sync, for development). A realtime or simulated connection can also [match names](/matching) against an
-index of its company file's lists, and its `name_index` says where that index stands.
+Sync, for development). A realtime or simulated connection can also run [workflows](/workflows) and
+[match names](/matching) against an index of its company file's lists, and its `name_index` says where that
+index stands.
 
 **Queued request.** One QuickBooks operation, such as listing customers or adding an invoice, queued
 against a connection. You queue it with JSON, and its answer is delivered to your `webhook_url`.
@@ -64,8 +65,6 @@ sequenceDiagram
   App-->>Q: 200 OK
 ```
 
-Design for that from the start:
-
 <div className="qube-points">
   <div className="qube-point">
     <Icon icon="bell" size={20} />
@@ -103,7 +102,8 @@ Design for that from the start:
       **Do you need realtime integration?**
 
       A standard connection polls every five minutes. When a person is waiting on results, use `realtime`
-      connections that start processing requests within 10 seconds.
+      connections that start processing requests within 10 seconds. Workflows run only on realtime
+      connections.
     </div>
   </div>
 </div>
@@ -175,9 +175,9 @@ You can switch a connection between standard and realtime from its page in the d
 
 | Change | What happens |
 | --- | --- |
-| Upgrade to realtime | Billed as realtime from then on. [Name matching](/matching) is available at once. |
-| Downgrade to standard | Scheduled for the end of the billing period, and billed as realtime until then. Matching stops then, and the connection's name index is deleted. |
-| **Slow polling to every 5 minutes** | Slows a realtime connection right away, without changing its bill. Matching keeps working, though its refreshes wait for the slower check-ins. |
+| Upgrade to realtime | Billed as realtime from then on. [Workflows](/workflows) and [name matching](/matching) are available at once. |
+| Downgrade to standard | Scheduled for the end of the billing period, and billed as realtime until then. Then new workflow runs are refused (runs already going finish, at the standard pace), matching stops, and the connection's name index is deleted. |
+| **Slow polling to every 5 minutes** | Slows a realtime connection right away, without changing its bill. Workflows and matching keep working, though their steps wait for the slower check-ins. |
 
 To see when a connection will next pick up requests, read it on the connection
 (`GET /connections/{connection_id}` in v2), or the **Speed** card on its dashboard page:
