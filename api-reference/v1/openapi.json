@@ -3870,6 +3870,13 @@
             "description": "The product name of the connected QuickBooks instance",
             "nullable": true
           },
+          "onboarding_token_expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2023-01-08T12:00:00Z",
+            "description": "When `links.onboarding` stops working, UTC ISO 8601",
+            "nullable": true
+          },
           "type": {
             "type": "string",
             "example": "standard",
@@ -3953,6 +3960,37 @@
               "discarded"
             ],
             "description": "Current state of the queued request. `timed_out`: no answer came back (the customer's computer lost its connection, or QuickBooks or the Web Connector was closed, mid-request), so QuickBooks may still have applied it. `discarded`: it was discarded before the Web Connector picked it up, so QuickBooks never got it."
+          },
+          "page": {
+            "type": "integer",
+            "example": 1,
+            "description": "The page number, for a multi-page (iterated) response; `1` for a request that isn't iterated"
+          },
+          "original_request_id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "550e8400-e29b-41d4-a716-446655440000",
+            "description": "The id of the first page of this request's iteration, the same on every page of it: equal to `id` on the first page itself, and on a request that isn't iterated"
+          },
+          "iteration_state": {
+            "type": "string",
+            "enum": [
+              "not_applicable",
+              "continue",
+              "done",
+              "max_sandbox_iterations_reached"
+            ],
+            "description": "Whether this response is part of an ongoing iteration, and if so, whether more pages remain. Use this (not `state`) to tell whether a multi-page response is complete."
+          },
+          "request_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "CustomerQueryRq"
+            ],
+            "description": "The qbXML request type(s) in `request_xml`"
           },
           "webhook_state": {
             "type": "string",
@@ -4127,6 +4165,12 @@
                 "type": "string",
                 "format": "uri",
                 "example": "/app/connections/123e4567-e89b-12d3-a456-426614174000"
+              },
+              "pages": {
+                "type": "string",
+                "format": "uri",
+                "example": "/api/v2/connections/123e4567-e89b-12d3-a456-426614174000/queued-requests/550e8400-e29b-41d4-a716-446655440000/pages",
+                "description": "The pages of this request's iteration, oldest first. A v2 route (`GET /api/v2/connections/{connection_id}/queued-requests/{id}/pages`, documented in the v2 API reference): v1 has none of its own, and the same API key works there. It answers a page of them at a time (`page`, `page_size`, at most 100) with a `meta` block, and its rows are rendered as v1 renders this request."
               }
             },
             "required": [
@@ -4285,7 +4329,7 @@
                 },
                 "example": {
                   "redirect_url": [
-                    "must not have a query string"
+                    "must be a valid URL"
                   ]
                 },
                 "title": "Field by field",

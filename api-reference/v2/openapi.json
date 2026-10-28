@@ -34879,8 +34879,27 @@
               "$ref": "#/components/schemas/Connection"
             },
             "type": "array"
+          },
+          "meta": {
+            "properties": {
+              "page": {
+                "type": "integer"
+              },
+              "total_pages": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "page",
+              "total_pages"
+            ],
+            "type": "object"
           }
         },
+        "required": [
+          "data",
+          "meta"
+        ],
         "type": "object"
       },
       "updateSalesTaxCode_response_json": {
@@ -108553,7 +108572,7 @@
                 "type": "string"
               },
               "pages": {
-                "description": "Every page of a multi-page (iterated) response, keyed by `iteration_state`. Each page is also delivered to `webhook_url` as it is answered.",
+                "description": "The pages of a multi-page (iterated) response answered so far, oldest first, a page of them at a time (`page`, `page_size`), each with its own `iteration_state`. Each page is also delivered to `webhook_url` as it is answered.",
                 "format": "uri",
                 "type": "string"
               },
@@ -118583,9 +118602,31 @@
   "paths": {
     "/connections": {
       "get": {
-        "description": "Every connection belonging to the authenticated app.",
+        "description": "The connections belonging to the authenticated app, oldest first, a page at a time: `meta.total_pages` says how many pages there are.",
         "operationId": "listConnections",
-        "parameters": [],
+        "parameters": [
+          {
+            "description": "Which page of the list, from 1.",
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "How many to a page, at most 100.",
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -118595,10 +118636,20 @@
                 }
               }
             },
-            "description": "A list of connections"
+            "description": "A page of connections"
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrors"
+                }
+              }
+            },
+            "description": "`page` or `page_size` out of range: `errors` names it."
           }
         },
         "security": [
@@ -120311,7 +120362,7 @@
     },
     "/connections/{connection_id}/queued-requests/{id}/pages": {
       "get": {
-        "description": "Given any one page's id (not just the first), every page of the same iteration, oldest first -- lets a caller polling alone (no webhook) reconstruct a multi-page qbXML response and see, via each page's own `iteration_state`, whether it is complete.",
+        "description": "Given any one page's id (not just the first), the pages of the same iteration answered so far, oldest first, `page_size` at a time -- lets a caller polling alone (no webhook) reconstruct a multi-page qbXML response and see, via each page's own `iteration_state`, whether it is complete. Each page carries its whole `response_xml`, so keep `page_size` small for a large query; `meta.total_pages` says how many pages of them there are.",
         "operationId": "listQueuedRequestPages",
         "parameters": [
           {
@@ -120333,6 +120384,27 @@
               "format": "uuid",
               "type": "string"
             }
+          },
+          {
+            "description": "Which page of the list, from 1.",
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "How many to a page, at most 100.",
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -120346,19 +120418,48 @@
                         "$ref": "#/components/schemas/QueuedRequest"
                       },
                       "type": "array"
+                    },
+                    "meta": {
+                      "properties": {
+                        "page": {
+                          "type": "integer"
+                        },
+                        "total_pages": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "page",
+                        "total_pages"
+                      ],
+                      "type": "object"
                     }
                   },
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
                   "type": "object"
                 }
               }
             },
-            "description": "Every page of the iteration"
+            "description": "A page of the iteration's pages"
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrors"
+                }
+              }
+            },
+            "description": "`page` or `page_size` out of range: `errors` names it."
           }
         },
         "security": [
@@ -120366,7 +120467,7 @@
             "apiKey": []
           }
         ],
-        "summary": "List every page of a multi-page (iterated) response",
+        "summary": "List the pages of a multi-page (iterated) response",
         "tags": [
           "Queued Requests"
         ]
