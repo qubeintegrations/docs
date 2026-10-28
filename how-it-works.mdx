@@ -194,7 +194,7 @@ To see when a connection will next pick up requests, read it on the connection
 <Note>
   **Realtime connections in a sandbox app slow down while idle.** After 10 minutes without a request, they
   check in once a minute; after an hour, every 5 minutes. The session that picks up the next request brings
-  them back to every 10 seconds. To run a request immediately, click **Update Selected**. The connection's page
+  them back to every 10 seconds. To run a request immediately, click **Update Selected** (a click within about 20 seconds of a scheduled run is treated as the schedule and postponed; click again). The connection's page
   says when this is why its next check-in is minutes away, and so does `next_check_in_reason`
   (`sandbox_idle`) on the connection.
 </Note>
