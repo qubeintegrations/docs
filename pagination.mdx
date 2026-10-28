@@ -64,8 +64,10 @@ answer in one go. A large one is best narrowed with its filters, such as a modif
 
 ## Pages on demand
 
-Each queued request also has a `links.pages` URL, which returns every page answered so far, oldest first,
-each with its own `iteration_state`.
+Each queued request also has a `links.pages` URL, which returns the pages answered so far, oldest first,
+each with its own `iteration_state`. It answers 20 of them at a time: ask for more with `page`, and up to 100
+at a time with `page_size`. `meta.total_pages` says how many pages of them there are. Each one carries its whole
+`response_xml`, so keep `page_size` small for a large query.
 
 <Request path="/api/v2/connections/{connection_id}/queued-requests/{request_id}/pages" />
 
