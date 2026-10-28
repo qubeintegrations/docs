@@ -58,12 +58,12 @@ curl -u "$QUBE_API_KEY:" \
   byte, so you [verify the signature](/webhooks#securing-your-endpoints) with the same
   `QUBE_WEBHOOK_SECRET` that `qube env` wrote.
 - **Every webhook comes through:** request answers, a [workflow run](/workflows)'s webhooks and
-  notifications, and [name index](/matching) events.
+  notifications, a connection's [own events](/webhooks#connection-events), and [name index](/matching) events.
 - **A path you add is kept.** A `webhook_url` of `$QUBE_WEBHOOK_URL/runs` goes to the `--forward-to` URL
   plus `/runs`.
 - **Nothing else on your machine is exposed.** Only QuBe Sync's deliveries for this app come through, not
   requests from the internet, as a tunnel would let in.
-- **When it isn't running,** a delivery fails and is retried like any other, and the request's page in the
+- **When it isn't running,** a delivery fails and is retried for about 8 hours like any other, and the request's page in the
   dashboard has **Resend webhook**.
 - `qube listen` works for sandbox apps only, and `--json` prints one line per delivery for a script or an
   agent. See [the CLI](/cli#receive-webhooks-locally) for its flags.
@@ -98,7 +98,7 @@ Tips:
     [Verify the signature](/webhooks#securing-your-endpoints).
   </Card>
   <Card title="Missed one while it was down?" icon="arrows-rotate">
-    QuBe Sync retries each delivery several times, and any request's page in the dashboard has
+    QuBe Sync retries each delivery for about 8 hours, and any request's page in the dashboard has
     **Resend webhook**.
   </Card>
   <Card title="Set up a permanent tunnel" icon="link">

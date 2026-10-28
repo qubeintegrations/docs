@@ -46,8 +46,10 @@ goes.
 
 QuBe Sync's libraries make these calls for you: the API key as basic auth, the response's `data` out, an
 `Idempotency-Key` on every call that queues (yours, or one they make and resend on their own retries), safe
-retries after a timeout or a `503`, and one `APIError` with the API's `status`, `code` and message. They take
-the key as an argument, so your app reads it from the environment.
+retries after a timeout or a `503`, and one `APIError` with the API's `status`, `code` and message. A call and
+its retries stop after 60 seconds, and a retried `DELETE` answered `404` after a lost answer counts as done.
+They take the key as an argument, so your app reads it from the environment. They need Ruby 3.3, Python 3.8 or
+Node 16.17 ([the webhook libraries' table](/webhooks#verify-the-signature) has the rest).
 
 <CodeGroup>
 ```ruby Ruby
@@ -496,8 +498,9 @@ curl -u "$QUBE_API_KEY:" \
   1 to 255 printable ASCII characters. Every operation, [queueing qbXML](#sending-qbxml-yourself) and
   [starting a workflow run](/workflows) take one. Other calls ignore the header.
 
-  A key belongs to your app, so your sandbox and production apps never share one. It lasts as long as the
-  request or run it created.
+  A key belongs to your app, so your sandbox and production apps never share one. It lasts until what it
+  created is purged, 60 days after the request is answered or the run ends, and then frees up: a retry
+  after that queues something new.
 </ParamField>
 
 | You send | What happens |

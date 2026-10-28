@@ -46,19 +46,17 @@ A QuickBooks Desktop integration has more to get right than most: questions only
   </Step>
   <Step title="Check your webhook endpoint live">
     With your app running on your machine, the [CLI](/cli) sends your webhook endpoint signed test deliveries
-    and grades its answers: a bad signature, an old timestamp, an operation your app doesn't have, a
-    connection event that isn't for the connection you saved. The audit skill runs it too, and folds what
-    fails into its report:
+    and grades its answers: a bad signature, an old timestamp, a path your app doesn't route. Each is a delivery
+    your app must refuse or can't route, so none reaches a real run or connection. The audit skill runs it too,
+    and folds what fails into its report:
 
     ```bash
-    qube check webhooks http://localhost:3000/webhooks/qube --operation create_invoice --record 42
+    qube check webhooks http://localhost:3000/webhooks/qube
     ```
 
     Give it your app's local webhook URL, the one `qube listen --forward-to` forwards to, not the relay's.
-    `--operation` is one of your app's operation slugs, and `--record` the id of a record of yours that
-    keeps a connection (a shop or an account), whose connection's webhook URL is
-    `.../webhooks/qube/connection/42`. Without them, the checks that need them are skipped. The command
-    needs the CLI release that has `qube check webhooks`.
+    When your run webhook URLs don't start with `.../webhooks/qube/runs/`, pass `--operation` with the segment
+    yours start with. The command needs the CLI release that has `qube check webhooks`.
   </Step>
 </Steps>
 

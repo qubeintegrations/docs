@@ -53,7 +53,8 @@ import { Request } from "/snippets/request.jsx";
     {/* agent-block:end */}
 
     Store the connection's `id` against the customer's account. You'll use it for every request. Until it's
-    connected, show the account as waiting for QuickBooks.
+    connected, show the account as waiting for QuickBooks. In a production app, the call is refused with
+    `402` `billing_required` until your organization has billing ([Going live](/going-live)).
 
     <Accordion title="Standard or realtime?">
       Pass `type` when you create the connection:
@@ -255,10 +256,10 @@ module.exports = { quickbooksConnect };
 
 ## Keep an eye on the connection
 
-Showing your customer their connection status can help them self-diagnose why they're still waiting on a request. 
+Showing your customer their connection status can help them self-diagnose why they're still waiting on a request.
 
 When their web connector hasn't been heard from, the
-connection's `webhook_url` receives `connection.stalled` (and `connection.resumed` once it's polling again [Connection events](/webhooks#connection-events)). Its `connection.stall_reason` tells you what
+connection's `webhook_url` receives `connection.stalled` (and `connection.resumed` once it's polling again; see [Connection events](/webhooks#connection-events)). Its `connection.stall_reason` tells you what
 to tell your customer. `not_checking_in` means the Web Connector hasn't checked in when it was due (by the
 longer of 15 minutes and twice its schedule), so turn on the QuickBooks computer and check the Web Connector. `quickbooks_unavailable` means it is checking in but can't reach QuickBooks, so open QuickBooks with the correct
 company file.
@@ -268,6 +269,11 @@ company file.
 If QuickBooks moves to another computer, or your customer's Web Connector entry was removed, send them to the
 connection's onboarding link again ([regenerate it](/api-reference/v2/connections/regenerate-the-onboarding-url)
 if it's more than 48 hours old). The page tells them the connection is already set up, and offers **Set up again**.
+
+Choosing it changes the connection's password at once, so the old Web Connector entry is turned away
+("Invalid password for username"). Until the new setup is done, requests wait and `last_connected_at` stays
+at the old entry's last check-in. When the new entry checks in, the `webhook_url` hears `connection.connected`
+again, with `connection.setup` set to `again`.
 
 ## When a customer leaves
 

@@ -24,7 +24,7 @@ Find the webhook you got. The last column says who fixes it, what to do, and whe
 | <Badge color="orange">`retryable`</Badge> | QuickBooks wasn't running, the wrong company file was open, or a dialog was. | **Your customer.** Show them `user_message`, and don't resend. [Out of reach](#when-quickbooks-is-out-of-reach) |
 | <Badge color="purple">`timed_out`</Badge> | The answer was lost: the connection dropped, or QuickBooks/the Web Connector was closed, mid-request. | **Check first.** Queue a query again; query before resending a change. [The answer is lost](#when-the-answer-is-lost) |
 | <Badge color="gray">`discarded`</Badge> | Your app discarded it before the Web Connector took it. | **Nobody.** QuickBooks never saw it. [Discarding](#discarding-a-request) |
-| No webhook received,<br />requests stuck `waiting` | The Web Connector stopped checking in. | **Your customer.** Compare `last_connected_at` with now. [Stops checking in](#when-the-web-connector-stops-checking-in) |
+| No webhook received,<br />requests stuck `waiting` | The Web Connector stopped checking in. | **Your customer.** Your app is sent `connection.stalled` (`stall_reason: not_checking_in`), or compare `last_connected_at` with now. [Stops checking in](#when-the-web-connector-stops-checking-in) |
 
 ## The error object
 
@@ -311,7 +311,10 @@ can't write. **Those never arrive as a webhook.** The Web Connector just stops c
 
 <Steps>
   <Step title="Check when it last connected">
-    Compare the connection's `last_connected_at` with the current time.
+    A connection with a `webhook_url` is sent `connection.stalled` with `stall_reason: not_checking_in`
+    once one of your requests has waited too long, and `connection.resumed` when it's back
+    ([Connection events](/webhooks#connection-events)). Without one, compare the connection's
+    `last_connected_at` with the current time.
   </Step>
   <Step title="Read the Web Connector's status">
     Ask your customer to open the Web Connector and read the status next to your app. It shows these
@@ -345,6 +348,15 @@ Both carry a `code` to branch on:
 
 A body matching can't take is a `422` too, field by field, such as `{"errors": {"kind": ["must be one of: ..."]}}`.
 
+## When a connection is refused
+
+A production app can't have connections, of any type, until your organization has billing. Creating one,
+from the API (v1 or v2), the CLI or the dashboard, is refused on the call itself, with nothing saved:
+
+| Answer | `code` | Meaning | What to do |
+| --- | --- | --- | --- |
+| `402` | `billing_required` | The app is a production app and your organization has no subscription. | Set up billing in the dashboard ([Going live](/going-live)), then send the same call again. Sandbox apps need no billing. |
+
 ## When a workflow run is refused
 
 [Workflows run on realtime connections](/workflows#workflows-run-on-realtime-connections), and on simulated
@@ -356,6 +368,11 @@ ones. Starting a run on a `standard` connection is refused on the call itself, w
 
 A run already going when its connection's downgrade takes effect isn't refused: it finishes, at the
 standard pace.
+
+Resending a run's latest event (`POST .../workflow-runs/{run_id}/redeliver`) has two refusals of its own:
+`409` `nothing_to_redeliver` while the run is still working or when it has no `webhook_url`, and `429`
+`rate_limited`, past one a minute per run or 60 a minute per app, with a `Retry-After` header
+([When a delivery fails](/webhooks#when-a-delivery-fails)).
 
 ## In a workflow
 

@@ -94,8 +94,8 @@ change when you connect real QuickBooks later.
 
         <Accordion title="Make the next request fail on purpose">
           Real integrations fail in ways that are hard to reproduce, like a name that's already taken. On
-          the connection's page, under **Faults**, set **Next request** to *answered with 3100 — name
-          already in use*, then click **Queue test request** again. Its state is <Badge color="red">`error`</Badge>, with the same
+          the connection's page, click **Set faults** beside **Faults**, set **Next request** to *answered with
+          3100: name already in use*, then click **Queue test request** again. Its state is <Badge color="red">`error`</Badge>, with the same
           refusal QuickBooks would send.
 
           <Frame>
@@ -133,7 +133,7 @@ change when you connect real QuickBooks later.
         </Frame>
       </Step>
       <Step title="Connect QuickBooks">
-        On the connection's page, click **Copy Onboarding URL** and open it on the computer that runs
+        On the connection's page, click **Copy onboarding link** and open it on the computer that runs
         QuickBooks. It's the page your customers will use: a short checklist, then a `.qwc` file to open in
         the Web Connector and a password to paste into it.
 
@@ -141,19 +141,23 @@ change when you connect real QuickBooks later.
           <img src="/images/quickstart/onboarding.png" alt="The onboarding page: Connect My App Dev to QuickBooks Desktop, starting with step 1, Get QuickBooks ready: No picked for the server question, then its three checks" />
         </Frame>
 
-        When the Web Connector finishes its first update, **Last connected** on the connection's page
-        changes from *Never connected* to the time it checked in.
+        When the Web Connector finishes its first update, the connection's page stops waiting for it: its
+        status changes from *Never connected*, and its header says **Last session** with the time it checked
+        in.
 
         <AccordionGroup>
           <Accordion title="Set it up without the onboarding page">
-            1. Click **Download QWC File** and open the file on the QuickBooks computer. When QuickBooks
+            On the connection's page, click **Set it up yourself** under **Copy onboarding link** if its steps
+            are folded. (Once it has connected, they're under **Web Connector setup** → **Show**.)
+
+            1. Click **Download QWC file** and open the file on the QuickBooks computer. When QuickBooks
                asks, choose *Yes, always; allow access even if QuickBooks is not running*.
-            2. Click **Generate Password**. It's copied to your clipboard: paste it into the Web
+            2. Click **Generate password**. It's copied to your clipboard: paste it into the Web
                Connector's **Password** column.
             3. Tick the app in the Web Connector and click **Update Selected**.
 
             <Frame>
-              <img src="/images/quickstart/connection-real.png" alt="A standard connection's page: Copy Onboarding URL, Last connected Never connected, Download QWC File and Generate Password" />
+              <img src="/images/quickstart/connection-real.png" alt="A standard connection's page that has never connected: Copy onboarding link, then Download QWC file and Generate password" />
             </Frame>
           </Accordion>
           <Accordion title="The Web Connector shows an error">
@@ -197,7 +201,7 @@ dashboard:
     </Frame>
   </Accordion>
   <Accordion title="Where to find your connection ID">
-    Go to QB Connections -> your new connection; copy **ID** on the connection's page.
+    Go to QB Connections -> your new connection; copy **Connection ID** at the top of the connection's page.
   </Accordion>
 </AccordionGroup>
 

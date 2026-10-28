@@ -113,7 +113,7 @@ for the server to leak.
   <Card title="4 workflow tools" icon="diagram-project">
     `get_workflow_authoring_guide`, `validate_workflow_chart`, `list_workflow_templates` and
     `get_workflow_template`: everything an agent needs to write a [workflow](/workflow-authoring) and check
-    it.
+    it. Runs start only on realtime and simulated connections.
   </Card>
 </CardGroup>
 
@@ -273,7 +273,7 @@ curl -X POST \
 {/* agent-block:end */}
 
 `tools/list` returns 100 tools per page. The first page starts with the workflow tools,
-`report_confusion` and `match_records`, then the operations in alphabetical order. Pass `nextCursor` back as
+`report_confusion`, `match_records` and `get_integration_checklist`, then the operations in alphabetical order. Pass `nextCursor` back as
 `params.cursor` for the rest.
 
 <Note>

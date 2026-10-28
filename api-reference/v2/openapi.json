@@ -14612,6 +14612,12 @@
       "MatchRecord": {
         "description": "A record a match found: enough to show it, and its `list_id` to use it by. The index can be a few minutes behind QuickBooks (`index.as_of`), so read the record by its `list_id` before a change depends on it: one renamed since comes back with its new name, and one deleted since is a 3120 (or an empty answer).",
         "properties": {
+          "email": {
+            "description": "Its email, as the index holds it (lower-cased), for a person to tell candidates apart; null when it has none or isn't a customer, vendor, employee or other name.",
+            "example": "ap@acme.example",
+            "nullable": true,
+            "type": "string"
+          },
           "full_name": {
             "description": "Its full name: a job's or a sub-item's starts with its parent's, `Smith:Kitchen`.",
             "example": "Acme Inc",
@@ -14629,6 +14635,12 @@
           "list_id": {
             "description": "The record's ListID: what a reference (`customer_ref`, `item_ref`...) names it by.",
             "example": "80000011-1712345678",
+            "type": "string"
+          },
+          "phone": {
+            "description": "Its phone, for a person to tell candidates apart: a 10-digit one as `512-555-0142`, else as QuickBooks has it; null when it has none.",
+            "example": "512-555-0142",
+            "nullable": true,
             "type": "string"
           },
           "reasons": {
@@ -14655,7 +14667,9 @@
           "list",
           "is_active",
           "score",
-          "reasons"
+          "reasons",
+          "email",
+          "phone"
         ],
         "type": "object"
       },
@@ -28968,6 +28982,66 @@
                         ],
                         "type": "object"
                       },
+                      "columns": {
+                        "description": "For a field of type rows: what each row is asked, in order. Every row shares them, so an app's screen can set one column on many rows at once.",
+                        "items": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "enum": {
+                              "$ref": "#/components/schemas/WorkflowChartPromptEnum"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "$ref": "#/components/schemas/WorkflowChartIdentifier"
+                            },
+                            "record": {
+                              "additionalProperties": false,
+                              "description": "A search column: a row's value comes from the run's search (links.search with field=\\<field>.\\<column> and row=\\<key>). Its type is string: a search answers a ListID.",
+                              "properties": {
+                                "kind": {
+                                  "description": "The list to search, or a template for it over item, the row's element: \\${item.kind}.",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "kind"
+                              ],
+                              "type": "object"
+                            },
+                            "required": {
+                              "description": "Every row the column applies to (its columns name it, and its when holds) must answer it.",
+                              "type": "boolean"
+                            },
+                            "type": {
+                              "enum": [
+                                "string",
+                                "number",
+                                "boolean"
+                              ]
+                            },
+                            "when": {
+                              "additionalProperties": {
+                                "minItems": 1,
+                                "type": "array"
+                              },
+                              "description": "The values of the row's other columns this one applies under, such as {\"action\": [\"create\"], \"item_type\": [\"item_inventory\"]}. A column whose when doesn't hold isn't asked, and an answer to it is dropped.",
+                              "type": "object"
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "type"
+                          ],
+                          "type": "object"
+                        },
+                        "minItems": 1,
+                        "type": "array"
+                      },
+                      "enum": {
+                        "$ref": "#/components/schemas/WorkflowChartPromptEnum"
+                      },
                       "label": {
                         "type": "string"
                       },
@@ -28992,13 +29066,51 @@
                       "required": {
                         "type": "boolean"
                       },
+                      "rows": {
+                        "additionalProperties": false,
+                        "description": "For a field of type rows: one row per element of from, each rendered with the element at item.",
+                        "properties": {
+                          "columns": {
+                            "$ref": "#/components/schemas/WorkflowChartTemplate",
+                            "description": "The names of the columns this row asks, such as \\${item.ask.columns}; left out, every column."
+                          },
+                          "detail": {
+                            "$ref": "#/components/schemas/WorkflowChartTemplate",
+                            "description": "A short second line, such as the record's kind."
+                          },
+                          "from": {
+                            "description": "A template that renders to a list, such as \\${vars.asking}. At most 100 rows.",
+                            "type": "string"
+                          },
+                          "key": {
+                            "$ref": "#/components/schemas/WorkflowChartTemplate",
+                            "description": "The row's key, unique among the rows: the answer is keyed by it."
+                          },
+                          "label": {
+                            "$ref": "#/components/schemas/WorkflowChartTemplate",
+                            "description": "What the row says, such as \\${item.full_name}."
+                          },
+                          "values": {
+                            "$ref": "#/components/schemas/WorkflowChartTemplate",
+                            "description": "What the row already has for columns it doesn't ask, an object: a column's when reads them too, and the answer carries them."
+                          }
+                        },
+                        "required": [
+                          "from",
+                          "key",
+                          "label"
+                        ],
+                        "type": "object"
+                      },
                       "type": {
+                        "description": "string, number, boolean, object or array, as an input declares them; or rows: the same columns asked of each row of a list (rows and columns), answered as an object keyed by each row's key (docs/missing-records-question.md).",
                         "enum": [
                           "string",
                           "number",
                           "boolean",
                           "object",
-                          "array"
+                          "array",
+                          "rows"
                         ]
                       }
                     },
@@ -106259,6 +106371,29 @@
           }
         ]
       },
+      "WorkflowChartPromptEnum": {
+        "description": "The values a string or number field may take, each with what a person reads for it: the choice's field carries them, and an answer outside them is refused.",
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "value": {
+              "type": [
+                "string",
+                "number"
+              ]
+            }
+          },
+          "required": [
+            "value"
+          ],
+          "type": "object"
+        },
+        "minItems": 1,
+        "type": "array"
+      },
       "listItemPayments_response_json": {
         "description": "QuBe Sync's summary of QuickBooks' answer. Only an `Error` severity from QuickBooks is `status: \"error\"` (and makes the request's `state` `error`), so a query that matched nothing is still `success`. A `Warn` severity is a `success` with `warning` beside it.",
         "oneOf": [
@@ -118481,7 +118616,7 @@
           "connection_events": {
             "{$request.body#/webhook_url}": {
               "post": {
-                "description": "Sent to the connection's `webhook_url` (set here or by Update a connection), signed with `X-QUBE-Signature` like every other webhook (see the Webhooks guide). One of four events:\n\n- `connection.connected`: the Web Connector checked in for the first time, or for the first time since your customer chose Set up again on the connection's onboarding page (`connection.setup` says which). This is the signal to act on: mark the account connected. Your customer finishes the setup on the QuickBooks computer, which usually isn't signed in to your app, so your app hears it here rather than from their browser.\n- `connection.setup_cancelled`: your customer chose Cancel setup on the onboarding page. The connection is unchanged, and its onboarding link still works, so offer them Connect again.\n- `connection.stalled`: one of your requests has waited too long to be taken: past when the Web Connector was due to take it, by the longer of 15 minutes and twice the Web Connector's schedule. `connection.stall_reason` says why. `not_checking_in`: the Web Connector hasn't checked in when it was due, so the QuickBooks computer is probably off or offline. `quickbooks_unavailable`: the Web Connector is checking in but can't reach QuickBooks, usually because QuickBooks isn't open with the company file; the wait then counts from when your request was queued. If the reason changes while the stall goes on, the event comes again with the new reason and a newer `revision`. A connection with nothing of yours waiting is never stalled, and neither is a simulated one.\n- `connection.resumed`: a stalled connection's requests aren't waiting past that any more: they were taken, answered or deleted, or the Web Connector is checking in again. Only ever after a `connection.stalled`.\n\nA delivery can come more than once, and deliveries can come out of order. Take each `delivery_id` once, and apply an event only when its `revision` is newer than the last you applied.",
+                "description": "Sent to the connection's `webhook_url` (set here or by Update a connection), signed with `X-QUBE-Signature` like every other webhook (see the Webhooks guide). One of four events:\n\n- `connection.connected`: the Web Connector checked in for the first time, or for the first time since your customer chose Set up again on the connection's onboarding page (`connection.setup` says which). This is the signal to act on: mark the account connected. Your customer finishes the setup on the QuickBooks computer, which usually isn't signed in to your app, so your app hears it here rather than from their browser.\n- `connection.setup_cancelled`: your customer chose Cancel setup on the onboarding page. The connection is unchanged, and its onboarding link still works, so offer them Connect again.\n- `connection.stalled`: one of your requests has waited too long to be taken: past when the Web Connector was due to take it, by the longer of 15 minutes and twice the Web Connector's schedule. `connection.stall_reason` says why. `not_checking_in`: the Web Connector hasn't checked in when it was due, so the QuickBooks computer is probably off or offline. `quickbooks_unavailable`: the Web Connector is checking in but can't reach QuickBooks, usually because QuickBooks isn't open with the company file; the wait then counts from when your request was queued. If the reason changes while the stall goes on, the event comes again with the new reason and a newer `revision`. A connection with nothing of yours waiting is never stalled, and a simulated one only when its simulator's `stalled` fault is set, to test this handler.\n- `connection.resumed`: a stalled connection's requests aren't waiting past that any more: they were taken, answered or deleted, or the Web Connector is checking in again. Only ever after a `connection.stalled`.\n\nA delivery can come more than once, and deliveries can come out of order. Take each `delivery_id` once, and apply an event only when its `revision` is newer than the last you applied.",
                 "requestBody": {
                   "content": {
                     "application/json": {
@@ -119241,6 +119376,15 @@
                           }
                         },
                         "type": "object"
+                      },
+                      "stalled": {
+                        "description": "The connection stalls, so you can test your `connection.stalled` and `connection.resumed` handling: the value is the `stall_reason` it's sent with. While it's set the Web Connector doesn't run, so your requests wait, as on a real stall; once one of them is waiting, `connection.stalled` is sent within seconds instead of after the usual grace. Sticky until cleared: set to null or omit it to send `connection.resumed` and have the waiting requests answered.",
+                        "enum": [
+                          "not_checking_in",
+                          "quickbooks_unavailable"
+                        ],
+                        "nullable": true,
+                        "type": "string"
                       }
                     },
                     "type": "object"
@@ -119500,13 +119644,22 @@
                             "completed",
                             "connection_error",
                             "auth_failed",
-                            "postponed"
+                            "postponed",
+                            "stalled"
                           ],
                           "type": "string"
                         },
                         "retry_in": {
                           "description": "With `result: postponed`: QuickBooks couldn't be reached on the last tries, so QuBe asked the Web Connector to wait this many seconds before its next scheduled run.",
                           "type": "integer"
+                        },
+                        "stall_reason": {
+                          "description": "With `result: stalled`: the `stalled` fault is set, so no session ran and your requests wait. The fault's reason.",
+                          "enum": [
+                            "not_checking_in",
+                            "quickbooks_unavailable"
+                          ],
+                          "type": "string"
                         }
                       },
                       "type": "object"
@@ -120909,14 +121062,6 @@
                       ]
                     }
                   },
-                  "realtime_required": {
-                    "value": {
-                      "errors": {
-                        "code": "realtime_required",
-                        "detail": "Workflows run on realtime connections, and this connection is standard. Upgrade it to realtime from its page in the dashboard (Upgrade to realtime, under Speed); in a sandbox app that costs nothing, since sandbox apps aren't billed. A simulated connection runs workflows too."
-                      }
-                    }
-                  },
                   "invalid_input": {
                     "value": {
                       "errors": [
@@ -120942,6 +121087,14 @@
                         "webhook_url": [
                           "may not contain a username or password"
                         ]
+                      }
+                    }
+                  },
+                  "realtime_required": {
+                    "value": {
+                      "errors": {
+                        "code": "realtime_required",
+                        "detail": "Workflows run on realtime connections, and this connection is standard. Upgrade it to realtime from its page in the dashboard (Upgrade to realtime, under Speed); in a sandbox app that costs nothing, since sandbox apps aren't billed. A simulated connection runs workflows too."
                       }
                     }
                   },
@@ -121654,7 +121807,7 @@
                 "example": {
                   "data": [
                     {
-                      "detail": "Customer",
+                      "detail": "Customer · ar@lonestar.example · 512-555-0142 · Austin 78701",
                       "label": "Lone Star Supply",
                       "value": "80000012-1712345678"
                     },
@@ -121671,8 +121824,8 @@
                       "items": {
                         "properties": {
                           "detail": {
-                            "description": "Its list, and `inactive` when it is.",
-                            "example": "Customer",
+                            "description": "Its list, `inactive` when it is, then what tells it apart, as far as the index holds it: company name, email, phone, city and postal code, account number. Parts joined with ` · `, for a person to read.",
+                            "example": "Customer · ar@lonestar.example · 512-555-0142 · Austin 78701",
                             "type": "string"
                           },
                           "label": {

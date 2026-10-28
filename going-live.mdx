@@ -23,7 +23,8 @@ Your code doesn't change between the two. The API key, the webhook secret and th
     key can't reach production connections, and the other way round, so a mix-up fails with an error.
   </Step>
   <Step title="Set up billing">
-    In the dashboard, a production app without a subscription shows **Set up billing to enable**. Add a
+    In the dashboard, a production app without a subscription shows **Set up billing to turn this app on**, and no
+    getting-started steps or **New connection** button until it has one. Add a
     payment method before your first customer connects: until your organization has billing, its
     production app can't have connections of any type, `simulated` included. Creating one, from the API,
     the CLI or the dashboard, is refused with `402` and the code `billing_required`, and nothing is
@@ -85,8 +86,9 @@ See [pricing](https://qubesync.com/#pricing) for current rates. High volume or s
 <CardGroup cols={2}>
   <Card title="Watch connections, not just requests" icon="heart-pulse">
     A connection whose `last_connected_at` is days old has a Web Connector that stopped, usually because the
-    PC is off or QuickBooks moved. Its requests wait until it's back, and your organization's owners are
-    emailed after a week.
+    PC is off or QuickBooks moved. Its requests wait until it's back, and its `webhook_url` is sent
+    `connection.stalled`, then `connection.resumed` once it's working again
+    ([Connection events](/webhooks#connection-events)).
   </Card>
   <Card title="Rotate secrets without downtime" icon="rotate">
     Webhook deliveries are signed with every active secret on the app, so you can

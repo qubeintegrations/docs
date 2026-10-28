@@ -534,7 +534,7 @@ one `v1=` per secret, so you can rotate without dropping a delivery:
     the run's page) sends the run's latest event again: its ending, or the question it's asking now,
     never an older one. It's the same body with the run's current `revision`, so your revision check
     still holds, signed with your current secret, to the run's current `webhook_url`, and retried the
-    same way. It answers `202`, or `409` `nothing_to_redeliver` while the run is still working; one per
+    same way. It answers `202`, or `409` `nothing_to_redeliver` while the run is still working or when it has no `webhook_url`; one per
     run a minute and 60 per app (`429` with `Retry-After`). A failed resend emails nobody, and a run's
     notifications aren't resent.
   </Step>
@@ -594,7 +594,7 @@ choice's `id` to `links.decisions` ([Answering a question](/workflows#answering-
     "details": [ { "label": "Customer", "value": "Riverbend" } ],
     "choices": [
       { "id": "use:1", "label": "Riverbend Electric", "description": null,
-        "detail": "similar name", "fields": [] },
+        "detail": "similar name · ap@riverbend.example · 512-555-0142", "fields": [] },
       { "id": "use", "label": "Use this one", "description": null, "detail": null,
         "fields": [ { "name": "list_id", "type": "record", "kind": "customer",
                       "label": "Search for a different one", "required": true } ] },
@@ -614,7 +614,8 @@ choice's `id` to `links.decisions` ([Answering a question](/workflows#answering-
 
 `{"choice": "use:1"}` picks Riverbend Electric: its ListID is QuBe Sync's, so your app never sends one. The
 `use` choice's `record` field is filled from `GET links.search?field=list_id&q=…`, and `links.search` is
-`null` when the question has nothing to search (always, on a standard connection).
+`null` when the question has nothing to search (a list the name index doesn't hold, or a connection
+downgraded to standard while the run was going).
 
 [Workflows → What your app receives](/workflows#what-your-app-receives) has the events, their payloads and
 the `WorkflowRunEventJob` the controller above hands them to.
