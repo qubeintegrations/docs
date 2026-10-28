@@ -143,7 +143,7 @@ stateDiagram-v2
 | `waiting` | Queued; the Web Connector hasn't picked it up yet. | |
 | <Badge color="blue">`ticketed`</Badge> | A Web Connector session has taken it. | |
 | <Badge color="blue">`sent`</Badge> | Handed to QuickBooks; waiting for its answer. | |
-| <Badge color="orange">`retryable`</Badge> | The Web Connector couldn't reach QuickBooks (not running, a dialog open, the wrong company file). QuBe Sync tries again on the next runs, with no limit, until QuickBooks can be reached or your app discards it. | Yes, when the error first appears or changes |
+| <Badge color="orange">`retryable`</Badge> | The Web Connector couldn't reach QuickBooks (closed, and the app not allowed to start it; a dialog open; the wrong or a missing company file). QuBe Sync tries again on the next runs, with no limit, until QuickBooks can be reached or your app discards it. | Yes, when the error first appears or changes |
 | <Badge color="green">`response_received`</Badge> | QuickBooks answered. Read `response_json.data`. | Yes |
 | <Badge color="red">`error`</Badge> | Failed for good, for example QuickBooks refused it (a duplicate name, a stale `edit_sequence`). | Yes |
 | <Badge color="purple">`timed_out`</Badge> | QuickBooks received it, but never responded. It may or may not have been applied. Its `error.error_type` is `timed_out`. | Yes |

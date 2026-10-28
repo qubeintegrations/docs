@@ -122,7 +122,7 @@ import { Request } from "/snippets/request.jsx";
     | --- | --- | --- |
     | `connection.connected` | The Web Connector checked in for the first time. | Marks the account connected. |
     | `connection.setup_cancelled` | Your customer chose "Cancel setup" on the onboarding page. | Offers the button again. |
-    | `connection.stalled` | Your requests have waited too long, say on a computer that's off or with QuickBooks closed. | Tells your customer what to do. |
+    | `connection.stalled` | Your requests have waited too long, say on a computer that's off, or with QuickBooks closed when the app wasn't allowed to start it. | Tells your customer what to do. |
     | `connection.resumed` | After a stall, they're being taken again. | Clears that. |
 
     The setup ends on the QuickBooks computer, which usually isn't signed in to your app, and with a setup
@@ -261,7 +261,7 @@ Showing your customer their connection status can help them self-diagnose why th
 When their web connector hasn't been heard from, the
 connection's `webhook_url` receives `connection.stalled` (and `connection.resumed` once it's polling again; see [Connection events](/webhooks#connection-events)). Its `connection.stall_reason` tells you what
 to tell your customer. `not_checking_in` means the Web Connector hasn't checked in when it was due (by the
-longer of 15 minutes and twice its schedule), so turn on the QuickBooks computer and check the Web Connector. `quickbooks_unavailable` means it is checking in but can't reach QuickBooks, so open QuickBooks with the correct
+longer of 15 minutes and twice its schedule), so turn on the QuickBooks computer and check the Web Connector. `quickbooks_unavailable` means it is checking in but can't reach QuickBooks (when the app was allowed to run with QuickBooks closed, the Web Connector opens it itself, so this usually means a dialog or the wrong company file), so open QuickBooks with the correct
 company file.
 
 ## Setting a connection up again
