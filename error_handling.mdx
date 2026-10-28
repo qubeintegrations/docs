@@ -186,7 +186,8 @@ open. Nothing was applied, and only your customer can fix it.
 
 <Steps>
   <Step title="The Web Connector can't reach QuickBooks">
-    You receive a <Badge color="orange">`retryable`</Badge> webhook. 
+    You receive a <Badge color="orange">`retryable`</Badge> webhook. You get another only if the error
+    changes (a dialog open, then QuickBooks closed), not one for each try.
   </Step>
   <Step title="Its runs back off, and the queue waits">
     While QuickBooks stays out of reach, QuBe Sync spaces out the Web Connector's automatic runs: 5, 10, 20,
@@ -199,6 +200,10 @@ open. Nothing was applied, and only your customer can fix it.
   <Step title="Your customer fixes it">
     They don't have to wait: clicking **Update Selected** tries right away. If that first click also says
     "Update postponed by application", they click it again.
+
+    There's no limit on how long the request waits: it stays <Badge color="orange">`retryable`</Badge>, with
+    no <Badge color="red">`error`</Badge> webhook, until QuickBooks can be reached or your app
+    [discards](#discarding-a-request) it.
   </Step>
   <Step title="The answer arrives">
     The next webhook is the answer. It has the same `id` and `page_request_id` as the <Badge color="orange">`retryable`</Badge> one, and
@@ -285,6 +290,10 @@ One answer can be at most **4 MB as the Web Connector sends it, about 3 MB of qb
 over that isn't kept: the request ends <Badge color="red">`error`</Badge> with `error.error_type`
 `response_too_large`, and `response_xml` is null. QuickBooks did run the request, so this isn't a lost
 answer, and asking again the same way gets the same answer.
+
+Until that limit is switched on, an answer over 4 MB is still kept. An answer over **64 MB** never is:
+QuBe Sync stops reading it, and the request ends <Badge color="purple">`timed_out`</Badge>, as a
+[lost answer](#when-the-answer-is-lost) does.
 
 | It was | What to do |
 | --- | --- |

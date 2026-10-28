@@ -69,14 +69,15 @@ when your customer connects and when your requests stall.
 | --- | --- | --- |
 | <Badge color="green">`response_received`</Badge> | QuickBooks answered. | **Apply it.** Use `response_json.data`. |
 | <Badge color="red">`error`</Badge> | It failed for good. Usually QuickBooks refused it (a duplicate name, a stale `edit_sequence`). | **Show the error.** Branch on `response_json.error.code`; show your customer `error.user_message`. |
-| <Badge color="orange">`retryable`</Badge> | The Web Connector couldn't get it into QuickBooks: QuickBooks wasn't running, a dialog was open, or the wrong company file was. Nothing was applied. | **Wait. Don't resend.** QuBe Sync keeps trying. Show your customer `error.user_message` so they can fix it. |
+| <Badge color="orange">`retryable`</Badge> | The Web Connector couldn't get it into QuickBooks: QuickBooks wasn't running, a dialog was open, or the wrong company file was. Nothing was applied. | **Wait. Don't resend.** QuBe Sync keeps trying, with no limit, until QuickBooks can be reached or your app [discards](/error_handling#discarding-a-request) it. Show your customer `error.user_message` so they can fix it. |
 | <Badge color="purple">`timed_out`</Badge> | QuickBooks received it, but its answer never came back: the customer's computer lost its connection, or QuickBooks or the Web Connector was closed, mid-request. `error.error_type` is `timed_out`. | **Check, then resend.** Queries are safe to queue again. For a create or update, check whether it was applied first: a [workflow](/workflows#lost-answers) does this for you. |
 | <Badge color="gray">`discarded`</Badge> | Your app [discarded](/error_handling#discarding-a-request) it before the Web Connector took it. `error.error_type` is `discarded` (or, if it was <Badge color="orange">`retryable`</Badge>, still the connection error it was waiting on). | **Nothing.** QuickBooks never saw it. |
 
 <Note>
-  A <Badge color="orange">`retryable`</Badge> webhook arrives when the error first appears, and again only if it changes. It isn't
-  final: the next webhook for that page is usually the answer, with the same `id` and `page_request_id`
-  and a different `state`. That's why you key on `page_request_id` plus `state`, never on the id alone.
+  A <Badge color="orange">`retryable`</Badge> webhook arrives when the error first appears, and again only if it changes, not on
+  every try. It isn't final, and no <Badge color="red">`error`</Badge> webhook follows while the request stays
+  retryable, however long that is: the next webhook for that page is usually the answer, with the same `id`
+  and `page_request_id` and a different `state`. That's why you key on `page_request_id` plus `state`, never on the id alone.
 </Note>
 
 Every webhook but <Badge color="green">`response_received`</Badge> carries an `error`. Its keys aren't the ones in
@@ -522,10 +523,11 @@ one `v1=` per secret, so you can rotate without dropping a delivery:
   <Step title="Retried for about 8 hours">
     Anything but a `2xx` within 5 seconds is a failed delivery: a 3xx (redirects aren't followed), 4xx or
     5xx, a timeout, or a refused connection. QuBe Sync retries with backoff, 12 attempts in all: the first
-    four within about 4 minutes, so a deploy or a restart loses nothing, then further apart.
+    four within about 4 minutes, so a deploy or a restart loses nothing, then further apart. Throughout, the
+    request's `webhook_state` stays `pending`, and each failed attempt is recorded with its error.
   </Step>
   <Step title="Then marked failed">
-    After the last attempt the request's `webhook_state` becomes `failed`, your organization's owners get an
+    Only after the last attempt fails does the request's `webhook_state` become `failed`; your organization's owners get an
     email, and the dashboard offers **Resend webhook**.
   </Step>
   <Step title="A run's event can be sent again">

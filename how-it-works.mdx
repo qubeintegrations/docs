@@ -143,11 +143,11 @@ stateDiagram-v2
 | `waiting` | Queued; the Web Connector hasn't picked it up yet. | |
 | <Badge color="blue">`ticketed`</Badge> | A Web Connector session has taken it. | |
 | <Badge color="blue">`sent`</Badge> | Handed to QuickBooks; waiting for its answer. | |
-| <Badge color="orange">`retryable`</Badge> | The Web Connector couldn't reach QuickBooks (not running, a dialog open, the wrong company file). QuBe Sync tries again on the next runs. | Yes, when the error first appears or changes |
+| <Badge color="orange">`retryable`</Badge> | The Web Connector couldn't reach QuickBooks (not running, a dialog open, the wrong company file). QuBe Sync tries again on the next runs, with no limit, until QuickBooks can be reached or your app discards it. | Yes, when the error first appears or changes |
 | <Badge color="green">`response_received`</Badge> | QuickBooks answered. Read `response_json.data`. | Yes |
 | <Badge color="red">`error`</Badge> | Failed for good, for example QuickBooks refused it (a duplicate name, a stale `edit_sequence`). | Yes |
-| <Badge color="purple">`timed_out`</Badge> | QuickBooks received it, but never responded. It may or may not have been applied. | Yes |
-| <Badge color="gray">`discarded`</Badge> | Your app withdrew it before the Web Connector took it. It never reached QuickBooks. | Yes |
+| <Badge color="purple">`timed_out`</Badge> | QuickBooks received it, but never responded. It may or may not have been applied. Its `error.error_type` is `timed_out`. | Yes |
+| <Badge color="gray">`discarded`</Badge> | Your app withdrew it before the Web Connector took it. It never reached QuickBooks. Its `error.error_type` is `discarded`, or the connection error it was waiting on if it was `retryable`. | Yes |
 
 The last four are final. [Error handling](/error_handling) covers what to do with each.
 
@@ -167,8 +167,8 @@ Connector runs a sync immediately, whatever the schedule.
   **"Update postponed by application" is normal.** Every connection's Web Connector is set to run every 10
   seconds, and QuBe Sync tells it to wait when it isn't due. That's how a standard connection picks up
   requests every 5 minutes, and why its **Last Result** often reads "Update postponed by application". It
-  checks in again on its own. Leave **Auto-Run** ticked and don't edit the schedule (**Every Min**) in the
-  Web Connector: QuBe Sync controls it.
+  checks in again on its own. The schedule column (**Every Min**) is blank for a QuBe Sync entry, which is
+  expected. Leave **Auto-Run** ticked and don't edit the schedule in the Web Connector: QuBe Sync controls it.
 </Note>
 
 You can switch a connection between standard and realtime from its page in the dashboard:
