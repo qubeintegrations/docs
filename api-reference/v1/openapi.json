@@ -22,13 +22,38 @@
     "/connections": {
       "get": {
         "summary": "List all connections",
-        "description": "Returns a list of all connections for the authenticated application",
+        "description": "Returns a list of all connections for the authenticated application. Send `page` or `page_size` to get them a page at a time instead, oldest first, with a `meta` block saying how many pages there are. Without either, every connection comes back in one answer and there is no `meta`, as this endpoint has always answered.",
         "tags": [
           "Connections"
         ],
         "security": [
           {
             "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "description": "Optional. Which page of the list, from 1. Sending it turns paging on."
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "description": "Optional. How many to a page, at most 100. Sending it turns paging on."
           }
         ],
         "responses": {
@@ -44,6 +69,16 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "description": "`page` or `page_size` out of range: `errors` names it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrors"
+                }
+              }
+            }
           }
         }
       },
@@ -3935,6 +3970,26 @@
             "items": {
               "$ref": "#/components/schemas/Connection"
             }
+          },
+          "meta": {
+            "type": "object",
+            "description": "Pagination metadata, only when the request sent `page` or `page_size`.",
+            "properties": {
+              "page": {
+                "type": "integer",
+                "description": "Current page number",
+                "example": 1
+              },
+              "total_pages": {
+                "type": "integer",
+                "description": "Total number of pages available",
+                "example": 1
+              }
+            },
+            "required": [
+              "page",
+              "total_pages"
+            ]
           }
         }
       },
@@ -4031,7 +4086,7 @@
             "type": "string",
             "nullable": true,
             "example": "<QBXML><QBXMLMsgsRs statusCode='0' statusSeverity='Info' statusMessage='Status OK'><CustomerQueryRs requestID='1' statusCode='0' statusSeverity='Info' statusMessage='Status OK'><CustomerRet><ListID>80000001-1234567890</ListID><Name>Sample Customer</Name></CustomerRet></CustomerQueryRs></QBXMLMsgsRs></QBXML>",
-            "description": "The QBXML response from QuickBooks. One answer can be at most 4 MB as the Web Connector sends it, about 3 MB of qbXML; QuickBooks' answer over that isn't kept: this is null and `error.error_type` is `response_too_large`."
+            "description": "The QBXML response from QuickBooks. One answer can be at most 4 MB as the Web Connector sends it, about 3 MB of qbXML; QuickBooks' answer over that isn't kept: this is null and `error.error_type` is `response_too_large`. A webhook whose body would be over 1 MB is sent without it: it is null there, `response_xml_omitted` is true, and `links.self` is the URL to GET the request from, this field included."
           },
           "response_json": {
             "type": "array",
@@ -4107,10 +4162,11 @@
                   "quickbooks_business_error",
                   "unexpected_error",
                   "response_too_large",
+                  "outcome_unknown",
                   "timed_out",
                   "discarded"
                 ],
-                "description": "Where it failed. `timed_out`: no answer came back, and QuickBooks may still have applied the request, so look before sending it again. `discarded`: QuickBooks never got it. `response_too_large`: QuickBooks answered, but with more than QuBe Sync accepts for one answer (4 MB as the Web Connector sends it, about 3 MB of qbXML), so `response_xml` and `response_json` are null. QuickBooks ran the request: page the query (`iterate`, or `iterator=\"Start\"` with `<MaxReturned>` in `request_xml`) or narrow it, and for a write, look before sending it again."
+                "description": "Where it failed. `timed_out`: no answer came back, and QuickBooks may still have applied the request, so look before sending it again. `discarded`: QuickBooks never got it. `response_too_large`: QuickBooks answered, but with more than QuBe Sync accepts for one answer (4 MB as the Web Connector sends it, about 3 MB of qbXML), so `response_xml` and `response_json` are null. QuickBooks ran the request: page the query (`iterate`, or `iterator=\"Start\"` with `<MaxReturned>` in `request_xml`) or narrow it, and for a write, look before sending it again. `outcome_unknown`: a write the Web Connector answered with an error in place of QuickBooks' answer, so whether QuickBooks applied it is not known: look in QuickBooks before sending it again. A query that fails that way is `unexpected_error`, and can be sent again."
               },
               "message": {
                 "type": "string",

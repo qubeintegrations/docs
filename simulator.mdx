@@ -185,9 +185,11 @@ exist is refused with 3140. Queries return item, group and expense lines only wi
     `applied_amount` comes off the invoice's `balance_remaining` and the credit memo's `credit_remaining`.
     An `invoice.create` can apply credit memos with `set_credit` the same way.
 
-    The part of a payment the invoice no longer needs is its `unused_payment`. As on real QuickBooks, a
-    payment's `unused_credits` is all the credit its customer's credit memos have left when you read it,
-    whether or not this payment applied any, so it falls to 0 once that credit is applied elsewhere. Each
+    The part of a payment the invoice no longer needs is its `unused_payment`: a `total_amount` above the
+    `payment_amount`s keeps the rest, and `is_auto_apply: false` keeps all of it, applied to nothing. As on
+    real QuickBooks, a payment's `unused_credits` is all the credit its customer has when you read it: what
+    its credit memos have left, plus the `unused_payment` of its other payments (never this one's), whether
+    or not this payment applied any, so it falls to 0 once that credit is applied elsewhere. Each
     `applied_to_txn_ret` gives the invoice's `balance_remaining` and `txn_date` as they are when you read
     the payment, not when it was made: after an `invoice.update` raises the total, a payment's
     `balance_remaining` rises with it. Its `amount` is the payment's part only.
@@ -358,9 +360,9 @@ curl -u "$QUBE_API_KEY:" \
 
 | Fault | Values | Behaves like | Lasts |
 | --- | --- | --- | --- |
-| `connection_error` | `qb_closed`, `modal_dialog`, `company_file_mismatch`, `unexpected` | QuickBooks not running, a dialog open, the wrong company file open, or an unexplained failure. Requests go <Badge color="orange">`retryable`</Badge>. | Until a `PUT` leaves it out |
+| `connection_error` | `qb_closed`, `company_file_missing`, `modal_dialog`, `company_file_mismatch`, `unexpected` | The Web Connector failing to reach QuickBooks right after it signs in, before it asks for any request: QuickBooks closed for an app allowed to run only while it's open, the company file missing so QuickBooks can't be started, a dialog open, the wrong company file open, or an unexplained failure. Requests go <Badge color="orange">`retryable`</Badge>, never sent. | Until a `PUT` leaves it out |
 | `next_status` | `{"code": 3100}`, or any QuickBooks status code, with an optional `message` | QuickBooks refusing the next request with that code. | One request |
-| `next_response_error` | `"xml_error"`, or `{"hresult", "message"}` | QuickBooks failing to parse the next request. | One request |
+| `next_response_error` | `"xml_error"`, or `{"hresult", "message"}` | QuickBooks failing to parse the next request. With your own `message`, the Web Connector reporting an error in place of the answer: a connection error's message leaves the request `retryable`, and any other ends a create or update [`outcome_unknown`](/error_handling#when-the-outcome-is-unknown) and a query `unexpected_error`. | One request |
 | `next_lost_response` | `true` | QuickBooks applying the next request that changes the company file (an add, change, delete, void or merge), then the Web Connector dying before it answers. Queries and reports before it are answered normally and leave the fault armed, since a lost query is simply asked again. The request ends <Badge color="purple">`timed_out`</Badge>; a workflow that sent it [settles it](/workflows#lost-answers). | The next write |
 | `next_response_too_large` | `true` | QuickBooks applying the next request, then answering it with more than the [size limit](/error_handling#when-the-answer-is-too-large) for one answer. The request ends <Badge color="red">`error`</Badge> with `error_type` `response_too_large`; a workflow that sent it sees `no_response` with reason `too_large`. Sandbox companies are too small to reach the limit otherwise. | One request |
 | `latency_ms` | `0` to `60000` | QuickBooks taking its time over each answer. | Until a `PUT` leaves it out |
@@ -428,6 +430,7 @@ Walk every path before your customers do:
 | Record changed before a workflow's update | A chart of your own with an update state: change the record through the API, then run the update with the `edit_sequence` from before | Answer the [conflict prompt](/workflows#conflicts): `overwrite` or `keep` |
 | Missing reference | `next_status: {code: 3140}` | Create the referenced record, or tell the user |
 | QuickBooks closed | `connection_error: qb_closed` | Show `error.user_message`, not resend; the answer follows once you clear the fault |
+| Company file moved or missing | `connection_error: company_file_missing` | Show `error.user_message`; your customer opens the right file or fixes the Web Connector's entry |
 | Wrong company file | `connection_error: company_file_mismatch` | Show `error.user_message` |
 | Computer off, or QuickBooks closed for long | `stalled: not_checking_in` or `quickbooks_unavailable`, then queue a request | Tell your customer by the `stall_reason` on `connection.stalled`, and clear the warning on `connection.resumed` |
 | Slow QuickBooks | `latency_ms: 20000` | Keep your UI responsive while it waits |

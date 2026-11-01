@@ -19,7 +19,8 @@ Your code doesn't change between the two. The API key, the webhook secret and th
 
 <Steps>
   <Step title="Configure production credentials">
-    Copy the production app's API key and webhook secret into your production environment. Your sandbox
+    Put the production app's API key and webhook secret into your production environment: an owner
+    generates a key on the production app's page and copies it when it's shown, the only time it is. Your sandbox
     key can't reach production connections, and the other way round, so a mix-up fails with an error.
   </Step>
   <Step title="Set up billing">
@@ -94,7 +95,7 @@ See [pricing](https://qubesync.com/#pricing) for current rates. High volume or s
     Webhook deliveries are signed with every active secret on the app, so you can
     [rotate](/webhooks#rotate-your-webhook-secret) by adding a new one before expiring the old. API keys work
     the same way: create the new key, deploy it, then expire the old one. Expiring a key takes effect
-    immediately.
+    immediately. Making, expiring and copying keys and secrets is for your organization's owners.
   </Card>
   <Card title="Use the dashboard to investigate" icon="magnifying-glass">
     Every request shows what was sent, what QuickBooks answered, and each webhook attempt, with a

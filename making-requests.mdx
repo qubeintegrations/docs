@@ -476,7 +476,7 @@ test suite, not on your customer's PC. You get `400` and nothing is queued:
 
 | How it works | What to do |
 | --- | --- |
-| **Requests run in the order you queued them**, one connection at a time. | Queue a request that depends on another (an invoice for a customer you're creating) **from the first one's webhook**, not alongside it. Or let a [workflow](/workflows) run the sequence for you. |
+| **Requests run in the order you queued them**, one connection at a time. If a Web Connector session ends with a request taken but not answered, what was queued after it waits until it's answered, put back or [timed out](/error_handling#when-the-answer-is-lost). | Queue a request that depends on another (an invoice for a customer you're creating) **from the first one's webhook**, not alongside it. Or let a [workflow](/workflows) run the sequence for you. |
 | **Every call queues a new request.** If your app sends the same call twice, QuickBooks runs it twice: two calls to create an invoice make two invoices. QuBe Sync itself never resends a request QuickBooks might have received. It only retries a request the Web Connector couldn't deliver at all. | **Retry with an idempotency key.** Send an `Idempotency-Key` header with each call, and a call you send again after a timeout queues nothing new (see [Retrying a call safely](#retrying-a-call-safely)). |
 | **QuBe Sync is already retrying** a request that's <Badge color="orange">`retryable`</Badge>. | **Don't resend it.** See [Error handling](/error_handling). |
 
@@ -499,7 +499,7 @@ curl -u "$QUBE_API_KEY:" \
   [starting a workflow run](/workflows) take one. Other calls ignore the header.
 
   A key belongs to your app, so your sandbox and production apps never share one. It lasts until what it
-  created is purged, 60 days after the request is answered or the run ends, and then frees up: a retry
+  created is purged, 60 days after the request is answered or the run ends (90 after a request fails), and then frees up: a retry
   after that queues something new.
 </ParamField>
 

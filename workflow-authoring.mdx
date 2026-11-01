@@ -189,8 +189,10 @@ stateDiagram-v2
                     "description": "The customer to add if it isn't there, exactly as you would POST it to the v2 customer.create endpoint. Its name is what is looked for." }
     },
     "outcomes": {
-      "found": { "description": "A customer has this name, or your app picked one. Nothing was added." },
-      "created": { "description": "Nothing was like it, or your app said none of them is it, so the customer you sent was added." }
+      "found": { "description": "A customer has this name, or your app picked one. Nothing was added.",
+                 "headline": "Found ${input.customer.name} in QuickBooks." },
+      "created": { "description": "Nothing was like it, or your app said none of them is it, so the customer you sent was added.",
+                   "headline": "Added ${input.customer.name} to QuickBooks." }
     },
     "initial": "look_up",
     "on": {
@@ -333,6 +335,11 @@ stateDiagram-v2
     Customers, vendors, items and every transaction query page this way. A query QuickBooks doesn't iterate
     (accounts, classes and the other short lists, the deleted-records queries, the company queries, reports)
     answers whole and arrives as page 1 with `more` false, so the same chart works over it.
+
+    A run takes at most 500 transitions, then fails with fault `transition_limit`. Each handled page costs
+    about two (to the page's state and back), so one run gets through about 250 pages: 25,000 records at the
+    default `page_size`, 50,000 at 200. For more, raise `page_size` or split the job over runs, by date range
+    say (the limits are under [Good to know](/workflows#good-to-know)).
   </Accordion>
   <Accordion title="Notify states" description="name, data" icon="bell">
     | Key | What it does |
@@ -816,7 +823,7 @@ order, at most 200.
 | `each` | The list. One that renders to nothing, such as an `items` the run wasn't sent, is empty: the state raises `success` at once with `response.data` `[]`. |
 | `as` | Where each element is: `each.<as>`, `item` by default. Its position is `each.index` and the length `each.count`. |
 | `input` | Rendered per element. |
-| `on_item_error` | `stop`, the default: the first failure raises `error` instead ("item 2 of 3: ..."). `continue`: the others go ahead. |
+| `on_item_error` | `stop`, the default: the first failure raises `error` instead ("item 2 of 3: ...", the element named by `as`: `"as": "ref"` reads "reference 2 of 3"). `continue`: the others go ahead. |
 | `stop_on` | Endings of the called workflow, such as `["cancelled"]`, that end the loop: the first element whose run ends in one is the last, and the elements after it never start, so your app isn't asked about them. Each must be an outcome the called workflow declares (or `completed`), and not a failure, which `on_item_error` decides. |
 
 The state raises one `success` with the outputs in `response.data`, how each ended in `response.outcomes`, and
@@ -910,7 +917,8 @@ different lists mixed:
 <Note>
   **None of these handles lost answers:** the run settles those before a state hears of them. `upsert` does
   handle one race. When its add meets 3100 because something created the name after the lookup, it runs
-  `resolve` once more, counting its looks with `$add` in the state's `entry`, so that it looks at most twice.
+  `resolve` once more, counting its looks with `$add` in the state's `entry`. When the second look finds
+  nothing too, another list holds the name, and it runs `ensure` with `lookup: false` for `ensure`'s question.
 </Note>
 
 ## Sending your app data from a chart
@@ -1032,8 +1040,10 @@ sent them: a key that renders to nothing is dropped, so one chart serves records
       "email": { "type": "string", "required": false, "description": "Its email, when your app has one: a candidate with the same email ranks first.", "example": "ap@acme.example" }
     },
     "outcomes": {
-      "found": { "description": "One customer is the one your app meant: exactly that name, or the one your app picked. `list_id` is its ListID." },
-      "not_found": { "description": "Nothing in the file is that customer. Nothing was changed." }
+      "found": { "description": "One customer is the one your app meant: exactly that name, or the one your app picked. `list_id` is its ListID.",
+                 "headline": "Found ${input.name} in QuickBooks." },
+      "not_found": { "description": "Nothing in the file is that customer. Nothing was changed.",
+                     "headline": "No customer in QuickBooks is ${input.name}; nothing was changed." }
     },
     "initial": "look_up",
     "states": {

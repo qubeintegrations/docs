@@ -79,7 +79,8 @@ sequenceDiagram
     <div>
       **One request at a time, in order**
 
-      A connection's requests go to QuickBooks in the order you queued them. If one request depends on the
+      A connection's requests go to QuickBooks in the order you queued them, even when a Web Connector session
+      ends part way: what was queued later waits. If one request depends on the
       answer to another, queue it from the first
       request's webhook. Better yet, let a [workflow](/workflows) do the sequencing.
     </div>
@@ -145,7 +146,7 @@ stateDiagram-v2
 | <Badge color="blue">`sent`</Badge> | Handed to QuickBooks; waiting for its answer. | |
 | <Badge color="orange">`retryable`</Badge> | The Web Connector couldn't reach QuickBooks (closed, and the app not allowed to start it; a dialog open; the wrong or a missing company file). QuBe Sync tries again on the next runs, with no limit, until QuickBooks can be reached or your app discards it. | Yes, when the error first appears or changes |
 | <Badge color="green">`response_received`</Badge> | QuickBooks answered. Read `response_json.data`. | Yes |
-| <Badge color="red">`error`</Badge> | Failed for good, for example QuickBooks refused it (a duplicate name, a stale `edit_sequence`). | Yes |
+| <Badge color="red">`error`</Badge> | Over, and not tried again, for example QuickBooks refused it (a duplicate name, a stale `edit_sequence`). With `error.error_type` `outcome_unknown`, a create or update may still have been saved. | Yes |
 | <Badge color="purple">`timed_out`</Badge> | QuickBooks received it, but never responded. It may or may not have been applied. Its `error.error_type` is `timed_out`. | Yes |
 | <Badge color="gray">`discarded`</Badge> | Your app withdrew it before the Web Connector took it. It never reached QuickBooks. Its `error.error_type` is `discarded`, or the connection error it was waiting on if it was `retryable`. | Yes |
 
@@ -242,8 +243,8 @@ To see when a connection will next pick up requests, read it on the connection
     <div>
       **Retention**
 
-      A finished request and its answer are kept for 60 days, then deleted. Workflow runs age out on the same
-      schedule. These can also be deleted immediately upon receipt by your app via the API.
+      An answered request is kept for 60 days, then deleted, and one that failed (`error`, `timed_out` or
+      `discarded`) for 90. Workflow runs, and the requests they sent, age out after 60 days. These can also be deleted immediately upon receipt by your app via the API.
     </div>
   </div>
 </div>

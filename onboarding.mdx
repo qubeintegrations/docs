@@ -290,7 +290,11 @@ the Web Connector needs yourself:
 <Steps>
   <Step title="The QWC file">
     [`POST /connections/{id}/qwc`](/api-reference/v2/connections/get-the-qwc-file) returns it. Offer it as
-    a download. QuickBooks has to be open with the company file when they add it.
+    a download. QuickBooks has to be open with the company file when they add it. A company file takes a
+    connection's setup file once: adding one again is refused with QBWC1039 until the first is cleared, so
+    beside the download, link
+    [Common problems](/common-problems#unique-ownerid-fileid-pair-value-required-when-adding-the-setup-file)
+    for the customer who sees that.
   </Step>
   <Step title="A password">
     [`POST /connections/{id}/password`](/api-reference/v2/connections/generate-or-set-a-password)

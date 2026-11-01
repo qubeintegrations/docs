@@ -68,7 +68,7 @@ when your customer connects and when your requests stall.
 | `state` | What happened | What to do |
 | --- | --- | --- |
 | <Badge color="green">`response_received`</Badge> | QuickBooks answered. | **Apply it.** Use `response_json.data`. |
-| <Badge color="red">`error`</Badge> | It failed for good. Usually QuickBooks refused it (a duplicate name, a stale `edit_sequence`). | **Show the error.** Branch on `response_json.error.code`; show your customer `error.user_message`. |
+| <Badge color="red">`error`</Badge> | It's over, and QuBe Sync won't try again. Usually QuickBooks refused it (a duplicate name, a stale `edit_sequence`). With `error.error_type` `outcome_unknown`, the Web Connector reported an error in place of QuickBooks' answer to a create or update, so it may have been saved. | **Show the error.** Branch on `response_json.error.code`; show your customer `error.user_message`. For [`outcome_unknown`](/error_handling#when-the-outcome-is-unknown), check whether it was applied before resending. |
 | <Badge color="orange">`retryable`</Badge> | The Web Connector couldn't get it into QuickBooks: QuickBooks wasn't running, a dialog was open, or the wrong company file was. Nothing was applied. | **Wait. Don't resend.** QuBe Sync keeps trying, with no limit, until QuickBooks can be reached or your app [discards](/error_handling#discarding-a-request) it. Show your customer `error.user_message` so they can fix it. |
 | <Badge color="purple">`timed_out`</Badge> | QuickBooks received it, but its answer never came back: the customer's computer lost its connection, or QuickBooks or the Web Connector was closed, mid-request. `error.error_type` is `timed_out`. | **Check, then resend.** Queries are safe to queue again. For a create or update, check whether it was applied first: a [workflow](/workflows#lost-answers) does this for you. |
 | <Badge color="gray">`discarded`</Badge> | Your app [discarded](/error_handling#discarding-a-request) it before the Web Connector took it. `error.error_type` is `discarded` (or, if it was <Badge color="orange">`retryable`</Badge>, still the connection error it was waiting on). | **Nothing.** QuickBooks never saw it. |
@@ -189,6 +189,14 @@ The four fields you act on, from the example at the top of this page.
     The raw qbXML QuickBooks sent back, if you ever need it. With `response_json` beside it, a webhook
     comes to about 1.7 times QuickBooks' answer: a page of 100 records is typically a few hundred KB. It's
     null when the answer was over the [size limit](/error_handling#when-the-answer-is-too-large).
+
+    It's also null when the webhook would be over **1 MB**: then `response_xml_omitted` is `true` and
+    `links.self` is the request's URL in the API. GET it with your API key for `response_xml`.
+    `response_json` is always in the webhook.
+  </ResponseField>
+  <ResponseField name="response_xml_omitted, links.self" type="boolean, string">
+    Only in a webhook sent without `response_xml` because of its size. `links.self` is where to fetch the
+    request, `response_xml` included.
   </ResponseField>
 </Accordion>
 
@@ -588,6 +596,7 @@ choice's `id` to `links.decisions` ([Answering a question](/workflows#answering-
   "reference": "contact-381-9b2f6c1e-0d4a-4f7e-8a7b-2a1c3d4e5f60",
   "revision": 6,
   "run_state": "awaiting_input",
+  "headline": "No record has exactly that name. Pick the one you meant, say none of these is it, or cancel.",
   "prompt": {
     "id": "resolve / ask",
     "token": "Vq3kT9xRb2LmW8sZ",
@@ -603,8 +612,7 @@ choice's `id` to `links.decisions` ([Answering a question](/workflows#answering-
       { "id": "none", "label": "None of these", "description": null, "detail": null, "fields": [] },
       { "id": "cancel", "label": "Cancel", "description": null, "detail": null, "fields": [] }
     ],
-    "data": { … },
-    "options": [ … ]
+    "data": { … }
   },
   "links": {
     "decisions": "https://qubesync.com/api/v2/connections/4fdde583-…/workflow-runs/fb1951a1-…/decisions?prompt_token=Vq3kT9xRb2LmW8sZ",
@@ -618,6 +626,44 @@ choice's `id` to `links.decisions` ([Answering a question](/workflows#answering-
 `use` choice's `record` field is filled from `GET links.search?field=list_id&q=…`, and `links.search` is
 `null` when the question has nothing to search (a list the name index doesn't hold, or a connection
 downgraded to standard while the run was going).
+
+Every run webhook has a `headline`: one plain sentence saying what happened, for a log line or the status
+you show on the record. Show it; never parse it. An ending says the rest as data: `outcome`, `output` with
+only the keys that ending sets, and on `workflow_run.failed` an `error` object. Its `code` is QuickBooks'
+status code when QuickBooks refused something (null otherwise), `type` a stable name for what failed
+(`name_in_use`), `message` a plain sentence to show, `quickbooks_message` QuickBooks' own words and `hint`
+what usually fixes it. `summary.changes` lists what the run changed in QuickBooks. A run that works through
+a list, such as `push_records`, says what happened to each record in one `items` list, with the same `error`
+object on each one that failed:
+
+```json workflow_run.completed (abridged)
+{
+  "event": "workflow_run.completed",
+  "run_state": "completed",
+  "headline": "1 of 2 records failed; the others went through.",
+  "workflow": "push_records",
+  "outcome": "pushed_with_errors",
+  "output": {
+    "counts": { "total": 2, "failed": 1, "created": 1 },
+    "items": [
+      { "index": 0, "name": "Riverbend Electric", "outcome": "failed",
+        "error": { "code": 3100, "type": "name_in_use",
+                   "message": "QuickBooks already has a record with this name. Choose a different name, or update the existing record instead of creating a new one.",
+                   "quickbooks_message": "The name \"Riverbend Electric\" of the list element is already in use.",
+                   "hint": "QuickBooks requires names to be unique across those lists. Query for the name first, or choose a different one -- the ensure template does both." } },
+      { "index": 1, "name": "Juniper Lane", "outcome": "created",
+        "record": { "list_id": "80000031-1790470701", "full_name": "Juniper Lane", … } }
+    ]
+  },
+  "summary": {
+    "ended_at": "2026-10-30T18:02:11Z",
+    "changes": [ { "action": "create", "kind": "customer", "list_id": "80000031-1790470701",
+                   "full_name": "Juniper Lane", "item": 1 } ],
+    "decisions": []
+  },
+  "links": { "run": "https://qubesync.com/api/v2/connections/4fdde583-…/workflow-runs/fb1951a1-…", "ui": "…" }
+}
+```
 
 [Workflows → What your app receives](/workflows#what-your-app-receives) has the events, their payloads and
 the `WorkflowRunEventJob` the controller above hands them to.

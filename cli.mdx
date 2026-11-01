@@ -64,6 +64,11 @@ qube connections create --simulated --name "Local dev" --use   # a fake QuickBoo
 `qube env --write` names the variables it wrote and prints nothing of their values. `qube env --print`
 prints them in full as `export` lines, if you want to see them.
 
+QuBe Sync keeps only a hash of each API key, so `qube env` makes a new key for your session, listed on
+the app's page as `qube CLI: <session name>`. Running it again in the same session replaces that key, and
+the one written before stops working. Only an organization's owners can run it: a member's session gets
+`403 owner_only`.
+
 If the file already exists, `--write` changes only its `QUBE_*` lines: those already there are updated in
 place, keeping any `export` in front, the missing ones are added at the end, and every other line stays
 as it was. If `.env` is a symbolic link, the file it points to is the one updated.
@@ -379,7 +384,7 @@ A session belongs to you, in one organization.
 
 | Approved with | It can | It can't |
 | --- | --- | --- |
-| **Sandbox** scope (the default) | List the organization's sandbox apps, read their API keys and webhook secrets, and act on their connections. | See production apps, or change billing, members or your account. |
+| **Sandbox** scope (the default) | List the organization's sandbox apps, get their API keys and webhook secrets (owners only), and act on their connections. | See production apps, or change billing, members or your account. |
 | **Every app** scope | The same, in production apps too. | Change billing, members or your account. |
 | **Read-only** access | List and show what its scope reaches, run QuickBooks queries, [match names](/matching), validate charts, download a connection's QWC file and [receive webhooks](#receive-webhooks-locally) with `qube listen`. | Create, change, delete, discard, run or answer anything, or read an app's API key or webhook secret, so `qube env` isn't available to it. |
 

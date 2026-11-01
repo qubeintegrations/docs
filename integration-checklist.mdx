@@ -419,6 +419,18 @@ are. If the session ends partway, the next page ends `error`, and the query has 
 from page 1. See [Handling far edge cases](/pagination#handling-far-edge-cases) and
 [If the session ends partway](/pagination#if-the-session-ends-partway).
 
+### `fetch-omitted-response-xml`
+
+<Badge color="gray">Minor</Badge> Applies when the app reads `response_xml` from request webhooks.
+
+**When a request's webhook has `response_xml_omitted: true`, GET its `links.self` with your API key
+for `response_xml`.**
+
+A webhook that would be over 1 MB comes without `response_xml`: it's null, and `links.self` is the
+request's URL in the API, `response_xml` included. `response_json` is always there, so an app that
+reads only `response_json` needs nothing here. This one GET, in the webhook's job, isn't polling:
+the answer is already in. See [Payload fields](/webhooks#payload-fields).
+
 ## Questions and endings
 
 What a workflow run asks your app, and every way it ends.
@@ -587,14 +599,20 @@ requests itself.
 <Badge color="orange">Major</Badge> Applies when the app queues QuickBooks writes itself (a workflow
 settles its own).
 
-**Treat a `timed_out` request as perhaps applied: queue a query again, but look before you send a
-create or an update again.**
+**Treat a `timed_out` request, or an `error` with `error_type` `outcome_unknown` or
+`response_too_large`, as perhaps applied: queue a query again (a too-large one paged or narrowed),
+but look before you send a create or an update again.**
 
 `timed_out` means QuickBooks received the request but its answer never came back: the customer's
 computer lost its connection, or QuickBooks or the Web Connector was closed, while the request was
 being processed. An `Idempotency-Key` doesn't help here, since the request was queued and sent:
-sending it again with its key only returns it. See
-[When the answer is lost](/error_handling#when-the-answer-is-lost) and
+sending it again with its key only returns it. `outcome_unknown` is the same for a write the Web
+Connector reported an error on mid-request: QuickBooks may have applied it. `response_too_large`
+means QuickBooks ran the request and answered with more than one answer may hold, so the answer
+wasn't kept: a write happened, and a query needs smaller pages or a narrower filter, not the same
+request again. See [When the answer is lost](/error_handling#when-the-answer-is-lost),
+[When the outcome is unknown](/error_handling#when-the-outcome-is-unknown),
+[When the answer is too large](/error_handling#when-the-answer-is-too-large) and
 [Lost answers](/workflows#lost-answers).
 
 ### `retryable-not-resent`

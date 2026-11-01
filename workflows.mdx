@@ -322,35 +322,36 @@ you see a question and its answer.
         "reference": "contact-381-9b2f6c1e-0d4a-4f7e-8a7b-2a1c3d4e5f60",
         "revision": 11,
         "run_state": "completed",
+        "headline": "Created Lone Star Supply Co (customer) in QuickBooks under the new name.",
         "workflow": "ensure",
         "outcome": "created_renamed",
         "output": {
           "record": { "list_id": "80000024-1790470634", "full_name": "Lone Star Supply Co (customer)",
                       "email": "orders@lonestarsupply.example", "is_active": true, … },
-          "how": null,
           "list": "customer"
         },
-        "error": null,
         "summary": {
           "ended_at": "2026-09-27T00:57:14.482113Z",
-          "stopped_at": "try_add",
-          "side_effects": [
-            { "state": "try_add", "workflow": "ensure", "operation": "customer.create",
-              "identifiers": { "list_id": "80000024-1790470634", "full_name": "Lone Star Supply Co (customer)" } }
+          "changes": [
+            { "action": "create", "kind": "customer", "list_id": "80000024-1790470634",
+              "full_name": "Lone Star Supply Co (customer)" }
           ],
           "decisions": [
-            { "state": "ask_rename", "workflow": "ensure", "option": "rename", "at": "2026-09-27T00:57:10.418204Z" }
+            { "question": "ask_rename", "choice": "rename", "at": "2026-09-27T00:57:10.418204Z" }
           ]
         }
       }
       ```
 
-      The webhook's `summary` is what your app acts on: what the run changed in QuickBooks
-      (`side_effects`) and every decision it was given, plus `unconfirmed` when a change QuickBooks never
-      answered couldn't be settled, and `notifications` when the run [sent your app data](#sending-your-app-data).
-      Each entry names the `workflow` whose state it was, which tells a called workflow's step from the run's
-      own. The run itself (`GET links.run`) has the whole summary, which also lists every request the run
-      sent (`requests`), the workflows it called (`calls`), what its matches found (`matches`) and what a cancel
+      `headline` says what happened in one sentence, for a log line or a status on your page: show it, never
+      parse it. `output` has only the keys this ending sets. The webhook's `summary` is what your app acts on:
+      what the run changed in QuickBooks (`changes`: the `action`, the record's `kind` and its ids, and `item`
+      for one element of a list) and every decision it was given (`question`, the `prompt.id` it answered, `choice`, `at`, and `item` for one element of
+      a list), plus `unconfirmed` when a change QuickBooks
+      never answered couldn't be settled, `notifications` when the run [sent your app data](#sending-your-app-data),
+      and `stopped_at` when it failed or was cancelled. The run itself (`GET links.run`) has the whole summary,
+      which also names the state that made each change (`side_effects`) and lists every request the run sent
+      (`requests`), the workflows it called (`calls`), what its matches found (`matches`) and what a cancel
       withdrew (`discarded`). Those lists grow with the run, so a webhook leaves them out.
     </Accordion>
   </Step>
@@ -376,10 +377,10 @@ the query to send, such as `{"operation": "customer.query", "params": {"active_s
 | Template | What it does |
 | --- | --- |
 | `ensure` | Finds a list record of any kind as `resolve` does, and creates it from your add when nothing is it. A record of the same list with exactly the name is used without asking; a near match, or the name held by another list, is your app's to decide. |
-| `upsert` | Updates a list record if it finds one, as `resolve` does, and creates it if not. |
+| `upsert` | Updates a list record if it finds one, as `resolve` does, and creates it if not. A name another list holds is your app's to decide, as in `ensure`. |
 | `push_records` | Runs `upsert` for up to 200 records, in order, in one run. |
 | `add_transaction` | Makes sure every customer, item, class and account a transaction names exists, then adds it, and says for each how it was found or made. Any transaction. |
-| `record_payment` | Finds an invoice and records a payment against it. |
+| `record_payment` | Finds an invoice and records a payment against it. A payment over what the invoice owes, or for an invoice QuickBooks doesn't have, is your app's to decide. |
 | `void_transaction` | Finds a transaction, then voids or deletes it. |
 
 **Send QuickBooks data to your app.** Each sends [notifications](#sending-your-app-data), so each needs a
@@ -402,12 +403,12 @@ the query to send, such as `{"operation": "customer.query", "params": {"active_s
     | --- | --- | --- | --- |
     | `resolve` | Finds a list record of `kind` (`customer`, `vendor`, `employee`, `other_name`, `entity` for those four, `item` or one item type, `account`, `class`, `terms`, `sales_tax_code` and the other lists a transaction names) by the `list_id` your app stored, then by `name`, under `parent` (full name or ListID) for a job or a sub-item. The name is [matched](/matching) by rank on a realtime or simulated connection, with `fields` such as `email` or `account_number` for a customer, vendor, employee or other name, and through QuickBooks' own exact and "contains" filters on a connection downgraded to standard while the run is going. Only an exact match is used without asking, or a strong one with `accept: "strong"`. What it finds is read whole by its ListID before it's used, and matched once more if it was deleted since. With `pick: true`, nothing found asks your app to pick one of the active records instead of ending `not_found`. With `adds: true`, the caller adds the record when no near match is it, so the question's none choice reads `None of these: add "<name>" as new` (`ensure` and `add_transaction` send it when they have an add). It only finds: `ensure` and `upsert` write. | `ask` for a strong match or near matches: `use:1`, `use:2`, ... (one choice per match), `use` (a search, on a realtime or simulated connection), `none` (ends `not_found`) or `cancel`. `ask_detail` (or `ask_name`, for a list without an address) when more than 10 are alike: `narrow` (with an `account_number`, `city`, `postal_code` or fuller `name`), `none` or `cancel`, three times at most. With `pick`, `ask_pick`: `use:1`, `use:2`, ... (one choice per active record, up to 25), `use` (a search, on a realtime or simulated connection) or `cancel` | `found`, `picked`, `not_found`, `cancelled` |
     | `ensure` | Runs `resolve`, then sends your `add` (the body `POST /<kind>` takes; `kind` is the list it goes to, such as `customer` or `item_service`) when nothing is the record. A record of the add's own list with exactly the name is found and used without asking (on a realtime or simulated connection, before the add goes out); only a near match asks. A name already held in its name space (customers, vendors, employees and other names share one; every item type another) is a 3100: it finds what holds the name and asks. Allows five renames. Without an `add`, it creates nothing, and `resolve` asks your app to pick one of the active records instead. With `lookup: false` it sends the add without looking, for a caller that already did. | Through `resolve` (`ask_pick` without an `add`). `ask_use`: `use_existing`, `rename` (with `name`), `cancel`. `ask_rename` when another list holds the name: `rename`, `cancel` | `found`, `picked`, `created`, `created_renamed`, `used_existing`, `cancelled`; fails as `renames_exhausted` |
-    | `upsert` | Finds a list record as `resolve` does (`kind`, the name and parent in your `add`, optional `list_id`, `fields` and `accept`) and sends your `update` to it with its ListID filled in; the engine reads the edit sequence first and asks before overwriting a record someone changed since. Nothing is the record: sends your `add` instead, looking once more if the name was taken in between. | `resolve / ask`: `use:1`, ... (one per match), `use` (a search), `none` (then the add goes out) or `cancel`. And the [conflict prompt](#conflicts) when the record changed after it was read | `updated`, `created`, `cancelled`; fails as `name_taken` when the update renames it to a name in use |
-    | `push_records` | Runs `upsert` once per entry of `records` -- at most 200, each the `kind`, `add`, `update`, `list_id`, `fields` and `accept` that `upsert` takes, records of different lists mixed -- one at a time, in order, in one run. A record QuickBooks refuses, or one that isn't a valid `upsert` input, is listed in `errors` and the next one goes. For a webhook per record, run `upsert` once per record instead. | Through `upsert`, for each record that asks | `completed` |
+    | `upsert` | Finds a list record as `resolve` does (`kind`, the name and parent in your `add`, optional `list_id`, `fields` and `accept`) and sends your `update` to it with its ListID filled in; the engine reads the edit sequence first and asks before overwriting a record someone changed since. Nothing is the record: sends your `add` instead, looking once more if the name was taken in between. If that look finds nothing, another list of the name space holds the name (a vendor named like your customer), and `ensure` asks its question. | `resolve / ask`: `use:1`, ... (one per match), `use` (a search), `none` (then the add goes out) or `cancel`. `taken / ask_rename` when another list holds the name: `rename` (with `name`, five times at most) or `cancel` (`taken / ask_use` when an item of another type holds it: `use_existing` sends the update to that item). And the [conflict prompt](#conflicts) when the record changed after it was read | `updated`, `created`, `created_renamed`, `cancelled`; fails as `name_taken` when the update renames it to a name in use, or `renames_exhausted` |
+    | `push_records` | Runs `upsert` once per entry of `records` -- at most 200, each the `kind`, `add`, `update`, `list_id`, `fields` and `accept` that `upsert` takes, records of different lists mixed -- one at a time, in order, in one run. A record QuickBooks refuses, one renamed five times to names all taken, or one that isn't a valid `upsert` input, is an entry of `items` with its `error`, and the next one goes. For a webhook per record, run `upsert` once per record instead. | Through `upsert`, for each record that asks | `pushed` (no record failed), `pushed_with_errors` (one or more did; the rest still went) |
     | `add_transaction` | Sends any transaction add (`operation`, such as `invoice.create`, and its `params`, lines included) once every list record it names exists, in two passes over its distinct references (the same item on five lines is one). First it finds each with `resolve`, writing nothing: every question comes here, and a cancel ends the run with nothing created and nothing more asked. An account, sales tax code, terms, price level or sales tax item that isn't there is your app's to pick. Customers, vendors, other names and items that aren't there and that your app sent no complete add for (none, or an item add without its accounts) are asked about in one question, `ask_missing`, a row each: create it (an item's type and accounts, where the add doesn't say them, are your user's to choose) or use one QuickBooks has. Then it creates what the first pass didn't find, a reference sent with a stored ListID that names nothing any more included, with `ensure`: a customer, vendor, employee or item from the add your app sent for it in `adds`, a class, payment method, ship method or customer message from its name alone. Each entry of `adds` is `{"kind": "item_service", "add": {...}}`, matched to a reference by full name, and may carry `fields` (`email`, `phone`, `account_number`, `city`, `postal_code`, `company_name`) and `accept` (`strong`), which `resolve` matches that reference with in the first pass; a reference without an entry is matched on its name alone, and only an exact match is used without asking. `references` changes those rules by kind (`ensure`, `create` or `must_exist`). A cancel at a name clash there stops the rest. Then the add goes out with every reference as its ListID, and a lost answer is [settled by the run](#lost-answers): the run stamps the add with a GUID, and looks for it by the reference number your app sent, which QuickBooks answers whole, or else among the transactions for the same customer or vendor and date, at most 50. One carrying the GUID is the add, and the run reads it whole by its TxnID and uses it. A whole answer without it (by reference number, or fewer than 50) means the add didn't go in, and the run sends it again. | Through `resolve` in the first pass, and `ensure`'s name clash questions in the second, for each reference that asks. `ask_missing` between them, once, for every record with no complete add: `proceed` (a `rows` field, [below](#a-table-of-rows)) or `cancel`. And `ask_about_add` when the run could not settle whether the add went in either way: `use_existing:1`, `use_existing:2`, ... (one choice per candidate, its TxnID QuBe Sync's: the run reads that transaction whole by it before ending `added`; by `option`, `use_existing` takes a `txn_id`, and one QuickBooks has no transaction for asks again, saying so in the message and in `data.not_found`, and the third ends `no_such_transaction`), `add_again`, `cancel`. Its `data.why` says which: `unsettled`, the `candidates` the check found could be it (`candidates_complete` is true when they're every transaction that could be, so if none is it, it wasn't added); `no_response`, the check went unanswered too, so there are no candidates and nothing is known | `added`, `cancelled`; fails as `unanswered_twice` or `no_such_transaction` |
     | `resolve_transaction` | Finds a transaction by the `txn_id` your app stored, then by its `ref_number`, then by the filters your `query` carries (a customer, a date range), picking out the one carrying the `external_guid` your app kept from the add. One transaction with the number and no GUID to check is it; anything less sure is offered to your app. Without line items: read it whole by `txn_id` when you need them. | `ask`: `use:1`, `use:2`, ... (one choice per candidate), `none` (ends `not_found`) or `cancel` | `found`, `picked`, `not_found`, `cancelled` |
     | `void_transaction` | Finds a transaction of `kind` as `resolve_transaction` does, then voids it, or deletes it when `action` is `delete`. QuickBooks voids sixteen types (invoice, bill, check, journal_entry and the others `kind` lists) and deletes those and nine more (sales_order, estimate, purchase_order, receive_payment, time_tracking and four others), so a delete takes kinds a void does not; asking to void one of those nine fails at once, before anything is sent, and says to pass `action` `delete`. An invoice that payments paid can be voided: the payments stay, with what they had applied to it now their `unused_payment`. Nothing is voided or deleted until the transaction is identified. | Through `resolve_transaction` | `voided`, `deleted`, `not_found`, `cancelled` |
-    | `record_payment` | Finds an invoice as `resolve_transaction` does and records a `payment` (a `receive_payment.create` body: how it was paid) for the invoice's own customer, applied to that invoice; the amount defaults to what the invoice still owes. An invoice already paid in full is reported, not paid again. | Through `resolve_transaction` | `applied`, `already_paid`, `not_found`, `cancelled` |
+    | `record_payment` | Finds an invoice as `resolve_transaction` does and records a `payment` (a `receive_payment.create` body: how it was paid) for the invoice's own customer, applied to that invoice; the amount defaults to what the invoice still owes. An invoice already paid in full is reported, not paid again. QuickBooks refuses a payment over the invoice's balance, so the run asks first. When no invoice is found and the `payment` names its `customer_ref`, it lists that customer's open invoices (up to 25) and asks; without a `customer_ref` it ends `not_found`. | Through `resolve_transaction`. `ask_over` when the amount is more than the invoice owes: `apply_owed` (the balance applied, the rest left on the payment as the customer's credit), `unapplied` (the whole payment, applied to nothing) or `cancel`. `ask_invoice` when the invoice isn't there: `use:1`, `use:2`, ... (one choice per open invoice, which then goes through the same check), `unapplied` (with an optional `total_amount` when the `payment` has none) or `cancel` | `applied`, `applied_with_credit`, `unapplied`, `already_paid`, `not_found`, `cancelled` |
     | `stream_query` | Pages through the `query` you pass, 200 at a time, and sends each page to your app as a `page` [notification](#sending-your-app-data) carrying `kind`, `page`, `more`, `pass` and `records`, then how many there were. Any query: every customer, the items changed since a date, one customer's invoices; one QuickBooks doesn't page, such as the accounts, arrives as a single page. If the Web Connector session ends between pages, it starts again from page 1 (`pass` 2, at most 3), so take a repeated page without harm. Needs a `webhook_url`. | No | `completed` |
     | `pull_changes` | The sync. For each kind word in `lists` (`customer`, `vendor`, `account`, `class`, the `item_*` kinds such as `item_service`, and every other list type a deleted-records query knows, all but `billing_rate`) and in `transactions` (`invoice`, `receive_payment`, `bill` and every other transaction type), runs `stream_query` over the records modified on or after `since`, inactive ones included, so they arrive as `page` [notifications](#sending-your-app-data) with that `kind`. Then it sends one `deleted` notification with the records of those kinds deleted since then, and of no others: a payment deleted since then isn't in it unless `transactions` names `receive_payment`. QuickBooks keeps 90 days of them. Without `since` it sends every record of those kinds, and no `deleted` notification: the initial import. Transactions come without their lines unless `include_line_items` is true (four kinds don't take it: `build_assembly`, `charge`, `time_tracking` and `vehicle_mileage`). A list QuickBooks doesn't page arrives as one page. Needs a `webhook_url`. | No | `completed` |
     | `company_profile` | Reads the company (name, legal name, address, fiscal year), its preferences (inventory, class tracking, multiple currencies, sales tax and the defaults QuickBooks posts with) and its host (product, version, country and the qbXML versions it speaks), all three in one Web Connector session. Run it when a connection is set up. | No | `completed` |
@@ -415,7 +416,7 @@ the query to send, such as `{"operation": "customer.query", "params": {"active_s
     A question's `prompt.id` is the path of the state that asks it, such as `ask_use`. When one workflow calls
     another, the calling state comes first. `resolve` asks `ask`, `ask_detail`, `ask_name` or `ask_pick`, which
     `upsert` and `ensure` relay as `resolve / ask` and the rest; `resolve_transaction` asks `ask`, and
-    `void_transaction` and `record_payment` relay `find / ask`. `push_records` relays `upsert / resolve / ask`
+    `void_transaction` and `record_payment` relay `find / ask`. `upsert` relays `ensure`'s as `taken / ask_rename` (or `ask_use`). `push_records` relays `upsert / resolve / ask` (or `upsert / taken / ask_rename`)
     for whichever record asks, and `add_transaction` relays `find_references / ask` (or `ask_detail`,
     `ask_pick`, ...) in its first pass and `create_missing / ask_use` (or `ask_rename`) in its second, for
     whichever reference asks: `prompt.from.item_index` says which, counting from 0, and `item_count` how many
@@ -423,21 +424,22 @@ the query to send, such as `{"operation": "customer.query", "params": {"active_s
     `add_transaction` installed before it had `ask_missing` never asks it: install the template again with
     `--replace` (`"replace": true`) to get it.
 
-    Every template can also end <Badge color="red">`failed`</Badge>, when something goes wrong that it doesn't handle. `error` says why,
-    usually in QuickBooks' own words.
+    Every template can also end <Badge color="red">`failed`</Badge>, when something goes wrong that it doesn't handle. `error` says why:
+    an object with QuickBooks' `code` when QuickBooks refused something, a `type`, a plain `message`, QuickBooks' own
+    words in `quickbooks_message`, and a `hint`.
   </Accordion>
   <Accordion title="What each template returns in output" icon="box-open">
     | Template | `output` |
     | --- | --- |
-    | `resolve` | `{record, how, list}`: the record read whole, `how` it was found (`id`, `exact`, `strong` or `picked`) and the `list` it's in (`customer`, `item_service`, ...); all null when nothing was found |
-    | `ensure` | `{record, how, list}`: the record found, picked, created or used; `how` as `resolve` gives it when `resolve` found it; and the `list` it's in: the `kind` it was added to, or the list of the record found or used (for an item, maybe another type than `kind`) |
-    | `upsert` | `{outcome, matched, how, record}`: `matched` is `found` or `picked` after an update, null after a create |
-    | `push_records` | `{results, outcomes, errors}`, in the order of `records`: each one's `upsert` output (null for one that failed), how it ended (`updated`, `created`, `cancelled`, `failed`, `name_taken`, or null when it wasn't a valid `upsert` input) and an `{index, message}` entry for each that failed, with its `outcome` when it ran |
-    | `resolve_transaction` | `{outcome, record, ref: {txn_id, ref_number, external_guid}}`: the header, without lines |
-    | `void_transaction` | `{outcome, ref: {txn_id, ref_number, external_guid}}` |
-    | `record_payment` | `{outcome, payment, invoice: {txn_id, ref_number, balance_before, applied}}` |
+    | `resolve` | `found` and `picked`: `{record, how, list}`, the record read whole, `how` it was found (`id`, `exact`, `strong` or `picked`) and the `list` it's in (`customer`, `item_service`, ...). `not_found` and `cancelled`: `{}` |
+    | `ensure` | `found`: `{record, how, list}`, `how` as `resolve` gives it. `picked`, `created`, `created_renamed` and `used_existing`: `{record, list}`, the record picked, created or used and the `list` it's in: the `kind` it was added to, or the list of the record found or used (for an item, maybe another type than `kind`). `cancelled`: `{}` |
+    | `upsert` | `updated`: `{record, matched, how}`, `matched` being `found`, `picked` or `used_existing`. `created` and `created_renamed`: `{record}`. `cancelled`: `{}` |
+    | `push_records` | `{items, counts}`. `items` is one entry per record, in the order of `records`: its `index` (from 0), `name`, `outcome` (`upsert`'s: `updated`, `created`, `created_renamed`, `cancelled`, or how it failed: `failed`, `name_taken`, `renames_exhausted`), and `record` (with `matched` and `how` after an update) or, for one that failed, `error`. `counts` has `total`, `failed` and one count per outcome |
+    | `resolve_transaction` | `found` and `picked`: `{record, ref: {txn_id, ref_number, external_guid}}`, the header, without lines. `not_found` and `cancelled`: `{}` |
+    | `void_transaction` | `voided` and `deleted`: `{ref: {txn_id, ref_number, external_guid}}`. `not_found` and `cancelled`: `{}` |
+    | `record_payment` | `applied` and `applied_with_credit`: `{payment, invoice: {txn_id, ref_number, balance_before, applied}}`; after `applied_with_credit`, `applied` is the balance and `payment.unused_payment` the credit. `unapplied`: `{payment}`. `already_paid`: `{invoice}`. `not_found` and `cancelled`: `{}` |
     | `stream_query` | `{kind, records, pages, passes}`: how many records were sent, over how many pages, and how many times the query was started from page 1 |
-    | `pull_changes` | `{since, lists, transactions, deleted: {lists, transactions}}`: `lists` and `transactions` hold `stream_query`'s output for each kind, in the order given, and `deleted` how many deleted records of each were sent (0 without `since`) |
+    | `pull_changes` | `{lists, transactions, deleted: {lists, transactions}}`: `lists` and `transactions` hold `stream_query`'s output for each kind, in the order given (`transactions` is `[]` when none were asked for), and `deleted` how many deleted records of each were sent (0 without `since`) |
     | `add_transaction` | `{record, references}`: `record` is the transaction, lines and their `txn_line_id`s included: what QuickBooks answered the add with; or, when its answer was lost and the run found it by its GUID, that transaction read by its TxnID; or the one your app named at `ask_about_add`, read the same way. Only when the read after a found GUID can't be answered is it the header the check found. `references` is an object keyed by where each reference sits in the `params` your app sent: `customer_ref`, `invoice_line_add.0.item_ref` (the first line's item). An item named on two lines is under both paths, with the same entry. Each entry is `kind` (the list it names), `outcome`, `how` (`id`, `exact`, `strong` or `picked`, when the first pass found it) and `record`, the record the add used, read whole, whose `type` is always its list (`customer`, `item_service`, ...), however it was found or made. Store each `record.list_id` against what your app sent at that path: it differs from the `list_id` you sent when the one you stored was stale. `outcome` is `found` or `picked` (the first pass, or a row of `ask_missing` answered `use`), `created`, `created_renamed` or `used_existing` (the second), or `cancelled`. On `cancelled`, `record` is null, a reference the second pass didn't get to is still `not_found`, and one the run never looked for has a null `outcome` and `record` |
     | `company_profile` | `{company, preferences, host}`, each as its query answers it |
 
@@ -511,17 +513,22 @@ any `2xx` within 5 seconds.
 | `workflow_run.awaiting_input` | The run needs a decision. It carries the question in `prompt`. | Shows its `details` and `choices`, then POSTs the picked `choice` to `links.decisions` ([below](#answering-a-question)). |
 | `workflow_run.notification` | A `notify` state [sends your app data](#sending-your-app-data). The run waits for your `2xx`. | Stores `data`, deduplicating on `delivery_id`. |
 | `workflow_run.completed` | The run ended as designed: `completed`, or a success outcome the chart declares. | Branches on `outcome` and stores `output`. |
-| `workflow_run.failed` | Something needs attention: a QuickBooks error the chart doesn't handle, a named failure such as `renames_exhausted`, or a limit reached. | Shows `error`. What the run changed stays in QuickBooks. |
+| `workflow_run.failed` | Something needs attention: a QuickBooks error the chart doesn't handle, a named failure such as `renames_exhausted`, or a limit reached. | Shows `error.message`. What the run changed stays in QuickBooks. |
 | `workflow_run.cancelled` | Somebody stopped it: your app with `POST links.cancel`, or a person on the run's page. | Reads `cancel_reason`. Nothing is undone. |
 
 <Visibility for="agents">
 Every event has `event`, `timestamp`, `app_id`, `sandbox`, `connection_id`, `workflow` (the key),
 `workflow_id` (`null` once the workflow is deleted), `run_id`, `reference` (yours, as you sent it; `null`
-without one), `revision`, `run_state` (the run's `state` when the body was built) and `links` (`run`,
-`decisions`, `search`, `cancel`, `ui`; `search` is `null` unless the question has a record to search for). All three endings carry `outcome`, `output`, `error` and `summary`, and `workflow_run.cancelled` adds
-`cancel_reason`. An ending's `summary` has `ended_at`, `stopped_at`, `side_effects` and `decisions`, and
-`unconfirmed` and `notifications` when there are any; the run's own summary also has `requests`, `calls`,
-`matches` and `discarded`. A run's `error` is a sentence, not the error object a request's webhook carries.
+without one), `revision`, `run_state` (the run's `state` when the body was built), `headline` (one plain sentence saying
+what happened; never parse it) and `links` (`run` and `ui` always, `cancel` until the run ends, `decisions`
+and `search` only while it asks, `search` only when the question has a record to search for).
+`workflow_run.completed` carries `outcome`, `output` (only the keys that ending sets, none null) and
+`summary`; `workflow_run.failed` carries `outcome`, `error` and `summary`, and `output` only when its failure
+outcome declares one; `workflow_run.cancelled` carries `outcome` (null), `cancel_reason` and `summary`. An
+ending's `summary` has `ended_at`, `changes` (`action`, `kind`, the record's ids, `item`) and `decisions` (`question`, `choice`, `at`, `item`), `stopped_at`
+on a failure or a cancel, and `unconfirmed` and `notifications` when there are any; the run's own summary
+also has `side_effects`, `requests`, `calls`, `matches` and `discarded`. A run's `error` is an object:
+`code` (QuickBooks' status code, or null), `type`, `message`, `quickbooks_message` and `hint`.
 `GET links.run` returns the whole run, including its input, vars, trace and whole summary.
 </Visibility>
 
@@ -571,7 +578,7 @@ Deliveries can fail, repeat, or arrive early and out of order:
           question: body["prompt"], # nil once it's answered
           outcome: body["outcome"],
           output: body["output"],
-          error: body["error"] || body["cancel_reason"]
+          error: body.dig("error", "message") || body["cancel_reason"]
         )
       end
     end
@@ -1016,7 +1023,7 @@ A chart's own `cancelled` ending, when your app answered `cancel`, is a *complet
   as `cancel_reason`, trimmed and cut to 500 characters. The workflows the run calls stop with it. Requests
   not yet handed to the Web Connector are withdrawn; one already sent may still complete. The run says which
   (`GET links.run`): withdrawn ones are in `summary.discarded`, and one still out is `"status": "in_flight"`
-  in `summary.requests`. Cancelling never undoes what was applied: `summary.side_effects`, in the
+  in `summary.requests`. Cancelling never undoes what was applied: `summary.changes`, in the
   `workflow_run.cancelled` webhook too, lists it, so you can check or reverse it, and `summary.unconfirmed`
   lists any change QuickBooks never answered that the run hadn't settled yet. Cancelling a run that has ended is
   `409 already_finished`.
@@ -1035,7 +1042,7 @@ request ends <Badge color="purple">`timed_out`</Badge>, and QuickBooks may or ma
 ([Error handling](/error_handling#when-the-answer-is-lost)). A workflow doesn't leave that to you; the run **settles** the request: it constructs a fingerprint from the original request details and queries QuickBooks to find out if it was applied.
 
 <Check>
-  Your app has nothing to do. A change the run found this way is in `summary.side_effects` like any other,
+  Your app has nothing to do. A change the run found this way is in `summary.changes` like any other, with `settled`,
   and the run's page lists it as "confirmed after a lost answer". A transaction found this way is then read
   whole by its TxnID, so `add_transaction`'s `output.record` has its lines either way.
 </Check>

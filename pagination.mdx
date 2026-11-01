@@ -86,6 +86,13 @@ curl -u "$QUBE_API_KEY:" \
 </Visibility>
 {/* agent-block:end */}
 
+## Listing your connections
+
+`GET /api/v2/connections` answers 20 connections a page, oldest first, with the same `page` and `page_size`
+(up to 100) and `meta.total_pages`. v1's `GET /api/v1/connections` takes the same two parameters, and there
+they are optional: send neither and it answers every connection in one go with no `meta`, exactly as it
+always has, so an existing v1 integration sees no change.
+
 ## An initial import
 
 New QuickBooks connections usually require bringing over large lists of various record types in bulk. You can use

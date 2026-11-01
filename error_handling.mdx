@@ -19,6 +19,7 @@ Find the webhook you got. The last column says who fixes it, what to do, and whe
 | <Badge color="green">`response_received`</Badge><br />with a `warning` | QuickBooks saved it, but warned you: e.g. a field it didn't save. | **Your app.** Store the id; don't resend. Check `warning.code`. [With a warning](#quickbooks-said-yes-with-a-warning) |
 | <Badge color="red">`error`</Badge><br />`quickbooks_business_error` | QuickBooks refused it on its own terms: a name in use, a stale `edit_sequence`. | **Your app.** Branch on `error_code`; show `user_message`. [QuickBooks said no](#quickbooks-said-no) |
 | <Badge color="red">`error`</Badge><br />`xml_error` | QuickBooks couldn't parse the request. | **Your app.** Fix the request: sent again as-is, it fails again. [Other endings](#other-endings) |
+| <Badge color="red">`error`</Badge><br />`outcome_unknown` | The Web Connector reported an error in place of QuickBooks' answer to a create or update, so it may or may not have been saved. | **Check first.** Query before resending it. [Outcome unknown](#when-the-outcome-is-unknown) |
 | <Badge color="red">`error`</Badge><br />`unexpected_error` | QuickBooks failed without saying why. | **Support.** Read the Web Connector's log; ask support if it repeats. [Other endings](#other-endings) |
 | <Badge color="red">`error`</Badge><br />`response_too_large` | QuickBooks answered, but with more than one answer may hold, so the answer wasn't kept. | **Your app.** Page the query, or narrow it. [Too large](#when-the-answer-is-too-large) |
 | <Badge color="orange">`retryable`</Badge> | QuickBooks wasn't running, the wrong company file was open, or a dialog was. | **Your customer.** Show them `user_message`, and don't resend. [Out of reach](#when-quickbooks-is-out-of-reach) |
@@ -51,7 +52,7 @@ new customer because the name is taken:
 
 | Field | What it's for |
 | --- | --- |
-| `error_type` | Where it failed: [`quickbooks_business_error`](#quickbooks-said-no), [`quickbooks_connection_error`](#when-quickbooks-is-out-of-reach), [`xml_error`](#other-endings), [`unexpected_error`](#other-endings), [`timed_out`](#when-the-answer-is-lost) or [`discarded`](#discarding-a-request). |
+| `error_type` | Where it failed: [`quickbooks_business_error`](#quickbooks-said-no), [`quickbooks_connection_error`](#when-quickbooks-is-out-of-reach), [`xml_error`](#other-endings), [`unexpected_error`](#other-endings), [`response_too_large`](#when-the-answer-is-too-large), [`outcome_unknown`](#when-the-outcome-is-unknown), [`timed_out`](#when-the-answer-is-lost) or [`discarded`](#discarding-a-request). |
 | `error_code` | QuickBooks' status code for a business error. A stable thing to branch on. |
 | `user_message` | Plain language for your end user: what went wrong and what to do. |
 | `message` | The raw message from QuickBooks or the Web Connector. For `timed_out` and `discarded`, which neither sent, QuBe Sync's own. |
@@ -284,6 +285,22 @@ An [`Idempotency-Key`](/making-requests#retrying-a-call-safely) doesn't help her
   A [workflow](/workflows#lost-answers) automatically reconciles lost requests for you. Mutations are fingerprinted before sending, so they can be reconciled later if needed. See [In a workflow](#in-a-workflow).
 </Tip>
 
+## When the outcome is unknown
+
+Now and then the Web Connector reports an error where QuickBooks' answer should be. A connection problem
+there (a dialog open, QuickBooks closed, another company file) is <Badge color="orange">`retryable`</Badge>,
+as [above](#when-quickbooks-is-out-of-reach). Any other error ends the request
+<Badge color="red">`error`</Badge>, and QuickBooks had it, so for a create or update nobody can say whether it
+was saved: `error.error_type` is `outcome_unknown`, and `user_message` tells your customer to check QuickBooks
+first.
+
+| It was | What to do |
+| --- | --- |
+| A query | It's `unexpected_error`, not `outcome_unknown`: a query changes nothing, so queue it again. |
+| A create or update | Handle it as a [lost answer](#when-the-answer-is-lost): query to see whether it happened, and resend only if it didn't. |
+
+In a [workflow](#in-a-workflow), the step sees `no_response` with reason `connector_error`.
+
 ## When the answer is too large
 
 One answer can be at most **4 MB as the Web Connector sends it, about 3 MB of qbXML**. QuickBooks' answer
@@ -311,7 +328,7 @@ Two rarer kinds of <Badge color="red">`error`</Badge>:
 | `error_type` | What happened | What to do |
 | --- | --- | --- |
 | `xml_error` | QuickBooks couldn't parse the request. Requests built through the API are validated against QuickBooks' schema first, so this is rare, but it can happen with qbXML you [send yourself](/making-requests#sending-qbxml-yourself). | Fix the request: sent again as-is, it fails again. |
-| `unexpected_error` | QuickBooks failed without saying why. | Read the Web Connector's log (**View Log**), and turn on [verbose logging](/qwc-logs) if it says nothing more. [support@qubesync.com](mailto:support@qubesync.com) can help. |
+| `unexpected_error` | QuickBooks failed without saying why. A query that ends this way is safe to queue again; a create or update ends [`outcome_unknown`](#when-the-outcome-is-unknown) instead. | Read the Web Connector's log (**View Log**), and turn on [verbose logging](/qwc-logs) if it says nothing more. [support@qubesync.com](mailto:support@qubesync.com) can help. |
 
 ## When the Web Connector stops checking in
 
@@ -393,4 +410,5 @@ A [workflow run](/workflows) meets the same endings, but its chart receives them
 | A warning | The state's `success` carries `response.warning`, so a transition can test `response.warning.code`. |
 | <Badge color="purple">`timed_out`</Badge> | The run [settles it](/workflows#lost-answers): it finds out whether QuickBooks applied the request and carries on. When it can't tell, the state raises `unsettled` or `no_response`, which fails the run unless the chart handles it. |
 | Discarded by your app | The state that sent it raises `error` with type `no_response` and `reason` `withdrawn`, "the request was withdrawn before it was sent". Such a request can't be deleted on its own: it goes when the run does. |
+| `outcome_unknown` | Settled as a <Badge color="purple">`timed_out`</Badge> request is; when it can't tell, the state raises `no_response` with `reason` `connector_error`. |
 | `xml_error` | Not settled: the state raises `no_response` with `reason` `rejected`. |

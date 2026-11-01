@@ -162,7 +162,10 @@ change when you connect real QuickBooks later.
           </Accordion>
           <Accordion title="The Web Connector shows an error">
             Its log says why, usually in the last few lines. [Read the Web Connector logs](/qwc-logs) for
-            where to find it and what the common errors mean.
+            where to find it and what the common errors mean. If adding the file is refused with QBWC1039
+            "Unique OwnerID/FileID pair value required", the company file already holds this connection's
+            setup: [Common problems](/common-problems#unique-ownerid-fileid-pair-value-required-when-adding-the-setup-file)
+            says how to clear it.
           </Accordion>
         </AccordionGroup>
       </Step>
@@ -194,7 +197,10 @@ dashboard:
 
 <AccordionGroup>
   <Accordion title="Where to find your API key">
-    Open **My Applications**, then **My App Dev**, and copy the key.
+    Open **My Applications**, then **My App Dev**. QuBe Sync shows a key only once, when it's made, so an
+    owner of your organization either clicks **Download .env**, which makes a new key for the file (and
+    replaces the key in their last download), or clicks **Generate key** and copies it then. After that
+    the page shows only the key's first and last characters. `qube env --write` makes one for you too.
 
     <Frame caption="Each app has its own keys. Keep them out of your code and your logs.">
       <img src="/images/quickstart/app-keys.png" alt="My App Dev's API key and webhook secret, each shortened, with Expire and Generate buttons" />
