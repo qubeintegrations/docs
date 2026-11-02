@@ -49,8 +49,7 @@
               "webhooks",
               "pagination",
               "matching",
-              "error_handling",
-              "common-problems"
+              "error_handling"
             ]
           },
           {
