@@ -92,8 +92,10 @@ text.**
 | 3180 | `cannot_save` | QuickBooks refused to save a new record. | The text after "QuickBooks error message:" says why. |
 | 3200 | `stale_edit_sequence` | The record changed in QuickBooks after you read it. | Retry with `error.current`'s `edit_sequence`: see [When the record changed after you read it](#when-the-record-changed-after-you-read-it). |
 | 3210 | `invalid_value` | A field's value isn't one QuickBooks accepts. | `message` names the field and value. |
+| 3231 | `request_not_processed` | QuickBooks didn't run the request: an earlier request in the same batch failed, or, sent alone, this company file doesn't include the feature. | In a batch, fix the first failure and send the rest again. Sent alone, treat it like 3250. |
 | 3250 | `feature_not_enabled` | The feature is off in this company file, or this edition lacks it. | Ask the customer to turn it on, or skip the feature. |
 | 3260 | `insufficient_permission` | QuickBooks didn't grant permission for this action. | The customer changes your app's access in QuickBooks' Integrated Applications preferences. |
+| 3262 | `payroll_subscription_required` | The request needs a QuickBooks payroll subscription, which this company file doesn't have. | Skip payroll requests for this customer. |
 
 Intuit's
 [status code reference](https://developer.intuit.com/app/developer/qbdesktop/docs/develop/exploring-the-quickbooks-desktop-sdk/status-codes-in-response-messages)
