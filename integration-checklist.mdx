@@ -570,12 +570,15 @@ or merged into another, and a request that references it is refused with 3120. S
 <Badge color="orange">Major</Badge> Applies when the app keeps what its workflow runs make or find.
 
 **Store what a run's final webhook carries in `output`: the records and ids it made or found, such
-as `add_transaction`'s `output.record` and each entry of its `output.references`.**
+as `add_transaction`'s `output.record` and each entry of its `output.refs`; with a `webhook_url`,
+take each `records` notification's records as they come.**
 
 A run's `output` is built for your app. `add_transaction`'s holds the whole transaction with its
-lines, and each reference keyed by where it sits in your `params` (`customer_ref`,
-`invoice_line_add.0.item_ref`), with the record it was found, chosen or created as. `summary` is the
-run's own log of its steps. See [How a run ends](/workflows#how-a-run-ends).
+lines, and `refs`: each reference keyed by where it sits in your `params` (`customer_ref`,
+`invoice_line_add.0.item_ref`), with the `list_id` and `type` of the record it was found, chosen or
+created as. Its `records` notifications say the same for the records that change what you hold, as
+each pass settles them, before the ending. `summary` is the run's own log of its steps. See
+[How a run ends](/workflows#how-a-run-ends).
 
 ### `prune-ended-runs-only`
 

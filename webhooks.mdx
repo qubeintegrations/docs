@@ -586,7 +586,7 @@ id alone.
 
 A question arrives as `workflow_run.awaiting_input`, with the question in `prompt`. Every question has the
 same shape, so one handler and one screen answer all of them: show `prompt.message`, the `prompt.details`
-rows and a button per `prompt.choices` entry (with an input per entry of its `fields`), and POST the picked
+rows and a button per `prompt.choices` entry (with an input per entry of its `fields`, weighed by its `role`), and POST the picked
 choice's `id` to `links.decisions` ([Answering a question](/workflows#answering-a-question)):
 
 ```json workflow_run.awaiting_input (abridged)
@@ -594,24 +594,25 @@ choice's `id` to `links.decisions` ([Answering a question](/workflows#answering-
   "event": "workflow_run.awaiting_input",
   "run_id": "fb1951a1-25b9-4fb2-98c7-c988988ecdf7",
   "reference": "contact-381-9b2f6c1e-0d4a-4f7e-8a7b-2a1c3d4e5f60",
-  "revision": 6,
   "run_state": "awaiting_input",
-  "headline": "No record has exactly that name. Pick the one you meant, say none of these is it, or cancel.",
+  "revision": 6,
+  "headline": "QuickBooks has no customer named exactly “Riverbend”.",
   "prompt": {
     "id": "resolve / ask",
-    "token": "Vq3kT9xRb2LmW8sZ",
     "kind": "decision",
-    "message": "No record has exactly that name. Pick the one you meant, say none of these is it, or cancel.",
-    "details": [ { "label": "Customer", "value": "Riverbend" } ],
+    "message": "QuickBooks has no customer named exactly “Riverbend”.",
+    "details": [],
     "choices": [
-      { "id": "use:1", "label": "Riverbend Electric", "description": null,
-        "detail": "similar name · ap@riverbend.example · 512-555-0142", "fields": [] },
-      { "id": "use", "label": "Use this one", "description": null, "detail": null,
-        "fields": [ { "name": "list_id", "type": "record", "kind": "customer",
-                      "label": "Search for a different one", "required": true } ] },
-      { "id": "none", "label": "None of these", "description": null, "detail": null, "fields": [] },
-      { "id": "cancel", "label": "Cancel", "description": null, "detail": null, "fields": [] }
+      { "id": "use:1", "label": "Riverbend Electric", "role": "pick",
+        "detail": "similar name · ap@riverbend.example · 512-555-0142", "description": null, "fields": [] },
+      { "id": "use", "label": "Use this one", "role": "search", "detail": null, "description": null,
+        "fields": [ { "name": "list_id", "label": "Not listed? Search QuickBooks", "type": "record",
+                      "required": true, "kind": "customer" } ] },
+      { "id": "none", "label": "It's not in QuickBooks", "role": "decline", "detail": null, "description": null,
+        "fields": [] },
+      { "id": "cancel", "label": "Cancel", "role": "cancel", "detail": null, "description": null, "fields": [] }
     ],
+    "token": "Vq3kT9xRb2LmW8sZ",
     "data": { … }
   },
   "links": {

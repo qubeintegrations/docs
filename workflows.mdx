@@ -190,8 +190,8 @@ you see a question and its answer.
     The run looks for the customer first and finds none. But Lone Star Supply Co is a vendor in the simulator,
     and QuickBooks keeps one name space for customers, vendors, employees and other names, so the add meets
     error 3100. The run finds what holds the name, stops at `ask_rename` and sends
-    `workflow_run.awaiting_input`. Its `prompt` says the name already belongs to a vendor, lists what the
-    question is about in `details`, and offers two `choices`:
+    `workflow_run.awaiting_input`. Its `prompt` says, in one sentence, that QuickBooks already has the vendor
+    “Lone Star Supply Co”, and offers two `choices`:
 
     | `choice` | `label` | Fields |
     | --- | --- | --- |
@@ -262,7 +262,7 @@ you see a question and its answer.
           "id": "ask_rename",
           "token": "Vq3kT9xRb2LmW8sZ",
           "kind": "decision",
-          "message": "\"Lone Star Supply Co\" already belongs to a record of another list (vendor), and QuickBooks keeps names unique across customers, vendors, employees and other names, and across every type of item. Add this one under another name, or cancel.",
+          "message": "QuickBooks already has the vendor “Lone Star Supply Co”, so the customer can't have that name too.",
           "data": {
             "kind": "customer",
             "name": "Lone Star Supply Co",
@@ -271,10 +271,7 @@ you see a question and its answer.
                           "email": "orders@lonestar.example", "is_active": true, "balance": 0.0,
                           "time_created": "2026-09-22T09:30:23", "time_modified": "2026-09-22T09:30:23" }
           },
-          "details": [
-            { "label": "Customer", "value": "Lone Star Supply Co" },
-            { "label": "Held by", "value": "Vendor" }
-          ],
+          "details": [],
           "options": [
             { "id": "rename", "label": "Add it under another name",
               "fields": { "name": { "type": "string", "required": true, "label": "New name" } } },
@@ -282,10 +279,11 @@ you see a question and its answer.
               "description": "Stop here. Nothing is created." }
           ],
           "choices": [
-            { "id": "rename", "label": "Add it under another name", "description": null, "detail": null,
-              "fields": [ { "name": "name", "type": "string", "label": "New name", "required": true } ] },
-            { "id": "cancel", "label": "Cancel", "description": "Stop here. Nothing is created.",
-              "detail": null, "fields": [] }
+            { "id": "rename", "label": "Add it under another name", "role": "answer", "detail": null,
+              "description": null,
+              "fields": [ { "name": "name", "label": "New name", "type": "string", "required": true } ] },
+            { "id": "cancel", "label": "Cancel", "role": "cancel", "detail": null,
+              "description": "Stop here. Nothing is created.", "fields": [] }
           ]
         },
         "links": {
@@ -440,7 +438,7 @@ the query to send, such as `{"operation": "customer.query", "params": {"active_s
     | `record_payment` | `applied` and `applied_with_credit`: `{payment, invoice: {txn_id, ref_number, balance_before, applied}}`; after `applied_with_credit`, `applied` is the balance and `payment.unused_payment` the credit. `unapplied`: `{payment}`. `already_paid`: `{invoice}`. `not_found` and `cancelled`: `{}` |
     | `stream_query` | `{kind, records, pages, passes}`: how many records were sent, over how many pages, and how many times the query was started from page 1 |
     | `pull_changes` | `{lists, transactions, deleted: {lists, transactions}}`: `lists` and `transactions` hold `stream_query`'s output for each kind, in the order given (`transactions` is `[]` when none were asked for), and `deleted` how many deleted records of each were sent (0 without `since`) |
-    | `add_transaction` | `{record, references}`: `record` is the transaction, lines and their `txn_line_id`s included: what QuickBooks answered the add with; or, when its answer was lost and the run found it by its GUID, that transaction read by its TxnID; or the one your app named at `ask_about_add`, read the same way. Only when the read after a found GUID can't be answered is it the header the check found. `references` is an object keyed by where each reference sits in the `params` your app sent: `customer_ref`, `invoice_line_add.0.item_ref` (the first line's item). An item named on two lines is under both paths, with the same entry. Each entry is `kind` (the list it names), `outcome`, `how` (`id`, `exact`, `strong` or `picked`, when the first pass found it) and `record`, the record the add used, read whole, whose `type` is always its list (`customer`, `item_service`, ...), however it was found or made. Store each `record.list_id` against what your app sent at that path: it differs from the `list_id` you sent when the one you stored was stale. `outcome` is `found` or `picked` (the first pass, or a row of `ask_missing` answered `use`), `created`, `created_renamed` or `used_existing` (the second), or `cancelled`. On `cancelled`, `record` is null, a reference the second pass didn't get to is still `not_found`, and one the run never looked for has a null `outcome` and `record` |
+    | `add_transaction` | `{record, refs}`: `record` is the transaction, lines and their `txn_line_id`s included: what QuickBooks answered the add with; or, when its answer was lost and the run found it by its GUID, that transaction read by its TxnID; or the one your app named at `ask_about_add`, read the same way. Only when the read after a found GUID can't be answered is it the header the check found. `refs` is an object keyed by where each reference sits in the `params` your app sent: `customer_ref`, `invoice_line_add.0.item_ref` (the first line's item). An item named on two lines is under both paths. Each entry is `{list_id, type}`: the record the add used, and its list (`customer`, `item_service`, ...). Store each `list_id` against what your app sent at that path, keyed by the connection and `type`: it differs from the `list_id` you sent when the one you stored was stale. With a `webhook_url`, the records that change what your app holds are also sent as each pass settles them, before the ending, in `records` notifications: each entry's `action` (`found` under another ListID, `picked`, `created`, `created_renamed` or `used_existing`), `kind`, `paths`, `sent` (what your app sent there) and `record` (`list_id`, `full_name`, `type`, `edit_sequence`, `is_active`). On `cancelled`, `refs` has only the references settled before it stopped |
     | `company_profile` | `{company, preferences, host}`, each as its query answers it |
 
     An invoice whose customer the run created under a new name, abridged:
@@ -457,19 +455,15 @@ the query to send, such as `{"operation": "customer.query", "params": {"active_s
         ],
         …
       },
-      "references": {
-        "customer_ref": { "kind": "customer", "outcome": "created_renamed", "how": null,
-                          "record": { "list_id": "8000002B-1792189814", "full_name": "Lone Star Supply Co (customer)",
-                                      "type": "customer", … } },
-        "invoice_line_add.0.item_ref": { "kind": "item", "outcome": "found", "how": "exact",
-                                         "record": { "list_id": "80000025-1792189712", "full_name": "Vinyl Banner",
-                                                     "type": "item_non_inventory", … } },
+      "refs": {
+        "customer_ref": { "list_id": "8000002B-1792189814", "type": "customer" },
+        "invoice_line_add.0.item_ref": { "list_id": "80000025-1792189712", "type": "item_non_inventory" },
         …
       }
     }
     ```
 
-    Each key is the path your app sent the reference at, so it reads the record for the customer it sent at
+    Each key is the path your app sent the reference at, so it reads the ListID for the customer it sent at
     `customer_ref`, and for its first line's item at `invoice_line_add.0.item_ref`. The lines come back in the
     order sent: `record.invoice_line_ret[0]` is that first line, with its `txn_line_id`.
   </Accordion>
@@ -601,13 +595,17 @@ Deliveries can fail, repeat, or arrive early and out of order:
 Every question arrives the same way, whatever it asks, so your app needs one screen for all of them, not a
 branch per question. Show `prompt.message`, then `prompt.details` (label and value rows: what the question
 is about), then one button per entry of `prompt.choices`, in order: its `label`, with its `description`
-and `detail` under it, and an input for each of its `fields`. POST the picked one's `id` as `choice`, with
+and `detail` under it, and an input for each of its `fields`. Weigh each by its `role`: the `pick`s (the
+records the run offers) together under a heading such as "Possible matches", the first as the main action;
+a `search` after them, quieter; `decline` ("It's not in QuickBooks") next; and `cancel` (which ends the
+whole request, such as "Don't add the invoice") last and quietest. POST the picked one's `id` as `choice`, with
 its fields in `data`, to `links.decisions`.
 
 | Choice field | What it holds |
 | --- | --- |
 | `id` | Unique within the prompt. Send it as `choice`. |
 | `label` | The button's text. |
+| `role` | How to weigh it: `pick`, `search`, `decline`, `cancel` or `answer` (anything else). Treat a role you don't know as `answer`. |
 | `description`, `detail` | `null`, or a line under the label: what picking it does, or which record it is (a candidate's list, why it matched, and its email and phone when QuickBooks has them, such as `similar name · ap@riverbend.example · 512-555-0142`; a transaction's date, customer and amount). |
 | `fields` | What to fill in first, each `name`, `type` (`string`, `number`, `boolean`, `record` or `rows`), `label` and `required`; for a `record`, `kind`; for one that takes a fixed list, `enum` (`[{"value", "label"}]`, a drop-down); for `rows`, `columns` and `rows` ([below](#a-table-of-rows)). Empty for a choice that's a button alone. |
 
@@ -621,7 +619,8 @@ its fields in `data`, to `links.decisions`.
   <Card title="A search for another" icon="magnifying-glass">
     On a realtime or simulated connection, a question that picks a record also offers a search: a choice
     such as `{"id": "use", "label": "Use this one"}` with a field of type `record`. Fill it from
-    `GET links.search?field=list_id&q=lone` and send the `value` of the one picked:
+    `GET links.search?field=list_id&q=lone` (with `q` empty as the box is focused, it lists the first
+    active records by name) and send the `value` of the one picked:
     `{"choice": "use", "data": {"list_id": "80000012-1712345678"}}`.
   </Card>
 </CardGroup>
@@ -682,11 +681,11 @@ asks.
 
 | Field | What it holds |
 | --- | --- |
-| `columns` | Each `name`, `type` (`string`, `number`, `boolean` or `record`), `label`, `required`, `kind` (a `record` column's list, or `null` when it depends on the row), `enum` (the values it takes, or `null`) and `when` (`null`, or the values of the row's other columns it applies under: `{"action": ["create"], "item_type": ["item_inventory"]}`). |
+| `columns` | Each `name`, `type` (`string`, `number`, `boolean` or `record`), `label`, `required`, `kind` (a `record` column's list, or `null` when it depends on the row), `enum` (the values it takes, or `null`), `default` (one of `enum`'s values to start at, already chosen and still changeable, or `null`) and `when` (`null`, or the values of the row's other columns it applies under: `{"action": ["create"], "item_type": ["item_inventory"]}`). |
 | `rows` | Each `key` (what its answer is keyed by), `label`, `detail`, `columns` (the names it asks), `values` (what it already says for columns it doesn't ask, such as an item add's type) and `kinds` (each record column's list for this row). At most 100. |
 
 Show a row's column only when it's in the row's `columns` and its `when` holds over the row's `values` and
-what your user has picked so far, and show or hide it as they change. Search a record column with
+what your user has picked so far (a column's `default` counts as picked until they change it), and show or hide it as they change. Search a record column with
 `GET links.search?field=records.list_id&row=customer_ref&q=lone`: `row` picks that row's list
 (`422 invalid_row` without it when the list depends on the row). Answer every row, with only the columns
 it asks:
@@ -735,7 +734,7 @@ kinds are answered at `links.decisions`.
     {
       "id": "ask_use",
       "kind": "decision",
-      "message": "\"Riverbend Electric\" is already in QuickBooks. Use that record, add this one under another name, or cancel.",
+      "message": "QuickBooks already has the customer “Riverbend Electric”.",
       "data": {
         "kind": "customer",
         "name": "Riverbend Electric",
@@ -743,18 +742,15 @@ kinds are answered at `links.decisions`.
                       "full_name": "Riverbend Electric", "company_name": "Riverbend Electric LLC",
                       "email": "ap@riverbend.example", "phone": "512-555-0142", "is_active": true }
       },
-      "details": [
-        { "label": "Customer", "value": "Riverbend Electric" },
-        { "label": "Held by", "value": "Customer" }
-      ],
+      "details": [],
       "options": [ … the three answers as the chart declares them … ],
       "choices": [
-        { "id": "use_existing", "label": "Use the existing record", "detail": null,
+        { "id": "use_existing", "label": "Use the existing record", "role": "answer", "detail": null,
           "description": "Carry on with the record QuickBooks already has. Nothing new is created.", "fields": [] },
-        { "id": "rename", "label": "Add it under another name", "detail": null,
+        { "id": "rename", "label": "Add it under another name", "role": "answer", "detail": null,
           "description": "Try the add again under a name you choose.",
-          "fields": [ { "name": "name", "type": "string", "label": "New name", "required": true } ] },
-        { "id": "cancel", "label": "Cancel", "detail": null,
+          "fields": [ { "name": "name", "label": "New name", "type": "string", "required": true } ] },
+        { "id": "cancel", "label": "Cancel", "role": "cancel", "detail": null,
           "description": "Stop here. Nothing is created.", "fields": [] }
       ]
     }
@@ -790,8 +786,10 @@ kinds are answered at `links.decisions`.
         { "id": "keep", "label": "Keep what QuickBooks has" }
       ],
       "choices": [
-        { "id": "overwrite", "label": "Apply my changes anyway", "description": null, "detail": null, "fields": [] },
-        { "id": "keep", "label": "Keep what QuickBooks has", "description": null, "detail": null, "fields": [] }
+        { "id": "overwrite", "label": "Apply my changes anyway", "role": "answer", "detail": null, "description": null,
+          "fields": [] },
+        { "id": "keep", "label": "Keep what QuickBooks has", "role": "answer", "detail": null, "description": null,
+          "fields": [] }
       ]
     }
     ```
@@ -936,6 +934,9 @@ the builder) sends a `workflow_run.notification` to the run's `webhook_url`, und
 routes on. The usual use is a whole list, a page at a time: `pull_changes` sends `page` with `seq` 1, 2, 3…,
 each naming its `kind`, the customers, then the vendors, then whatever else you asked for (with a `since`,
 then one `deleted`), then `workflow_run.completed` with the counts.
+`add_transaction` sends `records` after each pass that settles a record your app should store (one it picked,
+created, or found under another ListID), so you can link it before the ending: each entry's `paths`, `action`,
+`kind`, `sent` and `record` (`list_id`, `full_name`, `type`, `edit_sequence`, `is_active`).
 
 Save each record by the connection the run is on, its `kind` and its `list_id` or `txn_id`, never by the id
 alone: QuickBooks makes ids unique only within one list family of one company file (customers, vendors, employees
@@ -950,7 +951,7 @@ isn't held up: the pages keep being fetched while your app takes them. **The run
 | --- | --- |
 | A delivery fails | **Delivery is at least once.** A failed delivery is retried up to 10 times over about an hour, with the same `delivery_id`. If none succeeds, your organization's owners get an email and the state raises `error` with `response.error.type` `not_delivered`, which the chart can handle (go to a `wait` that asks whether to retry, say); otherwise the run fails. |
 | A notification is over 4 MB, once filled in | It's never sent: `error` `too_large`. Send fewer records at a time with a smaller `page_size`. |
-| The run has no `webhook_url` | Notifications go only to the run's `webhook_url`: a chart can't name a URL of its own. A workflow with a `notify` state, or one that calls such a workflow, refuses to start without one (`422 webhook_url_required`). |
+| The run has no `webhook_url` | Notifications go only to the run's `webhook_url`: a chart can't name a URL of its own. A workflow with a `notify` state, or one that calls such a workflow, refuses to start without one (`422 webhook_url_required`), unless every such state is `optional`: then nothing is sent there, and the ending carries what it would have (as `add_transaction`'s `refs` does). |
 
 <Note>
   **One run sends at most about 250 pages: 50,000 records at 200 a page.** A run caps at 500 transitions,

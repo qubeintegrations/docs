@@ -7184,7 +7184,7 @@
         ]
       },
       "WorkflowPromptChoice": {
-        "description": "One thing the person can pick, in the order to show them. Answer with `{\"choice\": id}`, and `data` holding its `fields`. A choice like `use:1` is one item of a list the run offers -- a candidate, a transaction it found -- with its value already filled in by QuBe Sync, so your app never handles the ListID or TxnID. A choice with a `record` field is the search for another one, offered only on a realtime or simulated connection.",
+        "description": "One thing the person can pick, in the order to show them. Answer with `{\"choice\": id}`, and `data` holding its `fields`. A choice like `use:1` is one item of a list the run offers -- a candidate, a transaction it found -- with its value already filled in by QuBe Sync, so your app never handles the ListID or TxnID. A choice with a `record` field is the search for another one, offered only on a realtime or simulated connection. Its `role` says how to weigh it beside the others.",
         "properties": {
           "description": {
             "description": "What picking it does, for a line under the label.",
@@ -7214,6 +7214,18 @@
             "description": "What the choice says: a button's text.",
             "example": "Add it under another name",
             "type": "string"
+          },
+          "role": {
+            "description": "How to weigh the choice, so every question can be shown the same way: `pick` is one of the records the run offers (show them together, under a heading such as \"Possible matches\", the first as the main action), `search` looks up another one (after the picks, quieter), `decline` says none of the offered records is it, `cancel` ends the whole request (last, set apart, the quietest), and `answer` is anything else. Treat a role you don't know as `answer`: more may be added.",
+            "enum": [
+              "pick",
+              "search",
+              "decline",
+              "cancel",
+              "answer"
+            ],
+            "example": "pick",
+            "type": "string"
           }
         },
         "required": [
@@ -7221,7 +7233,8 @@
           "label",
           "description",
           "detail",
-          "fields"
+          "fields",
+          "role"
         ],
         "type": "object"
       },
@@ -29558,6 +29571,13 @@
                         "items": {
                           "additionalProperties": false,
                           "properties": {
+                            "default": {
+                              "description": "One of enum's values, chosen when the row shows; the person can change it. A row's values still win.",
+                              "type": [
+                                "string",
+                                "number"
+                              ]
+                            },
                             "enum": {
                               "$ref": "#/components/schemas/WorkflowChartPromptEnum"
                             },
@@ -29572,7 +29592,7 @@
                               "description": "A search column: a row's value comes from the run's search (links.search with field=\\<field>.\\<column> and row=\\<key>). Its type is string: a search answers a ListID.",
                               "properties": {
                                 "kind": {
-                                  "description": "The list to search, or a template for it over item, the row's element: \\${item.kind}.",
+                                  "description": "The list to search (as a field's record.kind: account_income for income accounts, say), or a template for it over item, the row's element: \\${item.kind}.",
                                   "type": "string"
                                 }
                               },
@@ -29621,7 +29641,7 @@
                         "description": "A search choice: the option once more, this field of type record, filled from the run's search (links.search) of the connection's name index. Only on a realtime or simulated connection, which has one; on a standard one the choice isn't offered, so give the question another way to answer too. The field's type is string: a search answers a ListID.",
                         "properties": {
                           "kind": {
-                            "description": "The list to search, or a template for it: customer, vendor, entity, item, an item type such as item_service, account, class, ... (a kind a match takes).",
+                            "description": "The list to search, or a template for it: customer, vendor, entity, item, an item type such as item_service, account, an account type such as account_income (that type's accounts: account_ and QuickBooks' AccountType in snake case), class, ... (a kind a match takes).",
                             "type": "string"
                           },
                           "label": {
@@ -29714,6 +29734,16 @@
                 },
                 "label": {
                   "type": "string"
+                },
+                "role": {
+                  "description": "How a screen weighs the option's choice: pick (one of the offered records), search (look another one up), decline (none of the offered records is it), cancel (end the whole request) or answer (anything else). Left out, it is worked out: option id cancel is cancel, none is decline, an item of a choose field is pick, a record field's search choice is search, anything else answer. The items a choose field expands to are always pick.",
+                  "enum": [
+                    "pick",
+                    "search",
+                    "decline",
+                    "cancel",
+                    "answer"
+                  ]
                 }
               },
               "required": [
@@ -56260,11 +56290,15 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/WorkflowChartTemplate",
-                  "description": "Any JSON, rendered as the state is entered and sent to the app as a workflow_run.notification webhook, to the webhook_url the run was started with (a run of a workflow that can send one is refused without it: 422 webhook_url_required). `response` here is the response of the event that entered the state -- on a paginated query's `page`, that page -- so `${response.data}` sends the page's records; a page set (a paginating query's `success`) cannot be sent. At most 4 MB once encoded. The run waits for the app's 2xx: then the state raises success with response.delivery_id (the same on every retry), response.seq (1, 2, ... in send order for the run) and response.attempts. Delivery is retried for about an hour (10 attempts); if none succeeds, or the data is over 4 MB, it raises error with response.error.type not_delivered or too_large."
+                  "description": "Any JSON, rendered as the state is entered and sent to the app as a workflow_run.notification webhook, to the webhook_url the run was started with (a run of a workflow that can send one is refused without it: 422 webhook_url_required, unless the state is optional). `response` here is the response of the event that entered the state -- on a paginated query's `page`, that page -- so `${response.data}` sends the page's records; a page set (a paginating query's `success`) cannot be sent. At most 4 MB once encoded. The run waits for the app's 2xx: then the state raises success with response.delivery_id (the same on every retry), response.seq (1, 2, ... in send order for the run) and response.attempts. Delivery is retried for about an hour (10 attempts); if none succeeds, or the data is over 4 MB, it raises error with response.error.type not_delivered or too_large."
                 },
                 "name": {
                   "$ref": "#/components/schemas/WorkflowChartIdentifier",
                   "description": "What the app routes on, such as customers_page: the webhook's `name`."
+                },
+                "optional": {
+                  "description": "true: on a run started without a webhook_url, it sends nothing and raises success at once (response.status skipped), and it doesn't make starting a run need one. For data an app gets another way too, such as the ending's output.",
+                  "type": "boolean"
                 }
               },
               "required": [
@@ -83376,7 +83410,7 @@
             "type": "object"
           },
           "prompt": {
-            "description": "Present while awaiting_input: `id` (the question's id, as the workflow's contract lists it -- its path from this run, `<calling state> / <wait state>`, when a workflow this one calls asked), `token` (new each time the run asks; send it back as the decision's `prompt_token`), `kind`, message, data, details, the options and the choices to pick from. `details` (label and value rows: what it is about) and `choices` (everything the person can pick, in order, each with its `fields`) are what to render: every question is shown and answered the same way, by `choice`, and `options` stays for a chart's own code. `from` is set when a workflow this one calls asked the question: `workflow` (its key) and `state` (its own wait state) -- that workflow runs as part of this run, so answer it here either way. When the asking workflow runs once per item of a list, `from` also carries `item_index` (0-based) and `item_count`. `kind` says who asked: `decision` for a `wait` state's own question, `conflict` when the engine asks about an update that met a stale edit sequence (someone changed the record in QuickBooks after the run read it, error 3200) and the state's `on_conflict` is `ask`, its default. A conflict prompt's `id` is `conflict:<state>` (prefixed like any question when a workflow this one calls asked), `state` is the request state that sent the update, and `data` carries `operation` (the update, e.g. `customer.update`), `sent` (the fields it carries, without its id and edit sequence), `current` (the record QuickBooks has now, with its edit sequence), `as_read` (the record as the run last read it, or null when it never read it), `conflicts` (one `{field, sent, current, as_read}` row per field being updated that someone else changed too) and `theirs` (one `{field, as_read, current}` row per field they changed that the update does not touch; empty when `as_read` is null). Its options are fixed: `overwrite` re-sends with the current edit sequence -- the original fields, or `data.params` (an object, optional) in their place -- and `keep` carries on with the record as QuickBooks has it.",
+            "description": "Present while awaiting_input: `id` (the question's id, as the workflow's contract lists it -- its path from this run, `<calling state> / <wait state>`, when a workflow this one calls asked), `token` (new each time the run asks; send it back as the decision's `prompt_token`), `kind`, message, data, details, the options and the choices to pick from. `details` (label and value rows: what it is about) and `choices` (everything the person can pick, in order, each with its `fields`) are what to render: every question is shown and answered the same way, by `choice` (each choice's `role` says how to weigh it: `pick`, `search`, `decline`, `cancel` or `answer`), and `options` stays for a chart's own code. `from` is set when a workflow this one calls asked the question: `workflow` (its key) and `state` (its own wait state) -- that workflow runs as part of this run, so answer it here either way. When the asking workflow runs once per item of a list, `from` also carries `item_index` (0-based) and `item_count`. `kind` says who asked: `decision` for a `wait` state's own question, `conflict` when the engine asks about an update that met a stale edit sequence (someone changed the record in QuickBooks after the run read it, error 3200) and the state's `on_conflict` is `ask`, its default. A conflict prompt's `id` is `conflict:<state>` (prefixed like any question when a workflow this one calls asked), `state` is the request state that sent the update, and `data` carries `operation` (the update, e.g. `customer.update`), `sent` (the fields it carries, without its id and edit sequence), `current` (the record QuickBooks has now, with its edit sequence), `as_read` (the record as the run last read it, or null when it never read it), `conflicts` (one `{field, sent, current, as_read}` row per field being updated that someone else changed too) and `theirs` (one `{field, as_read, current}` row per field they changed that the update does not touch; empty when `as_read` is null). Its options are fixed: `overwrite` re-sends with the current edit sequence -- the original fields, or `data.params` (an object, optional) in their place -- and `keep` carries on with the record as QuickBooks has it.",
             "nullable": true,
             "properties": {
               "choices": {
@@ -93198,7 +93232,7 @@
             "type": "integer"
           },
           "kind": {
-            "description": "`call_started` and `call_finished` begin and end a workflow this one calls; `run_started` and `run_completed`/`run_failed`/`run_cancelled` with a `state` are that workflow's own start and end, at the calling state. `notification_queued`, `notification_delivered` and `notification_failed` are a notify state's `workflow_run.notification`: sent, answered with a 2xx, or never delivered. `match_waiting` and `match_answered` are a match state's: waiting for the connection's name index to be built or refreshed, and what it found (its tier and counts, never a name).",
+            "description": "`call_started` and `call_finished` begin and end a workflow this one calls; `run_started` and `run_completed`/`run_failed`/`run_cancelled` with a `state` are that workflow's own start and end, at the calling state. `notification_queued`, `notification_delivered` and `notification_failed` are a notify state's `workflow_run.notification`: sent, answered with a 2xx, or never delivered; `notification_skipped` an optional one on a run without a `webhook_url`, which sends nothing. `match_waiting` and `match_answered` are a match state's: waiting for the connection's name index to be built or refreshed, and what it found (its tier and counts, never a name).",
             "enum": [
               "run_started",
               "state_entered",
@@ -93219,6 +93253,7 @@
               "notification_queued",
               "notification_delivered",
               "notification_failed",
+              "notification_skipped",
               "match_waiting",
               "match_answered",
               "webhook_sent",
@@ -103686,7 +103721,7 @@
         ]
       },
       "WorkflowChartTemplate": {
-        "description": "Any JSON value. Strings may hold \\${...} references; a map may hold the reserved \"\\$from\" key, whose rendered map the rest of the map is deep-merged onto. A map holding \"\\$map\" is a list built from another: {\"\\$map\": \"\\${vars.items}\", \"as\": \"item\", \"template\": ...} renders template once per element, with the element at each.\\<as>, its position at each.index and the length at each.count. With \"key\" (a template per element), it is an object instead: each element's template under the key or keys it renders.\n\n{\"\\$add\": [...]} sums its operands and {\"\\$default\": [...]} is the first that renders to something. {\"\\$merge\": [a, b, ...]} deep-merges each object onto the ones before it, as \"\\$from\" does (objects merge key by key; lists and scalars replace; an operand that renders to nothing is skipped). {\"\\$find\": \"\\${vars.items}\", \"where\": condition} is the first element the condition holds for (at each.\\<as>), or nothing.\n\n{\"\\$refs\": \"\\${input.params}\", \"operation\": \"invoice.create\"} lists an add's references, or with \"list_ids\" puts their ListIDs back. {\"\\$read\": id, \"operation\": an add} reads that record whole. {\"\\$kind_name\": \"\\${input.kind}\"} is a kind, or an operation's, as a person reads it (Customer, Service item, Invoice for invoice.create), for a question's details. No other \\$-prefixed key is allowed.",
+        "description": "Any JSON value. Strings may hold \\${...} references; a map may hold the reserved \"\\$from\" key, whose rendered map the rest of the map is deep-merged onto. A map holding \"\\$map\" is a list built from another: {\"\\$map\": \"\\${vars.items}\", \"as\": \"item\", \"template\": ...} renders template once per element, with the element at each.\\<as>, its position at each.index and the length at each.count. With \"key\" (a template per element), it is an object instead: each element's template under the key or keys it renders.\n\n{\"\\$add\": [...]} sums its operands and {\"\\$default\": [...]} is the first that renders to something. {\"\\$merge\": [a, b, ...]} deep-merges each object onto the ones before it, as \"\\$from\" does (objects merge key by key; lists and scalars replace; an operand that renders to nothing is skipped). {\"\\$find\": \"\\${vars.items}\", \"where\": condition} is the first element the condition holds for (at each.\\<as>), or nothing.\n\n{\"\\$refs\": \"\\${input.params}\", \"operation\": \"invoice.create\"} lists an add's references, or with \"list_ids\" puts their ListIDs back. {\"\\$read\": id, \"operation\": an add} reads that record whole. {\"\\$kind_name\": \"\\${input.kind}\"} is a kind, or an operation's, as a person reads it (Customer, Service item, Invoice for invoice.create), for a question's details; with \"as\": \"noun\", mid-sentence (customer). No other \\$-prefixed key is allowed.",
         "if": {
           "type": "object"
         },
@@ -103710,7 +103745,7 @@
               "type": "string"
             },
             "$kind_name": {
-              "description": "A kind or an operation id, or a template for one (customer, item_service, invoice.create, \\${input.kind}): its name as a person reads it -- Customer, Service item, Sales tax code, Invoice -- or nothing for anything but a non-empty string. For a question's details. Only \\$kind_name.",
+              "description": "A kind or an operation id, or a template for one (customer, item_service, invoice.create, \\${input.kind}): its name as a person reads it -- Customer, Service item, Sales tax code, Invoice -- or nothing for anything but a non-empty string. For a question's details. With \"as\": \"noun\", as it reads mid-sentence (customer, service item, invoice), for a message or a label. Only \\$kind_name and as.",
               "type": "string"
             },
             "$map": {
@@ -110824,6 +110859,19 @@
       "WorkflowPromptColumn": {
         "description": "One column of a `rows` field: a field asked of each row that lists it.",
         "properties": {
+          "default": {
+            "description": "One of `enum`'s values to start at, already chosen when the row shows; the person can change it. A row's `values` still win. Null when nothing is chosen until the person chooses.",
+            "example": "create",
+            "nullable": true,
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              }
+            ]
+          },
           "enum": {
             "description": "The values it takes, when it takes one of a fixed list.",
             "items": {
@@ -110883,6 +110931,7 @@
           "required",
           "kind",
           "enum",
+          "default",
           "when"
         ],
         "type": "object"
@@ -124199,7 +124248,7 @@
     },
     "/connections/{connection_id}/workflow-runs/{run_id}/search": {
       "get": {
-        "description": "For a `record` field of the question the run is asking (a field of type `record` in one of `prompt.choices`): the records of its `kind` whose names are like `q`, from the connection's name index -- what a person types into a search box, one call per pause in their typing. GET the run's `links.search`, which carries the prompt's `token`, adding `field` and `q`; answer the choice with the `value` of the one picked as that field. At most 20, ranked as matching ranks them: the exact name first, then names that start with `q`, then the most alike.\n\nOnly a realtime or simulated connection has a name index, so only there does a prompt carry a search choice and `links.search`. While the index is being built, the search is refused with `409 name_index_building`, as a match is. `q` is a name your user typed: keep it out of your own logs as QuBe Sync keeps it out of its own.",
+        "description": "For a `record` field of the question the run is asking (a field of type `record` in one of `prompt.choices`): the records of its `kind` whose names are like `q`, from the connection's name index -- what a person types into a search box, one call per pause in their typing, and one with `q` empty as the box is focused before anything is typed. GET the run's `links.search`, which carries the prompt's `token`, adding `field` and `q`; answer the choice with the `value` of the one picked as that field. At most 20, ranked as matching ranks them: the exact name first, then names that start with `q`, then the most alike.\n\nOnly a realtime or simulated connection has a name index, so only there does a prompt carry a search choice and `links.search`. While the index is being built, the search is refused with `409 name_index_building`, as a match is. `q` is a name your user typed: keep it out of your own logs as QuBe Sync keeps it out of its own.",
         "parameters": [
           {
             "description": "ID of the connection",
@@ -124242,14 +124291,13 @@
             }
           },
           {
-            "description": "What the person typed: 2 to 100 characters, once trimmed.",
+            "description": "What the person typed: 2 to 100 characters, once trimmed. Empty or left out, the first 20 active records of the field's list by name: what to offer as the box is focused before anything is typed. One character is refused (`422`).",
             "example": "Lone",
             "in": "query",
             "name": "q",
-            "required": true,
+            "required": false,
             "schema": {
               "maxLength": 100,
-              "minLength": 2,
               "type": "string"
             }
           },
