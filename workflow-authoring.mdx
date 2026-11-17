@@ -295,14 +295,18 @@ stateDiagram-v2
     | `message` | The question, a template. |
     | `data` | Anything the app needs beside it (the record found, the candidates), a template. |
     | `details` | What the question is about, as at most 20 `{"label", "value"}` rows, each a template: `[{"label": {"$kind_name": "${input.kind}"}, "value": "${vars.name}"}]` shows `Customer: Lone Star Supply Co`. A list renders as its parts joined with ` · `, and a row whose value renders to nothing is left out. |
-    | `options` | The answers: each an `id` (the event it raises), a `label` and an optional `description` (both templates, so a button can say what follows, as `resolve`'s "It's not in QuickBooks: add "Acme" as new" does), an optional `role` (`pick`, `search`, `decline`, `cancel` or `answer`: how a screen weighs its choice; left out, `cancel` and `none` say it by their id, a `choose` item is `pick`, a `record` search `search`, anything else `answer`), and the `fields` it asks for (`type`, `required`, `label`). Each becomes a choice. At most 26. |
+    | `options` | The answers: each an `id` (the event it raises), a `label` and an optional `description` (both templates, so a button can say what follows, as `resolve`'s "It's not in QuickBooks: add "Acme" as new" does), an optional `role` (`pick`, `search`, `decline`, `cancel` or `answer`: how a screen weighs its choice; left out, `cancel` and `none` say it by their id, a `choose` item is `pick`, a `record` search `search`, anything else `answer`), and the `fields` it asks for (`type`, `required`, `label`). A choice about one record can carry `title` (the record's name, shown in place of the label), `action` (its button's text, such as "Use existing"), `lines` (at most 6, each a template or a list of them joined with ` · `) and `facts` (at most 8 `{"label", "value"}` pairs, shown side by side); a line or fact that renders to nothing, or only repeats the title, is left out, and without a `detail` they make one, for an app that shows only `detail`. Each becomes a choice. At most 26. |
     | `fields.<name>.choose` | One choice per element of `from` (a template that gives a list), the field already filled with what `value` renders to for it, so your app never handles the value: `{"from": "${vars.found.candidates}", "value": "${item.list_id}", "label": "${item.full_name}", "detail": "${item.reasons}"}`. `detail` may be a list of templates, such as `["${item.reasons}", "${item.email}", "${item.phone}"]`, shown joined with ` · ` and without the empty ones. The element is at `item`, bound only here. Its choices are `use:1`, `use:2`, ..., at most 25, and 26 in all. One field per option. |
     | `fields.<name>.record` | A search choice too, filled from the connection's name index: `{"kind": "${input.kind}", "label": "Use this one"}`, `label` being the button that sends the pick. `kind` is a list a match takes (`customer`, `entity`, `item`, an item type, `account`, ...), or an account type such as `account_income` (only that type's accounts: `account_` and QuickBooks' `AccountType` in snake case). Every list but inventory sites can be searched, and workflows run only on realtime or simulated connections, which have the index. The field is a `string`: a search answers a ListID, which the chart should read before using. |
     | `fields.<name>.enum` | The values a `string` or `number` field takes, each with what a person reads: `[{"value": "item_service", "label": "Service"}]`. A drop-down; an answer outside it is refused. |
     | `fields.<name>` of type `rows` | The same columns asked of each row of a list, in one question ([A table of rows](/workflows#a-table-of-rows)). `rows` is `{"from": "${vars.asking}", "key", "label", "detail", "columns", "values"}`, templates over `item`, the element: `columns` the names the row asks, `values` what it already has. `columns` is a list of fields with a `name`, each with optional `enum`, `record` (`{"kind": "${item.kind}"}`) and `when` (`{"action": ["create"]}`: the values of the row's other columns it applies under). Answered as `{row key: {column: value}}`; at most 100 rows. |
 
     `{"$kind_name": "${input.kind}"}` is a kind, or an operation's (`invoice.create`), as a person reads it:
-    `Customer`, `Service item`, `Invoice`. The validator checks every key, `item` outside a `choose`
+    `Customer`, `Service item`, `Invoice`.
+    `{"$format": "${vars.holder.time_created}", "as": "date"}` is a value as a person reads it: `as` is
+    `amount` (`1,250.00`) or `date` (`Mar 2, 2024`), and an optional `prefix` comes first (`"added "`). A value
+    that's empty renders to nothing, prefix and all; one it can't read is shown as it is. Use it in
+    `details`, a choice's `detail`, `lines` and `facts`. The validator checks every key, `item` outside a `choose`
     included. A template in `details` or a `choose` that doesn't render when the run asks fails the run, as a
     bad `message` does.
   </Accordion>
@@ -675,7 +679,7 @@ working copy, the published version or an older one.
 | Below it | The start form and the recent runs. Each run's page has its [steps, chart, event log and data](/workflows#follow-your-runs). |
 
 <Frame caption="Test run, beside the chart: the run's status, its steps (an error the chart handles is Handled), and its question.">
-  <img src="/images/workflows/builder-test-run.png" width="380" alt="The Test run panel beside ensure's chart: Waiting for an answer at ask_rename; 2 earlier steps, then try_add Handled, holder_kind, find_holder, read_holder and same_list Done, and ask_rename Waiting; and the head of the question, Your answer is needed" />
+  <img src="/images/workflows/builder-test-run.png" width="380" alt="The Test run panel beside ensure's chart: Waiting for an answer at ask_rename; 3 earlier steps, then try_add Handled, holder_kind, find_holder, read_holder and same_list Done, and ask_rename Waiting; and the start of the question" />
 </Frame>
 
 Walk the unhappy paths too:

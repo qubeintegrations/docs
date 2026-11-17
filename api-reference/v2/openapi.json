@@ -7186,17 +7186,56 @@
       "WorkflowPromptChoice": {
         "description": "One thing the person can pick, in the order to show them. Answer with `{\"choice\": id}`, and `data` holding its `fields`. A choice like `use:1` is one item of a list the run offers -- a candidate, a transaction it found -- with its value already filled in by QuBe Sync, so your app never handles the ListID or TxnID. A choice with a `record` field is the search for another one, offered only on a realtime or simulated connection. Its `role` says how to weigh it beside the others.",
         "properties": {
+          "action": {
+            "description": "Present when the chart gives one: the text for the choice's button where it shows as a row, in place of your own (\"Use this one\").",
+            "example": "Use existing",
+            "type": "string"
+          },
           "description": {
             "description": "What picking it does, for a line under the label.",
-            "example": "Try the add again under a name you choose.",
+            "example": "Try the add again with a different name.",
             "nullable": true,
             "type": "string"
           },
           "detail": {
-            "description": "A short second line about one item of a list: a candidate's list and why it matched, a transaction's date, customer and amount.",
+            "description": "A short second line about the choice: a candidate's list and why it matched, a transaction's date, customer and amount, or, for a choice with `lines` and `facts`, those in one line.",
             "example": "Customer · similar name",
             "nullable": true,
             "type": "string"
+          },
+          "facts": {
+            "description": "Present on a choice about one record: labelled values to show side by side under its lines, the label quieter.",
+            "example": [
+              {
+                "label": "Company",
+                "value": "Riverbend Electric LLC"
+              },
+              {
+                "label": "Balance",
+                "value": "1,250.00"
+              },
+              {
+                "label": "Added",
+                "value": "Mar 2, 2024"
+              }
+            ],
+            "items": {
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "label",
+                "value"
+              ],
+              "type": "object"
+            },
+            "maxItems": 8,
+            "type": "array"
           },
           "fields": {
             "description": "What to fill in before picking it, in order; empty for a choice that is a button alone.",
@@ -7215,8 +7254,19 @@
             "example": "Add it under another name",
             "type": "string"
           },
+          "lines": {
+            "description": "Present on a choice about one record: lines to show under its title, each already joined with ` · `.",
+            "example": [
+              "ap@riverbend.example · 512-555-0142 · Austin"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 6,
+            "type": "array"
+          },
           "role": {
-            "description": "How to weigh the choice, so every question can be shown the same way: `pick` is one of the records the run offers (show them together, under a heading such as \"Possible matches\", the first as the main action), `search` looks up another one (after the picks, quieter), `decline` says none of the offered records is it, `cancel` ends the whole request (last, set apart, the quietest), and `answer` is anything else. Treat a role you don't know as `answer`: more may be added.",
+            "description": "How to weigh the choice, so every question can be shown the same way: `pick` is one of the records the run offers (show them together as rows, each answered by its own button, the first the main action unless there is a decline), `search` looks up another one (a box under the picks; its picked match becomes another row), `decline` says none of the offered records is it (under the picks, weighed the same as them, and the main action once a search finds nothing), `cancel` ends the whole request (last, set apart, the quietest), and `answer` is anything else. Treat a role you don't know as `answer`: more may be added.",
             "enum": [
               "pick",
               "search",
@@ -7225,6 +7275,11 @@
               "answer"
             ],
             "example": "pick",
+            "type": "string"
+          },
+          "title": {
+            "description": "Present on a choice about one record (a name clash's existing record): its name as QuickBooks has it, to show in place of `label` as the row's heading. Left out when the chart gives none.",
+            "example": "RIVERBEND ELECTRIC",
             "type": "string"
           }
         },
@@ -29532,8 +29587,37 @@
           "options": {
             "items": {
               "properties": {
+                "action": {
+                  "$ref": "#/components/schemas/WorkflowChartTemplate",
+                  "description": "The choice's button text where it shows as a row (Use existing); without it the screen's own (Use this one)."
+                },
                 "description": {
                   "type": "string"
+                },
+                "detail": {
+                  "$ref": "#/components/schemas/WorkflowChartTemplate",
+                  "description": "What the choice is about, in one line under its label: a template, or a list of them whose parts that render to something are joined with ' · '. A plain option's choice only: a choose field's items take its own detail. Left out with lines or facts, it is those in one line (Riverbend Electric LLC · ap@riverbend.example · Balance 1,250.00), for an app that shows only detail."
+                },
+                "facts": {
+                  "description": "Labelled values under the lines, shown as label and value side by side (Balance 1,250.00, Added Mar 2, 2024: {\"label\": \"Added\", \"value\": {\"\\$format\": \"\\${vars.holder.time_created}\", \"as\": \"date\"}}). A fact whose value renders to nothing, or only repeats the title, is left out.",
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "label": {
+                        "$ref": "#/components/schemas/WorkflowChartTemplate"
+                      },
+                      "value": {
+                        "$ref": "#/components/schemas/WorkflowChartTemplate"
+                      }
+                    },
+                    "required": [
+                      "label",
+                      "value"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 8,
+                  "type": "array"
                 },
                 "fields": {
                   "additionalProperties": {
@@ -29735,6 +29819,14 @@
                 "label": {
                   "type": "string"
                 },
+                "lines": {
+                  "description": "Lines under the title, each a template, or a list of them whose parts that render to something are joined with ' · ' ([\"\\${vars.holder.email}\", \"\\${vars.holder.phone}\"]). A line that renders to nothing, or only repeats the title, is left out.",
+                  "items": {
+                    "$ref": "#/components/schemas/WorkflowChartTemplate"
+                  },
+                  "maxItems": 6,
+                  "type": "array"
+                },
                 "role": {
                   "description": "How a screen weighs the option's choice: pick (one of the offered records), search (look another one up), decline (none of the offered records is it), cancel (end the whole request) or answer (anything else). Left out, it is worked out: option id cancel is cancel, none is decline, an item of a choose field is pick, a record field's search choice is search, anything else answer. The items a choose field expands to are always pick.",
                   "enum": [
@@ -29744,6 +29836,10 @@
                     "cancel",
                     "answer"
                   ]
+                },
+                "title": {
+                  "$ref": "#/components/schemas/WorkflowChartTemplate",
+                  "description": "For a choice about one record, the record's name, shown in place of the label (\\${vars.holder.full_name}). The label stays, for an app that doesn't show title."
                 }
               },
               "required": [
@@ -103721,7 +103817,7 @@
         ]
       },
       "WorkflowChartTemplate": {
-        "description": "Any JSON value. Strings may hold \\${...} references; a map may hold the reserved \"\\$from\" key, whose rendered map the rest of the map is deep-merged onto. A map holding \"\\$map\" is a list built from another: {\"\\$map\": \"\\${vars.items}\", \"as\": \"item\", \"template\": ...} renders template once per element, with the element at each.\\<as>, its position at each.index and the length at each.count. With \"key\" (a template per element), it is an object instead: each element's template under the key or keys it renders.\n\n{\"\\$add\": [...]} sums its operands and {\"\\$default\": [...]} is the first that renders to something. {\"\\$merge\": [a, b, ...]} deep-merges each object onto the ones before it, as \"\\$from\" does (objects merge key by key; lists and scalars replace; an operand that renders to nothing is skipped). {\"\\$find\": \"\\${vars.items}\", \"where\": condition} is the first element the condition holds for (at each.\\<as>), or nothing.\n\n{\"\\$refs\": \"\\${input.params}\", \"operation\": \"invoice.create\"} lists an add's references, or with \"list_ids\" puts their ListIDs back. {\"\\$read\": id, \"operation\": an add} reads that record whole. {\"\\$kind_name\": \"\\${input.kind}\"} is a kind, or an operation's, as a person reads it (Customer, Service item, Invoice for invoice.create), for a question's details; with \"as\": \"noun\", mid-sentence (customer). No other \\$-prefixed key is allowed.",
+        "description": "Any JSON value. Strings may hold \\${...} references; a map may hold the reserved \"\\$from\" key, whose rendered map the rest of the map is deep-merged onto. A map holding \"\\$map\" is a list built from another: {\"\\$map\": \"\\${vars.items}\", \"as\": \"item\", \"template\": ...} renders template once per element, with the element at each.\\<as>, its position at each.index and the length at each.count. With \"key\" (a template per element), it is an object instead: each element's template under the key or keys it renders.\n\n{\"\\$add\": [...]} sums its operands and {\"\\$default\": [...]} is the first that renders to something. {\"\\$merge\": [a, b, ...]} deep-merges each object onto the ones before it, as \"\\$from\" does (objects merge key by key; lists and scalars replace; an operand that renders to nothing is skipped). {\"\\$find\": \"\\${vars.items}\", \"where\": condition} is the first element the condition holds for (at each.\\<as>), or nothing.\n\n{\"\\$refs\": \"\\${input.params}\", \"operation\": \"invoice.create\"} lists an add's references, or with \"list_ids\" puts their ListIDs back. {\"\\$read\": id, \"operation\": an add} reads that record whole. {\"\\$kind_name\": \"\\${input.kind}\"} is a kind, or an operation's, as a person reads it (Customer, Service item, Invoice for invoice.create), for a question's details; with \"as\": \"noun\", mid-sentence (customer). {\"\\$format\": \"\\${vars.holder.balance}\", \"as\": \"amount\"} is a value as a person reads it: an amount (1,250.00) or, with \"as\": \"date\", a date or date-time's date (Mar 2, 2024), after an optional \"prefix\" (\"added \"); nothing renders to nothing, prefix and all. No other \\$-prefixed key is allowed.",
         "if": {
           "type": "object"
         },
@@ -103740,6 +103836,13 @@
             "$find": {
               "description": "A template that renders to a list. With \"where\" (a condition, required) and \"as\" (default item): the first element for which the condition holds, the element at each.\\<as>, each.index and each.count; nothing when none does. Only \\$find, as and where.",
               "type": "string"
+            },
+            "$format": {
+              "description": "A template for a value, shown as a person reads it, by \"as\" (required): amount, a number with two decimals and thousands separators (1,250.00); date, a date or date-time as its date where it was written (Mar 2, 2024). With \"prefix\" (a string), that comes first (\"added \"). Nothing, or only spaces, renders to nothing, prefix and all; a value it can't read is shown as it is. For a question's details and a choice's detail. Only \\$format, as and prefix.",
+              "type": [
+                "string",
+                "object"
+              ]
             },
             "$from": {
               "type": "string"
@@ -103771,7 +103874,7 @@
           },
           "propertyNames": {
             "not": {
-              "pattern": "^\\$(?!(from|map|add|default|merge|find|refs|read|kind_name)$)"
+              "pattern": "^\\$(?!(from|map|add|default|merge|find|refs|read|kind_name|format)$)"
             }
           }
         }

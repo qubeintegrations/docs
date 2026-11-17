@@ -305,7 +305,7 @@ you see a question and its answer.
     You can use the app to test workflow runs: open the `links.ui` field to answer the question in the app, or just find the running workflow on the **Workflow Runs** page.
     
     <Frame caption="The same question on the run's page (links.ui), drawn from its details and choices as your app draws it. Answering here is the same as POSTing to links.decisions.">
-      <img src="/images/workflows/run-waiting.png" alt="A run's question, under Your answer is needed: Lone Star Supply Co already belongs to a vendor, its details (Customer: Lone Star Supply Co, Held by: Vendor), and two choices, each saying where it leads (Add it under another name, picked, with Lone Star Supply Co (customer) typed as the new name, which continues at try_add or ends renames_exhausted; Cancel, which ends cancelled), and a Send answer button" />
+      <img src="/images/workflows/run-waiting.png" alt="A run's question, framed as your app's user sees it: Lone Star Supply Co already belongs to a vendor, a New name box with Lone Star Supply Co (customer) typed, and its buttons: Cancel, and the one that adds it under the new name" />
     </Frame>
   </Step>
   <Step title="Get the result">
@@ -595,11 +595,23 @@ Deliveries can fail, repeat, or arrive early and out of order:
 Every question arrives the same way, whatever it asks, so your app needs one screen for all of them, not a
 branch per question. Show `prompt.message`, then `prompt.details` (label and value rows: what the question
 is about), then one button per entry of `prompt.choices`, in order: its `label`, with its `description`
-and `detail` under it, and an input for each of its `fields`. Weigh each by its `role`: the `pick`s (the
-records the run offers) together under a heading such as "Possible matches", the first as the main action;
-a `search` after them, quieter; `decline` ("It's not in QuickBooks") next; and `cancel` (which ends the
-whole request, such as "Don't add the invoice") last and quietest. POST the picked one's `id` as `choice`, with
-its fields in `data`, to `links.decisions`.
+and `detail` under it, and an input for each of its `fields`. Weigh each by its `role`, and show them all
+at once:
+
+- The `pick`s (the records the run offers) come first, each a row with its own "Use this one" button.
+  Make only the button clickable, so a click on a record's name doesn't answer. With no `decline`, the
+  first pick is the main action. With one, every pick and the decline weigh the same: the person is
+  choosing between them.
+- `decline` ("It's not in QuickBooks: add it as new") goes just under the picks.
+- A `search` is a search box under them. Picking a match doesn't answer: show it as a row like the
+  picks, with its own "Use this one", and empty the box for another search. If a search finds nothing,
+  the decline becomes the main action.
+- A choice about one record (it has a `title`, such as a name clash's existing record) is a row too, and
+  the main action. An `answer` with `fields` after it, such as "Add it under another name", can wait
+  behind a link until the person opens it.
+- `cancel`, which ends the whole request (such as "Don't add the invoice"), comes last and quietest.
+
+POST the chosen one's `id` as `choice`, with its fields in `data`, to `links.decisions`.
 
 | Choice field | What it holds |
 | --- | --- |
@@ -607,6 +619,7 @@ its fields in `data`, to `links.decisions`.
 | `label` | The button's text. |
 | `role` | How to weigh it: `pick`, `search`, `decline`, `cancel` or `answer` (anything else). Treat a role you don't know as `answer`. |
 | `description`, `detail` | `null`, or a line under the label: what picking it does, or which record it is (a candidate's list, why it matched, and its email and phone when QuickBooks has them, such as `similar name · ap@riverbend.example · 512-555-0142`; a transaction's date, customer and amount). |
+| `title`, `action`, `lines`, `facts` | Present on a choice about one record, such as a name clash's existing record: its name as QuickBooks has it (show it in place of `label`), its button's text (such as "Use existing", in place of your own "Use this one"), lines under the name, and `{"label", "value"}` facts to show side by side (`Balance 1,250.00`). Its `detail` holds them in one line, for an app that shows only `detail`. |
 | `fields` | What to fill in first, each `name`, `type` (`string`, `number`, `boolean`, `record` or `rows`), `label` and `required`; for a `record`, `kind`; for one that takes a fixed list, `enum` (`[{"value", "label"}]`, a drop-down); for `rows`, `columns` and `rows` ([below](#a-table-of-rows)). Empty for a choice that's a button alone. |
 
 <CardGroup cols={2}>
@@ -748,7 +761,7 @@ kinds are answered at `links.decisions`.
         { "id": "use_existing", "label": "Use the existing record", "role": "answer", "detail": null,
           "description": "Carry on with the record QuickBooks already has. Nothing new is created.", "fields": [] },
         { "id": "rename", "label": "Add it under another name", "role": "answer", "detail": null,
-          "description": "Try the add again under a name you choose.",
+          "description": "Try the add again with a different name.",
           "fields": [ { "name": "name", "label": "New name", "type": "string", "required": true } ] },
         { "id": "cancel", "label": "Cancel", "role": "cancel", "detail": null,
           "description": "Stop here. Nothing is created.", "fields": [] }
