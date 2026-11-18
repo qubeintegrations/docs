@@ -276,6 +276,10 @@ curl -X POST \
 `report_confusion`, `match_records` and `get_integration_checklist`, then the operations in alphabetical order. Pass `nextCursor` back as
 `params.cursor` for the rest.
 
+Each tool has a `title` to show a person and `annotations`. Every tool is marked `readOnlyHint: true` except
+`report_confusion`, which saves your report. That includes the `create_`, `update_` and `delete_` tools: a call
+only builds the request and never sends it, so nothing changes in QuickBooks until you send it yourself.
+
 <Note>
   The server is public, so don't send it real customer data. Use it to explore and build requests, then send
   them yourself with your API key.
